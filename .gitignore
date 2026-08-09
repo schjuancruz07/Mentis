@@ -1,0 +1,73 @@
+# Lo que NUNCA se sube.
+#
+# Este archivo es la última red, no la primera: el filtro de verdad está en el script que arma la
+# versión pública. Pero un push a un repositorio público no se deshace —queda en cachés, en clones
+# y en el índice de Google— así que conviene tener dos redes en vez de una.
+
+# ---- Claves y credenciales ----
+.env
+*.pem
+!mentis-firma-publica.pem
+engine/.nv-secrets
+.custom-models-secrets.env
+mcp-bridge/.secrets.env
+mcp-bridge/.google-tokens.json
+mcp-bridge/.gmail-oauth.json
+engine/.web-token
+.firma/
+
+# ---- Datos de quien lo usa ----
+# Conversaciones, memoria, archivos de trabajo. Nada de esto es del programa: es de la persona.
+conversations/
+memoria/
+knowledge/
+avatar/
+workspace/
+workspace-app/
+workspace-delegado/
+delegaciones/
+history.jsonl
+state.json
+propuestas/
+scheduled-runs/
+
+# ---- Índices de búsqueda ----
+# Parecen archivos técnicos por el nombre, pero guardan el TEXTO de las conversaciones.
+engine/recall-index.jsonl
+engine/recall-index.vecs.npy
+engine/memorias-index.jsonl
+engine/memorias-index.vecs.npy
+engine/recall-corpus/
+engine/index/
+
+# ---- Configuración de cada máquina ----
+mentis-settings.json
+modelos-override.json
+disparadores.json
+hooks.json
+location-cache.json
+eleven-cuota.json
+browser-daemon-state.json
+mcp-bridge-state.json
+
+# ---- Generado / descargable ----
+dist/
+node_modules/
+__pycache__/
+*.pyc
+engine/cache/
+engine/sombras/
+engine/logs/
+.repo-publico/
+actualizaciones/
+.actualizaciones-cache/
+.respaldos-actualizacion/
+# Binarios de servidores MCP: 25 MB cada uno y uno por sistema operativo.
+# Se bajan del release oficial; ver mcp-bridge/bin/COMO-OBTENER.md
+mcp-bridge/bin/*
+!mcp-bridge/bin/COMO-OBTENER.md
+
+# ---- Registros ----
+*.log
+mentis-app-crash.log
+kai-vault-watch.log

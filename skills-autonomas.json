@@ -1,0 +1,20 @@
+{
+  "_comentario": "Qué skills puede usar Mentis POR SU CUENTA, sin que el usuario escriba el /comando. Decidido por el usuario el 2026-07-30 después de repasar qué toca cada una. Tres valores: 'libre' = la usa cuando quiera, sin avisar; 'recibo' = la usa sin pedir permiso PERO te dice qué hizo y cómo deshacerlo; 'no' = sólo si vos escribís el comando. Desde el celular (modo remoto) NINGUNA corre sola, sin importar lo que diga este archivo.",
+  "_por_que_recibo": "Las cinco de 'recibo' son las únicas que dejan algo andando después del turno: /builder y /multiply abren otro agente con permiso de escribir y ejecutar (nv-agent -w), /programar agenda tareas reales en Windows que corren cuando no estás, /conectar instala paquetes npm, y /recordar escribe memoria permanente que influye en todas las conversaciones futuras. No frenan para preguntar: dejan rastro y se pueden deshacer.",
+
+  "recall": "libre",
+  "where": "libre",
+  "boveda": "libre",
+  "aprender": "libre",
+  "auditar-memoria": "libre",
+  "plan": "libre",
+  "design": "libre",
+  "architecture": "libre",
+  "corregir": "libre",
+
+  "builder": "recibo",
+  "multiply": "recibo",
+  "programar": "recibo",
+  "conectar": "recibo",
+  "recordar": "recibo"
+}

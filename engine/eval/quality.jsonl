@@ -1,0 +1,67 @@
+{"ts":"2026-06-29T20:39:44-0300","rol":"general","lang":"python","passrate":1.00,"n":3}
+{"ts":"2026-06-29T20:39:44-0300","rol":"deep","lang":"python","passrate":1.00,"n":3}
+{"ts":"2026-06-30T13:59:59-0300","rol":"reason","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T13:59:59-0300","rol":"general","lang":"node","passrate":1.00,"pass":4,"n":4}
+{"ts":"2026-06-30T13:59:59-0300","rol":"general","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T13:59:59-0300","rol":"code","lang":"bash","passrate":1.00,"pass":3,"n":3}
+{"ts":"2026-06-30T13:59:59-0300","rol":"code","lang":"node","passrate":1.00,"pass":4,"n":4}
+{"ts":"2026-06-30T13:59:59-0300","rol":"general","lang":"bash","passrate":1.00,"pass":3,"n":3}
+{"ts":"2026-06-30T13:59:59-0300","rol":"reason","lang":"node","passrate":1.00,"pass":4,"n":4}
+{"ts":"2026-06-30T13:59:59-0300","rol":"reason","lang":"bash","passrate":1.00,"pass":3,"n":3}
+{"ts":"2026-06-30T13:59:59-0300","rol":"deep","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T13:59:59-0300","rol":"code","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T13:59:59-0300","rol":"deep","lang":"node","passrate":1.00,"pass":4,"n":4}
+{"ts":"2026-06-30T13:59:59-0300","rol":"deep","lang":"bash","passrate":1.00,"pass":3,"n":3}
+{"ts":"2026-06-30T17:31:03-0300","rol":"general","lang":"node","passrate":1.00,"pass":2,"n":2}
+{"ts":"2026-06-30T17:31:03-0300","rol":"general","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T17:31:03-0300","rol":"code","lang":"bash","passrate":1.00,"pass":2,"n":2}
+{"ts":"2026-06-30T17:31:03-0300","rol":"code","lang":"node","passrate":1.00,"pass":2,"n":2}
+{"ts":"2026-06-30T17:31:03-0300","rol":"general","lang":"bash","passrate":1.00,"pass":2,"n":2}
+{"ts":"2026-06-30T17:31:03-0300","rol":"deep","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T17:31:03-0300","rol":"code","lang":"python","passrate":1.00,"pass":6,"n":6}
+{"ts":"2026-06-30T17:31:03-0300","rol":"deep","lang":"node","passrate":1.00,"pass":2,"n":2}
+{"ts":"2026-06-30T17:31:03-0300","rol":"deep","lang":"bash","passrate":1.00,"pass":2,"n":2}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-18T19:25:32.817590"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-18T19:26:30.019692"}
+{"rol": "general", "lang": "general", "n": 1, "pass": 1, "ts": "2026-07-25T22:38:51.061376"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T17:55:47.393123"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T17:58:29.918696"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:01:24.737679"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T18:02:18.380757"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:04:47.907861"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:07:58.020694"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:11:26.869861"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:11:50.834255"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:12:11.441370"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:19:12.138790"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-07-26T18:19:49.133143"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T18:22:17.938706"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T18:24:37.511428"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T21:04:55.210308"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T21:05:35.696401"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T21:05:48.179626"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T21:06:18.528021"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 1, "ts": "2026-07-26T21:06:40.068037"}
+{"rol": "code", "lang": "general", "n": 1, "pass": 1, "ts": "2026-07-26T21:15:00.062821"}
+{"rol": "general", "lang": "general", "n": 1, "pass": 1, "ts": "2026-08-02T17:43:32.652699"}
+{"rol": "general", "lang": "general", "n": 1, "pass": 1, "ts": "2026-08-02T17:43:48.035021"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 0, "ts": "2026-08-03T17:47:12.777039"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 0, "ts": "2026-08-03T17:47:51.187876"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-08-03T17:48:17.182753"}
+{"rol": "code", "lang": "python", "n": 1, "pass": 0, "ts": "2026-08-03T17:48:49.887100"}
+{"rol": "ultra", "lang": "python", "n": 1, "pass": 0, "ts": "2026-08-03T17:49:27.101283"}
+{"rol": "ultra", "lang": "python", "n": 1, "pass": 0, "ts": "2026-08-03T17:50:09.331708"}
+{"rol": "code", "lang": "bash", "n": 1, "pass": 0, "ts": "2026-08-03T17:51:53.946792"}
+{"rol": "code", "lang": "bash", "n": 1, "pass": 0, "ts": "2026-08-03T17:52:43.754527"}
+{"rol": "deep", "lang": "bash", "n": 1, "pass": 0, "ts": "2026-08-03T17:53:15.036584"}
+{"rol": "deep", "lang": "bash", "n": 1, "pass": 0, "ts": "2026-08-03T17:54:05.494408"}
+{"rol": "ultra", "lang": "bash", "n": 1, "pass": 0, "ts": "2026-08-03T17:54:46.399086"}
+{"rol": "reason", "lang": "general", "n": 1, "pass": 0, "ts": "2026-08-04T18:03:15.388289"}
+{"rol": "reason", "lang": "general", "n": 1, "pass": 1, "ts": "2026-08-04T18:03:37.859865"}
+{"rol": "reason", "lang": "python", "n": 1, "pass": 1, "ts": "2026-08-04T18:04:26.614465"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 1, "ts": "2026-08-08T19:02:38.737676"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 1, "ts": "2026-08-08T19:03:21.891063"}
+{"rol": "deep", "lang": "python", "n": 1, "pass": 1, "ts": "2026-08-08T19:03:58.930202"}
+{"rol": "reason", "lang": "general", "n": 1, "pass": 1, "ts": "2026-08-08T20:03:31.351952"}
+{"rol": "reason", "lang": "general", "n": 1, "pass": 0, "ts": "2026-08-08T20:03:48.083340"}
+{"rol": "reason", "lang": "general", "n": 1, "pass": 1, "ts": "2026-08-08T20:06:15.408755"}

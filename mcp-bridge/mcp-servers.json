@@ -1,0 +1,31 @@
+[
+  {
+    "name": "google-workspace",
+    "type": "stdio",
+    "enabled": true,
+    "command": "node",
+    "args": [
+      "node_modules/@dguido/google-workspace-mcp/dist/index.js"
+    ],
+    "env": {
+      "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+      "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}",
+      "GOOGLE_WORKSPACE_SERVICES": "drive,docs,sheets,slides,calendar,gmail,contacts"
+    }
+  },
+  {
+    "name": "github",
+    "type": "stdio",
+    "enabled": false,
+    "command": "bin/github-mcp-server.exe",
+    "args": [
+      "stdio",
+      "--read-only"
+    ],
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}",
+      "GITHUB_TOOLSETS": "repos,context"
+    },
+    "_nota": "Solo lectura. Para permitir que escriba (crear issues, PRs, commits), sacar --read-only de args."
+  }
+]

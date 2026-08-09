@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Mentis</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Barra de título propia (2026-07-28). Reemplaza al marco nativo azul de Windows, cuyo color
+       lo decide el sistema y no se puede pintar desde la app. El área arrastrable se declara con
+       -webkit-app-region en el CSS; los botones se marcan como "no-drag" o no se podrían clickear. -->
+  <div id="barra-titulo">
+    <div id="barra-titulo-nombre">Mentis</div>
+    <div id="barra-titulo-botones">
+      <button id="btn-win-min" type="button" aria-label="Minimizar" title="Minimizar">
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button id="btn-win-max" type="button" aria-label="Maximizar" title="Maximizar">
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+      <button id="btn-win-close" type="button" aria-label="Cerrar" title="Cerrar (Mentis sigue en la bandeja)">
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><line x1="3" y1="3" x2="9" y2="9" stroke="currentColor" stroke-width="1.2"/><line x1="9" y1="3" x2="3" y2="9" stroke="currentColor" stroke-width="1.2"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="app">
+    <aside id="sidebar">
+      <!-- Modo administrador. Arranca OCULTO y sólo se muestra en la máquina que tiene la clave
+           privada de firma: en las copias de las otras personas ni aparece, porque sin la clave no
+           hay nada que administrar. El switch es comodidad, no seguridad -- lo que impide publicar
+           sin permiso es la firma (ver engine/nv-firma-lib.sh). -->
+      <div id="admin-switch-fila" class="hidden">
+        <label class="admin-switch">
+          <input type="checkbox" id="admin-switch" />
+          <span class="admin-switch-pista"><span class="admin-switch-bolita"></span></span>
+          <span class="admin-switch-texto">Modo administrador</span>
+        </label>
+      </div>
+      <button id="btn-new-chat">+ Nueva conversación</button>
+      <button id="btn-new-folder">+ Nueva carpeta</button>
+      <button id="btn-open-projects">Proyectos</button>
+      <button id="btn-open-directory">Directorio</button>
+      <button id="btn-open-schedule">Tareas programadas</button>
+      <div id="conversation-list"></div>
+      <button id="btn-open-settings" aria-label="Configuración" title="Configuración">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0.33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>Configuración</span>
+      </button>
+    </aside>
+    <main id="main">
+      <div id="main-header">
+        <div id="header-wordmark">MENTIS</div>
+        <div id="header-project-badge" class="hidden"></div>
+        <div id="header-actions">
+          <button id="btn-emergency-stop" class="hidden" aria-label="Frenar todo ya (modo sin frenos activo)" title="Frenar todo lo que Mentis está haciendo, ya">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <rect x="5" y="5" width="14" height="14" rx="1.5"/>
+            </svg>
+            <span>Frenar ya</span>
+          </button>
+          <button id="btn-speech-pause" class="hidden" aria-label="Pausar la voz de Mentis" title="Pausar la voz de Mentis">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <rect x="6" y="5" width="4" height="14" rx="1"/>
+              <rect x="14" y="5" width="4" height="14" rx="1"/>
+            </svg>
+          </button>
+          <button id="btn-preview" aria-label="Ver previsualización en vivo" title="Qué está creando Mentis ahora">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button id="btn-summarize-handoff" aria-label="Resumir y empezar de nuevo" title="Resumir esta conversación y seguir en un chat nuevo">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7"/>
+              <polyline points="3 4 3 9 8 9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="handoff-banner" class="hidden">
+        <span id="handoff-banner-text">Esta conversación ya es larga — Mentis solo ve tus últimos ~20 mensajes. ¿Resumimos y seguimos en un chat nuevo?</span>
+        <div id="handoff-banner-actions">
+          <button id="btn-handoff-accept" type="button">Resumir y continuar</button>
+          <button id="btn-handoff-dismiss" type="button" aria-label="Descartar aviso">×</button>
+        </div>
+      </div>
+      <div id="status-panel" class="collapsed">
+        <div id="status-tabs">
+          <span id="status-panel-label">Previsualización</span>
+          <!-- "paso 3 de 10". Se llena solo mientras el turno corre; vacío el resto del tiempo. -->
+          <span id="status-progreso" aria-live="polite"></span>
+          <button id="btn-close-status" aria-label="Cerrar panel" title="Cerrar" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <div id="preview-content">Sin actividad todavía en este turno.</div>
+      </div>
+      <!-- ZONA CENTRAL (rediseño 2026-07-27, pedido del usuario: el modo voz pasa a ser el único).
+           El cuerpo digital vive ACÁ, en el mismo cuadro donde antes estaban las estadísticas --
+           no en un overlay que tapa todo: la barra lateral, el título, los Logs y los botones
+           de acción siguen siendo necesarios y quedan a la vista.
+           Sin conversación abierta el cuerpo ocupa el cuadro entero; al abrir una, se corre a un
+           rincón y le deja el lugar a los mensajes, pero sigue siendo el botón para hablar. -->
+      <!-- El cuerpo va PRIMERO en el DOM para quedar a la izquierda, y los mensajes a la derecha
+           (pedido del usuario, 2026-07-27: la línea roja de su captura). Sin conversación abierta la
+           columna del cuerpo ocupa todo; al abrir una, se parte en dos. -->
+      <div id="zona-central">
+        <div id="columna-cuerpo">
+          <canvas id="cuerpo-principal" aria-label="Mentis: tocá para hablar" role="button" tabindex="0"></canvas>
+          <div id="voz-estado">tocá el núcleo para hablar</div>
+          <!-- Los subtítulos viven ACÁ (2026-07-28), dentro de la columna del cuerpo y como parte
+               del flujo. Antes eran un div suelto al final del <body> con position:fixed anclado a
+               la ventana: flotaban sobre el cuadro de botones y sobre el cuerpo, y se veían igual
+               estando en el chat o en cualquier otra parte de la app. Acá ocupan su lugar debajo
+               del núcleo, empujan en vez de tapar, y desaparecen con la columna del cuerpo. -->
+          <div id="subtitulos-voz" class="hidden" aria-live="polite">
+            <div id="subtitulo-usuario" class="subtitulo"></div>
+            <div id="subtitulo-mentis" class="subtitulo"></div>
+          </div>
+        </div>
+        <div id="messages"></div>
+      </div>
+      <div id="logs-panel" class="collapsed">
+        <button id="btn-toggle-logs">Logs ▾</button>
+        <pre id="logs-content"></pre>
+      </div>
+      <!-- Panel de administración. MUDADO ACÁ desde la barra lateral (pedido del usuario, 2026-08-08).
+           Estaba metido entre la lista de conversaciones y Configuración, o sea en el camino de lo
+           que se usa todos los días, para una tarea que se hace muy de vez en cuando y que sólo
+           puede hacer una persona. Ahora vive en la franja de abajo a la derecha, al lado de Logs,
+           que es donde están las herramientas y no la navegación.
+           Sigue apareciendo SOLO con el switch prendido: la clase `hidden` ahora la respeta la
+           regla global de style.css. Antes no, y por eso se veía siempre.
+           El botón de publicar arranca deshabilitado a propósito: publicar mete código en la
+           computadora de otras personas, así que primero hay que revisar y escribir qué cambia. -->
+      <div id="admin-panel" class="hidden">
+        <h4>Publicar una actualización</h4>
+        <div id="admin-estado">—</div>
+        <button id="btn-admin-revisar" type="button">Revisar qué saldría</button>
+        <pre id="admin-salida" class="hidden"></pre>
+        <label class="settings-label" for="admin-notas">¿Qué cambia? (lo van a leer ellos)</label>
+        <textarea id="admin-notas" rows="3" placeholder="Arreglé…, agregué…"></textarea>
+        <button id="btn-admin-publicar" type="button" disabled>Publicar</button>
+        <p class="admin-nota">Antes de publicar se corren los tests. Si alguno falla, no sale.</p>
+        <button id="btn-admin-retirar" type="button" class="admin-secundario">Retirar la última</button>
+      </div>
+      <div id="composer">
+        <div id="attach-preview-row"></div>
+        <div id="slash-menu" class="hidden" role="listbox" aria-label="Comandos disponibles"></div>
+        <div id="composer-main">
+          <textarea id="message-input" spellcheck="true" placeholder="Escribile a Mentis..."></textarea>
+          <button id="btn-stop-turn" class="hidden" aria-label="Detener la respuesta" title="Detener -- cancela esta respuesta y te devuelve tu mensaje para editarlo">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
+            </svg>
+          </button>
+          <div id="voice-panel" class="hidden">
+            <button id="btn-mic" aria-label="Hablar" title="Tocá para hablar">
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="2" width="6" height="12" rx="3"/>
+                <path d="M5 11a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="18" x2="12" y2="22"/>
+                <line x1="8" y1="22" x2="16" y2="22"/>
+              </svg>
+            </button>
+            <span id="voice-status">Tocá para hablar</span>
+          </div>
+          <div id="action-cluster">
+            <!-- El modo voz ya no tiene boton (2026-07-31): estaba siempre encendido. El checkbox
+                 queda oculto porque parte del codigo lo consulta, pero nadie lo puede apagar. -->
+            <input type="checkbox" id="flag-voice" class="sr-only" checked hidden />
+            
+            <label class="flag-toggle" title="Navegar la web">
+              <input type="checkbox" id="flag-b" class="sr-only" checked />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0 -18"/>
+              </svg>
+            </label>
+            <label class="flag-toggle" id="flag-t-label" title="Conectores (clic derecho para ver/activar cada uno)">
+              <input type="checkbox" id="flag-t" class="sr-only" checked />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <rect x="3" y="7" width="7" height="7" rx="1.3"/>
+                <rect x="3" y="14" width="7" height="7" rx="1.3"/>
+                <rect x="10" y="14" width="7" height="7" rx="1.3"/>
+                <rect x="12" y="2" width="9" height="9" rx="1.6"/>
+              </svg>
+            </label>
+            <label class="flag-toggle" title="Generar imágenes/3D">
+              <input type="checkbox" id="flag-g" class="sr-only" checked />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5z"/>
+              </svg>
+            </label>
+            <label class="flag-toggle flag-toggle-danger" title="Computer-use: Mentis ve tu pantalla real y puede mover el cursor, hacer click y tipear de verdad. Vos también ves en vivo lo que va haciendo (panel de Previsualización). Pide confirmación.">
+              <input type="checkbox" id="flag-computer-use" class="sr-only" />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="12" rx="1.3"/>
+                <line x1="8" y1="20" x2="16" y2="20"/>
+                <line x1="12" y1="16" x2="12" y2="20"/>
+                <path d="M9 8l4 6 1-2.6 2.6-1z" fill="currentColor" stroke="none"/>
+              </svg>
+            </label>
+            <!-- Cámara y teléfono como botones del grupo (pedido del usuario, 2026-07-31: "no sólo en
+                 el Directorio"). Los dos arrancan APAGADOS y escriben el mismo interruptor que se
+                 ve en Directorio -> Conectores, así que nunca dicen cosas distintas. -->
+            <label class="flag-toggle flag-toggle-danger" title="Cámara: Mentis saca UNA foto cuando se lo pedís (mirar / leer / ver si estás), y te muestra en un recuadro lo que vio. Se prende y se apaga en el acto.">
+              <input type="checkbox" id="flag-webcam" class="sr-only" />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h3L9 5h6l1.5 2h3A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>
+                <circle cx="12" cy="13" r="3.5"/>
+              </svg>
+            </label>
+            <label class="flag-toggle" title="Teléfono: Mentis puede hacerlo sonar, avisarte en su pantalla, mandarte un archivo o un texto y leer tus notificaciones (por WiFi, KDE Connect). No manda SMS ni le escribe a nadie por vos.">
+              <input type="checkbox" id="flag-telefono" class="sr-only" />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <rect x="7" y="2" width="10" height="20" rx="2"/>
+                <line x1="11" y1="18.5" x2="13" y2="18.5"/>
+              </svg>
+            </label>
+            <label class="flag-toggle" title="Datos externos: mapas/geoespacial (OSM, Georef, Overture), rastreo en vivo (OpenSky) y ciencia/conocimiento abierto (NASA, Internet Archive, DOAJ, Wikipedia). Solo lectura, sin riesgo.">
+              <input type="checkbox" id="flag-datos" class="sr-only" checked />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="8" ry="3"/>
+                <path d="M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/>
+                <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6"/>
+              </svg>
+            </label>
+            <label class="flag-toggle flag-toggle-danger" title="Modo sin frenos: desactiva el bloqueo de comandos destructivos (rm -rf, git push, format...). Pide confirmación.">
+              <input type="checkbox" id="flag-x" class="sr-only" />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <path d="M12 3l9 4v5c0 5-3.8 8.4-9 9-5.2-.6-9-4-9-9V7z"/>
+                <line x1="12" y1="8" x2="12" y2="13"/>
+                <circle cx="12" cy="16" r="0.6" fill="currentColor" stroke="none"/>
+              </svg>
+            </label>
+            <label class="flag-toggle flag-toggle-danger" title="Arduino: Mentis puede compilar, subir código y leer el monitor serie de una placa real conectada por USB. Pide confirmación.">
+              <input type="checkbox" id="flag-a" class="sr-only" />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <rect x="6" y="6" width="12" height="12" rx="1"/>
+                <circle cx="12" cy="12" r="2.5"/>
+                <line x1="9" y1="2" x2="9" y2="6"/><line x1="15" y1="2" x2="15" y2="6"/>
+                <line x1="9" y1="18" x2="9" y2="22"/><line x1="15" y1="18" x2="15" y2="22"/>
+                <line x1="2" y1="9" x2="6" y2="9"/><line x1="2" y1="15" x2="6" y2="15"/>
+                <line x1="18" y1="9" x2="22" y2="9"/><line x1="18" y1="15" x2="22" y2="15"/>
+              </svg>
+            </label>
+            <button id="btn-attach" aria-label="Adjuntar archivo o imagen" title="Adjuntar archivo o imagen">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box">
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div id="modal-actions"></div>
+    </div>
+  </div>
+  <div id="onboarding-overlay" class="hidden">
+    <div id="onboarding-box">
+      <canvas id="onboarding-cuerpo" aria-label="Mentis"></canvas>
+      <div id="onboarding-step-content"></div>
+      <div id="onboarding-dots"></div>
+      <div id="onboarding-actions">
+        <button id="btn-onboarding-skip" type="button">Saltear</button>
+        <button id="btn-onboarding-next" type="button">Siguiente</button>
+      </div>
+    </div>
+  </div>
+  <div id="settings-overlay" class="hidden">
+    <div id="settings-box">
+      <div id="settings-header">
+        <h2 id="settings-title">Configuración</h2>
+        <button id="btn-close-settings" aria-label="Cerrar" title="Cerrar" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div id="settings-body">
+        <!-- Apariencia primero: es lo que alguien que recién instala quiere tocar antes que nada,
+             y es lo que hace que Mentis se sienta suyo y no prestado. -->
+        <section class="settings-section">
+          <h3>Apariencia</h3>
+          <p class="settings-hint">Elegí cómo se ve y cómo se llama. El color también se aplica en la página del celular.</p>
+          <label class="settings-label" for="apariencia-nombre">¿Cómo querés llamarla?</label>
+          <input id="apariencia-nombre" type="text" maxlength="24" placeholder="Mentis" />
+          <p class="settings-hint">Va a usar este nombre para presentarse y responder, también por voz.</p>
+          <div id="temas-grilla" role="radiogroup" aria-label="Paleta de colores"></div>
+        </section>
+        <section class="settings-section">
+          <h3>Perfil</h3>
+          <p class="settings-hint">Cómo te ve Mentis. Esto se le manda en cada turno para que te conozca, no hace falta repetirlo en el chat.</p>
+          <div id="profile-form">
+            <button id="btn-pick-avatar" type="button" aria-label="Cambiar avatar" title="Cambiar avatar">
+              <img id="profile-avatar-img" class="hidden" alt="Tu avatar" />
+              <span id="profile-avatar-fallback">+</span>
+            </button>
+            <div id="profile-fields">
+              <input id="profile-fullname" type="text" placeholder="Nombre completo" />
+              <input id="profile-nickname" type="text" placeholder="¿Cómo querés que te llame?" />
+              <select id="profile-role">
+                <option value="">¿Qué describe mejor tu trabajo?</option>
+                <option value="no-code">No-code / automatización</option>
+                <option value="developer">Desarrollo de software</option>
+                <option value="founder">Fundador/a o emprendedor/a</option>
+                <option value="otro">Otro</option>
+              </select>
+              <input id="profile-role-custom" type="text" class="hidden" placeholder="Contanos cuál" />
+            </div>
+          </div>
+          <textarea id="profile-instructions" placeholder="Instrucciones persistentes para Mentis (tono, reglas fijas, cómo querés que te responda)…" rows="3"></textarea>
+          <button id="btn-save-profile" type="button">Guardar perfil</button>
+          <span id="profile-save-status" class="settings-hint"></span>
+        </section>
+        <section class="settings-section">
+          <h3>Memoria sobre vos</h3>
+          <p class="settings-hint">Base de lo que Mentis sabe de vos. La arrancás vos; Mentis la va a ir actualizando sola cuando aprenda algo nuevo y duradero.</p>
+          <textarea id="user-memory-text" placeholder="Ej: trabajo en no-code y automatización, prefiero respuestas breves y directas…" rows="4"></textarea>
+          <div id="user-memory-meta" class="settings-hint"></div>
+          <button id="btn-save-user-memory" type="button">Guardar memoria</button>
+        </section>
+        <section class="settings-section">
+          <h3>Memoria sobre Mentis</h3>
+          <p class="settings-hint">Autoconocimiento de Mentis: quién es, qué es, qué se le da bien o mal -- no hechos sobre vos (esos van arriba). Vos la podés escribir/corregir acá, y Mentis la va a ir completando sola.</p>
+          <textarea id="self-memory-text" placeholder="Ej: tiendo a explicar de más cuando no hace falta, se me da bien detectar bugs de path en Windows…" rows="4"></textarea>
+          <div id="self-memory-meta" class="settings-hint"></div>
+          <button id="btn-save-self-memory" type="button">Guardar memoria</button>
+        </section>
+        <section class="settings-section">
+          <h3>Modelos personalizados por rol</h3>
+          <p class="settings-hint">Cada cerebro (código, razonamiento, etc.) puede apuntar a tu propia API en vez del ensemble NIM de fábrica. Los proveedores "OpenAI-compatible" (OpenAI, Groq, OpenRouter, Ollama/LM Studio local, etc.) funcionan ya mismo. Anthropic y Gemini con su formato propio quedan guardados pero todavía no están conectados.</p>
+          <div id="settings-models-list"></div>
+        </section>
+        <section class="settings-section">
+          <h3>Ideogram (imágenes con texto/logos)</h3>
+          <p class="settings-hint">Para logos, carteles o cualquier imagen donde el texto tenga que leerse bien -- Mentis usa esto en vez del generador general cuando corresponde. Necesita tu propia API key de <a href="https://ideogram.ai" target="_blank" rel="noopener">ideogram.ai</a>.</p>
+          <div id="ideogram-status" class="key-status"></div>
+          <div id="ideogram-form">
+            <input id="ideogram-apikey" type="password" placeholder="API key de Ideogram" />
+            <button id="btn-save-ideogram" type="button">Guardar</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>Video (Runway)</h3>
+          <p class="settings-hint">Genera videos reales a partir de texto (Runway anima un frame inicial con tu descripción -- la API pública de Runway no tiene texto→video puro, siempre necesita una imagen de base, que Mentis genera sola). Necesita tu propia API key de <a href="https://dev.runwayml.com/" target="_blank" rel="noopener">dev.runwayml.com</a>.</p>
+          <div id="runway-status" class="key-status"></div>
+          <div id="runway-form">
+            <input id="runway-apikey" type="password" placeholder="API key de Runway" />
+            <button id="btn-save-runway" type="button">Guardar</button>
+          </div>
+        </section>
+        <section class="settings-section">
+          <h3>Backup</h3>
+          <p class="settings-hint">Exporta un.zip con todo lo que no se puede regenerar: conversaciones, proyectos, tu memoria/perfil, y tus skills. No incluye tus API keys ni las imágenes/videos/documentos ya generados (esos quedan en tu carpeta Documents/Mentis de todos modos).</p>
+          <button id="btn-export-backup" type="button">Exportar todos mis datos</button>
+          <div id="export-backup-status" class="key-status"></div>
+        </section>
+        <section class="settings-section">
+          <h3>Tema visual</h3>
+          <p class="settings-hint">"Bitácora de campo" es el único tema por ahora.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="projects-overlay" class="hidden">
+    <div id="projects-box">
+      <div id="projects-header">
+        <h2 id="projects-title">Proyectos</h2>
+        <button id="btn-close-projects" aria-label="Cerrar" title="Cerrar" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div id="projects-grid"></div>
+    </div>
+  </div>
+  <div id="schedule-overlay" class="hidden">
+    <div id="schedule-box">
+      <div id="schedule-header">
+        <h2 id="schedule-title">Tareas programadas</h2>
+        <button id="btn-close-schedule" aria-label="Cerrar" title="Cerrar" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div id="schedule-toolbar">
+        <p class="settings-hint">Tareas que Mentis corre solo, en un horario, con el mismo agente completo de un chat normal. Cada una queda en su propia conversación, agrupada en "Tareas programadas" en el sidebar.</p>
+        <button id="btn-new-scheduled-task" type="button">+ Nueva tarea</button>
+      </div>
+      <div id="schedule-list"></div>
+    </div>
+  </div>
+  <div id="directory-overlay" class="hidden">
+    <div id="directory-box">
+      <div id="directory-header">
+        <h2 id="directory-title">Directorio</h2>
+        <button id="btn-close-directory" aria-label="Cerrar" title="Cerrar" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div id="directory-body">
+        <nav id="directory-nav">
+          <button class="directory-tab active" data-tab="habilidades" type="button">Habilidades</button>
+          <button class="directory-tab" data-tab="conectores" type="button">Conectores</button>
+          <button class="directory-tab" data-tab="conversaciones" type="button">Conversaciones</button>
+        </nav>
+        <div id="directory-content">
+          <div id="directory-toolbar">
+            <input id="directory-search" type="text" placeholder="Buscar…" />
+            <button id="btn-directory-add" type="button">+ Agregar</button>
+          </div>
+          <div id="directory-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="toast" class="hidden"></div>
+  <div id="connectors-popup" class="hidden" role="menu" aria-label="Conectores"></div>
+  <div id="splash-overlay">
+    <!-- El cuerpo digital reemplaza al logo estático (pedido del usuario, 2026-07-26): ya no es una
+         imagen que respira con CSS, es el núcleo 3D que refleja de verdad lo que Mentis hace. -->
+    <canvas id="splash-cuerpo" aria-label="Mentis"></canvas>
+  </div>
+  <script src="renderer.js"></script>
+  <!-- Va DESPUÉS de renderer.js y como módulo aparte: renderer.js es un script clásico, y
+       convertirlo entero a ESM solo para esto arriesgaría romper lo que ya funciona. El módulo
+       publica window.MentisCuerpo y avisa con un evento cuando está listo. -->
+  <script type="module" src="cuerpo-digital-init.js"></script>
+  <!-- El formateador de las respuestas (negrita, cursiva, listas, codigo). Mismo patrón: modulo
+       aparte que publica window.MentisFormato. Si por lo que sea no cargara, renderer.js sigue
+       pintando el texto plano de antes en vez de quedarse sin mostrar nada. -->
+  <script type="module" src="formato-init.js"></script>
+</body>
+</html>

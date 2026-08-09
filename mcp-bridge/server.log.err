@@ -1,0 +1,3 @@
+[2026-07-18T20:40:24.198Z] Starting Google Workspace MCP server...
+[2026-07-18T20:40:24.202Z] Server started: {"version":"3.4.4","node":"v24.16.0","profile":null,"services":["drive","docs","sheets","slides","calendar","gmail","contacts"],"read_only":false,"config_dir":"C:/Users/<usuario>\\.config\\google-workspace-mcp","token_path":"C:/Users/<usuario>\\.config\\google-workspace-mcp\\tokens.json"}
+[2026-07-18T20:40:24.203Z] Using credentials from GOOGLE_CLIENT_ID env var

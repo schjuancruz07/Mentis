@@ -1,0 +1,1292 @@
+/* Paleta "cuerpo digital" (pedido del usuario, 2026-07-26): naranja, negro y gris Gainsboro.
+   Reemplaza a la anterior "bitácora de campo" (verde pino + cuero + oro).
+   Los valores NO son elegidos a ojo: son los mismos del cuerpo digital 3D que ahora es la cara
+   de Mentis (ver cuerpo-digital.js). El naranja es su núcleo, el negro es su fondo y el rojo es
+   su estado de alerta. Así la interfaz y el logo son un solo sistema visual y no dos cosas que
+   conviven de casualidad. */
+:root {
+  --fondo: #050507;
+  --principal: #141418;
+  --secundario: #1c1c22;
+  --texto: #dcdcdc;
+  --texto-dim: #8b8b93;
+  --acento: #ff6600;
+  --acento-soft: rgba(255, 102, 0, 0.16);
+  --peligro: #ff1100;
+  --peligro-soft: rgba(255, 17, 0, 0.16);
+  --border: #2e2e36;
+  --bubble-usuario: #1f1f26;
+  /* Sombra negra plena: con un fondo casi negro, cualquier tinte de color se ve como una mancha
+     en vez de como profundidad. */
+  --shadow-tonal: 0 8px 28px rgba(0, 0, 0, 0.65);
+  --radius: 2px;
+  /* TIPOGRAFIA COURIER EN TODA LA APP (pedido del usuario, 2026-08-07).
+     Las tres variables apuntan a la misma familia a proposito: el pedido fue "un nuevo tipo de
+     letra para toda la app", no "una fuente distinta por zona". Se dejan las tres en vez de
+     colapsarlas en una sola porque todo el CSS ya las usa por separado (--font-serif en las
+     burbujas de Mentis, --font-mono en el preview, --font-sans en el resto), y manteniendo los
+     tres nombres se puede volver atras -- o darle a una zona su propia letra otra vez -- tocando
+     una linea y nada mas.
+     Courier New viene con Windows y macOS; el 'Courier' suelto y el 'monospace' final cubren
+     Linux y el celular, donde puede no estar instalada.
+     AVISO HONESTO, por si esto se lee dentro de seis meses: Courier es monoespaciada y de trazo
+     fino. Ocupa mas ancho por caracter y en pantalla se lee peor que una sans moderna. Se eligio
+     igual, sabiendolo, porque es la estetica que el usuario quiere. */
+  --font-sans: "Courier New", Courier, monospace;
+  --font-serif: "Courier New", Courier, monospace;
+  --font-mono: "Courier New", Courier, monospace;
+}
+* { box-sizing: border-box; }
+
+/* =====.hidden, UNA sola vez y para todos (2026-08-08) =====
+   Hasta hoy no existía esta regla: cada elemento traía la suya (`#toast.hidden{display:none}`,
+   `#modal-overlay.hidden{...}` y así 24 veces). El problema de esa forma es que el ocultamiento
+   depende de que quien agrega un panel nuevo se acuerde de escribir la suya -- y el que no se
+   acuerda no se entera, porque el elemento simplemente se ve siempre.
+   Pasó dos veces:
+     - ERR-124: `#panel { display:flex }` ganándole a `[hidden]`, panel imposible de cerrar.
+     - Hoy: `#admin-panel` y `#admin-switch-fila` nacieron sin su regla. El panel de publicar se
+       veía con el switch apagado, y el switch se veía en las copias de OTRAS personas -- que es
+       exactamente lo que el comentario de index.html promete que no pasa.
+   El `!important` es necesario, no decorativo: `#admin-panel` tiene `display:flex` y un selector
+   de id le gana a una clase. Sin él, esta regla no arregla nada.
+   La única excepción está abajo, junto a su elemento. */
+.hidden { display: none !important; }
+
+body { margin: 0; background: var(--fondo); color: var(--texto); font-family: var(--font-sans); }
+/* ===== Barra de título propia (2026-07-28) =====
+   El alto (34px) se le descuenta a #app: con frame:false la ventana entrega los 100vh completos
+   y, sin este descuento, el composer quedaría 34px por debajo del borde inferior -- fuera de la
+   pantalla y sin forma de llegar a los botones. */
+#barra-titulo {
+  height: 34px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: #000;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;      /* toda la barra arrastra la ventana */
+  user-select: none;
+  padding-left: 12px;
+}
+#barra-titulo-nombre {
+  font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.18em;
+  color: var(--texto-dim); text-transform: uppercase;
+}
+#barra-titulo-botones { display: flex; }
+#barra-titulo-botones button {
+  width: 46px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; padding: 0; cursor: pointer;
+  /* El no-drag va en CADA botón, no en el contenedor: -webkit-app-region NO se hereda. Puesto
+     sólo en el padre, los botones quedaban en 'none' y el área de arrastre de la barra se los
+     comía -- se verían perfectos y no responderían a un solo click. Lo agarró el test. */
+  -webkit-app-region: no-drag;
+  /* --texto-dim sobre negro es demasiado tenue para un control: se veían "apagados". */
+  color: #9aa0a6;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+#barra-titulo-botones button:hover { background: rgba(255,255,255,0.08); color: var(--texto); }
+/* El rojo del cerrar es la convención de Windows: si no está, la gente no lo encuentra. */
+#btn-win-close:hover { background: #c42b1c; color: #fff; }
+
+#app { display: flex; height: calc(100vh - 34px); }
+
+/* Scrollbars (pedido del usuario, 2026-07-18): el default de Chromium es un rectángulo BLANCO que
+   no tiene nada que ver con el tema oscuro. Track transparente (deja ver el fondo del propio
+   contenedor -- así "referencia a donde están ubicados" en vez de un color fijo) + deslizador y
+   flechas un tono más claro que ese fondo (--border), un poco más aún al pasar el mouse. Regla
+   global (todas las áreas con scroll de la app: sidebar, mensajes, modales, logs, etc.) via
+   scrollbar-color (estándar, Chromium 121+) y ::-webkit-scrollbar (fallback/mismo resultado).
+   IMPORTANTE: si alguien agrega un panel con fondo NO oscuro en el futuro, revisar que
+   --border siga siendo legible ahí -- estas reglas asumen fondo oscuro en toda la app. */
+* { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--texto-dim); background-clip: padding-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-button { background: transparent; }
+
+/* La sidebar es la "tapa" de la bitácora: superficie grande y contigua en el
+   color principal, no un gris neutro -- así el verde sigue siendo legible
+   incluso desenfocado. */
+#sidebar { width: 240px; background: var(--principal); border-right: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; }
+#btn-new-chat { background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius); padding: 10px; cursor: pointer; font-weight: 600; }
+#btn-new-chat:disabled { opacity: 0.4; cursor: not-allowed; }
+#btn-new-chat:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+#conversation-list { padding: 0; margin-top: 12px; overflow-y: auto; flex: 1; }
+#main { flex: 1; display: flex; flex-direction: column; position: relative; }
+#messages { flex: 1; overflow-y: auto; padding: 20px; }
+
+#main-header { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; }
+#header-wordmark {
+  font-family: var(--font-serif); font-size: 13px; font-weight: 700; letter-spacing: 0.18em;
+  color: var(--acento); user-select: none; cursor: default;
+}
+/* Easter egg sutil (pedido del usuario, mejora visual 2026-07-14): clic sostenido en el wordmark
+   dispara una chispa breve. Clase toggleada por JS, ver renderer.js. */
+#header-wordmark.spark { animation: mentis-wordmark-spark 0.5s ease-out; }
+@keyframes mentis-wordmark-spark {
+  0% { text-shadow: none; }
+  40% { text-shadow: 0 0 6px var(--acento), 0 0 16px rgba(255, 102, 0, 0.8); }
+  100% { text-shadow: none; }
+}
+/* Badge de proyecto (pedido del usuario, 2026-07-13): cuando la conversación activa pertenece a un
+   proyecto, se ve claramente al lado del wordmark -- distingue un chat de proyecto de uno suelto. */
+#header-project-badge {
+  font-family: var(--font-sans); font-size: 11px; color: var(--acento);
+  background: var(--acento-soft); border: 1px solid var(--acento); border-radius: var(--radius);
+  padding: 3px 6px 3px 8px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+}
+#header-project-badge.hidden { display: none; }
+#btn-exit-project {
+  background: none; border: none; color: var(--acento); cursor: pointer; padding: 2px;
+  display: flex; align-items: center; justify-content: center; border-radius: 2px;
+}
+#btn-exit-project:hover, #btn-exit-project:focus-visible { background: var(--acento); color: var(--fondo); }
+#header-actions { display: flex; gap: 6px; margin-left: auto; }
+
+/* Confirmación transitoria (pedido del usuario, 2026-07-13: "no sé si se creó" -- al crear un
+   proyecto, ahora aparece esto abajo a la derecha con la ruta real en disco). */
+#toast {
+  position: fixed; bottom: 20px; right: 20px; max-width: 360px; z-index: 200;
+  background: var(--principal); border: 1px solid var(--acento); border-radius: var(--radius);
+  color: var(--texto); padding: 10px 14px; font-size: 13px; font-family: var(--font-sans);
+  box-shadow: var(--shadow-tonal); animation: mentis-bubble-in 0.2s ease-out;
+}
+#toast.hidden { display: none; }
+
+/* Popup de Conectores por click-derecho (pedido del usuario, 2026-07-13, imagen 6): lista chica
+   flotante, un renglon por conector con nombre + switch on/off, sin abrir el modal grande de
+   Directorio para algo tan puntual. */
+#connectors-popup {
+  position: fixed; z-index: 210; min-width: 220px; max-width: 300px;
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-tonal); padding: 6px; font-family: var(--font-sans);
+  animation: mentis-modal-in 0.12s ease-out;
+}
+#connectors-popup.hidden { display: none; }
+.connectors-popup-title {
+  font-size: 11px; color: var(--texto-dim); text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 6px 8px 4px;
+}
+.connectors-popup-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 8px; border-radius: var(--radius); font-size: 13px; color: var(--texto);
+}
+.connectors-popup-row:hover { background: rgba(0, 0, 0, 0.15); }
+.connectors-popup-row-name { display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connectors-popup-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--peligro); flex-shrink: 0; }
+.connectors-popup-dot.on { background: #7ee787; }
+.connectors-popup-empty { padding: 10px 8px; font-size: 12px; color: var(--texto-dim); }
+
+/* Switch on/off (imagen 6): pill que se pone dorado/lleno cuando esta activo. */
+.connector-switch { position: relative; width: 34px; height: 19px; flex-shrink: 0; }
+.connector-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.connector-switch-track {
+  position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: background 0.15s;
+}
+.connector-switch-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--texto-dim); transition: transform 0.15s;
+}
+.connector-switch input:checked +.connector-switch-track { background: var(--acento); }
+.connector-switch input:checked +.connector-switch-track::after { transform: translateX(15px); background: var(--fondo); }
+.connector-switch input:focus-visible +.connector-switch-track { outline: 2px solid var(--acento); outline-offset: 2px; }
+#btn-preview {
+  background: transparent; border: none; color: var(--texto-dim); cursor: pointer;
+  width: 32px; height: 32px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
+}
+#btn-preview:hover, #btn-preview:focus-visible { color: var(--acento); background: var(--acento-soft); }
+#btn-summarize-handoff {
+  background: transparent; border: none; color: var(--texto-dim); cursor: pointer;
+  width: 32px; height: 32px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
+}
+#btn-summarize-handoff:hover, #btn-summarize-handoff:focus-visible { color: var(--acento); background: var(--acento-soft); }
+#btn-summarize-handoff:disabled { opacity: 0.5; cursor: wait; }
+
+/* Protocolo de pérdida de contexto (pedido del usuario, 2026-07-13): aviso no intrusivo cuando la
+   conversación activa ya pasó el umbral donde mentis-chat.sh deja de ver todo el historial. */
+#handoff-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--acento-soft); border-bottom: 1px solid var(--acento);
+  padding: 8px 16px; font-family: var(--font-sans); font-size: 12px; color: var(--texto);
+}
+#handoff-banner.hidden { display: none; }
+#handoff-banner-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#btn-handoff-accept {
+  background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
+}
+#btn-handoff-accept:hover { filter: brightness(1.1); }
+#btn-handoff-dismiss {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: 16px;
+  line-height: 1; padding: 0 4px;
+}
+#btn-handoff-dismiss:hover, #btn-handoff-dismiss:focus-visible { color: var(--texto); }
+#btn-emergency-stop.hidden { display: none; }
+#btn-emergency-stop {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--peligro); color: var(--fondo); border: none;
+  border-radius: var(--radius); padding: 6px 12px; font-family: var(--font-sans);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+#btn-emergency-stop:hover:not(:disabled) { filter: brightness(1.12); }
+#btn-emergency-stop:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
+#btn-emergency-stop:disabled { opacity: 0.6; cursor: not-allowed; }
+#btn-speech-pause.hidden { display: none; }
+#btn-speech-pause {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; background: transparent; color: var(--acento);
+  border: 1px solid var(--acento); border-radius: var(--radius); cursor: pointer;
+}
+#btn-speech-pause:hover { background: var(--acento-soft); }
+#btn-speech-pause:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+#status-panel { position: absolute; top: 48px; right: 12px; width: 360px; max-height: 340px;
+  display: flex; flex-direction: column;
+  background: var(--secundario); border: 1px solid var(--border);
+  border-radius: var(--radius); z-index: 5; overflow: hidden; }
+#status-panel.collapsed { display: none; }
+/* Sin tabs (pedido del usuario, 2026-07-13, sacó el panel "Tareas"): una sola sección,
+   "Previsualización", con su etiqueta fija y el botón de cerrar. */
+#status-tabs {
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 8px 10px;
+}
+#status-panel-label { color: var(--acento); font-size: 12px; font-family: var(--font-sans); font-weight: 600; }
+/* "paso 3 de 10". Discreto: acompaña, no compite con el contenido del panel. Se pone del color
+   de peligro cuando quedan dos pasos o menos, que es cuando el turno puede cortarse sin terminar
+   y conviene que el usuario lo vea antes de que pase, no después. */
+#status-progreso { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans);
+                   margin-left: auto; margin-right: 8px; letter-spacing: 0.02em; }
+#status-progreso.cerca-del-limite { color: var(--peligro); font-weight: 600; }
+#btn-close-status {
+  flex: 0 0 auto; background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0 10px;
+}
+#btn-close-status:hover, #btn-close-status:focus-visible { color: var(--acento); }
+#status-panel #preview-content { padding: 10px; overflow-y: auto; }
+#preview-content { font-family: var(--font-mono); font-size: 12px; color: var(--texto-dim); }
+#preview-content.preview-action { color: var(--acento); margin-bottom: 6px; }
+#preview-content pre {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 220px; overflow-y: auto;
+}
+/* Computer-use en vivo (pedido del usuario, 2026-07-16): captura real dentro del panel de
+   Previsualización, misma cota de alto que los <pre> de arriba para no desbordar el panel. */
+#preview-content.preview-screenshot {
+  display: block; max-width: 100%; max-height: 260px; margin-top: 4px;
+  border: 1px solid var(--border); border-radius: var(--radius); object-fit: contain;
+}
+.diff-line { white-space: pre-wrap; word-break: break-word; }
+.diff-line.diff-add { color: #7ee787; background: rgba(46, 160, 67, 0.15); }
+.diff-line.diff-del { color: #ff7b72; background: rgba(248, 81, 73, 0.15); }
+
+/* Entrada suave (pedido del usuario, mejora visual 2026-07-14): reusa la misma animación que ya
+   usaban la burbuja de bienvenida y el panel de stats, en vez de aparecer de golpe. */
+.bubble { max-width: 70%; padding: 10px 14px; border-radius: var(--radius); margin-bottom: 10px; white-space: pre-wrap; font-size: 14px; animation: mentis-bubble-in 0.2s ease-out; }
+.bubble.usuario { background: var(--bubble-usuario); color: var(--texto); font-family: var(--font-sans); }
+.bubble.mentis { background: var(--secundario); border: 1px solid var(--border); color: var(--texto); font-family: var(--font-serif); font-size: 15px; line-height: 1.7; }
+.bubble.mentis.error { border-color: var(--peligro); color: #ff8a80; font-family: var(--font-sans); }
+/* --- Modo administrador (2026-08-07) ----------------------------------------------------------
+   Va arriba de todo en la barra lateral, discreto: es una herramienta que se usa cada tanto, no
+   algo que tenga que competir con el chat. Sólo se muestra donde existe la clave privada. */
+#admin-switch-fila { padding: 8px 10px 4px; }
+.admin-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.admin-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.admin-switch-pista { width: 30px; height: 17px; border-radius: 9px; background: var(--secundario);
+                      border: 1px solid var(--border); position: relative; transition: background.15s; }
+.admin-switch-bolita { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px;
+                       border-radius: 50%; background: var(--texto-dim); transition: transform.15s, background.15s; }
+.admin-switch input:checked +.admin-switch-pista { background: var(--acento-soft); border-color: var(--acento); }
+.admin-switch input:checked +.admin-switch-pista.admin-switch-bolita { transform: translateX(13px); background: var(--acento); }
+.admin-switch-texto { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans);
+                      text-transform: uppercase; letter-spacing:.04em; }
+.admin-switch input:checked ~.admin-switch-texto { color: var(--acento); }
+
+/* Posición: franja de abajo a la derecha, flotando sobre el área de conversación y anclado al
+   borde inferior derecho (2026-08-08). Antes estaba en el flujo de la barra lateral y empujaba
+   hacia abajo la lista de conversaciones y el botón de Configuración.
+   `position: fixed` y no `absolute` porque tiene que quedar pegado a la ventana aunque el área
+   de mensajes scrollee; y un ancho fijo cómodo, porque adentro hay un textarea y la salida de los
+   tests, que con el ancho de la barra lateral se leían en una columna angosta.
+   El `max-height` con `overflow` es para que la salida de `revisar` -- que puede ser larguísima --
+   no empuje el panel fuera de la pantalla. */
+#admin-panel { position: fixed; right: 12px; bottom: 12px; width: 380px;
+               max-height: 72vh; overflow-y: auto; z-index: 6;
+               padding: 12px; border: 1px solid var(--acento);
+               border-radius: 8px; background: var(--secundario);
+               box-shadow: var(--shadow-tonal); display: flex;
+               flex-direction: column; gap: 7px; }
+#admin-panel h4 { margin: 0; font-size: 12px; font-family: var(--font-sans); color: var(--texto); }
+#admin-estado { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans); line-height: 1.4; }
+#admin-panel button { font-size: 12px; padding: 6px 8px; border-radius: 6px;
+                      border: 1px solid var(--border); background: var(--principal);
+                      color: var(--texto); cursor: pointer; font-family: var(--font-sans); }
+#admin-panel button:hover:not(:disabled) { border-color: var(--acento); }
+/* Deshabilitado tiene que VERSE deshabilitado: si parece apretable y no hace nada, la próxima vez
+   se aprieta más fuerte en vez de leer por qué. */
+#admin-panel button:disabled { opacity:.45; cursor: not-allowed; }
+#btn-admin-publicar:not(:disabled) { background: var(--acento); color: #fff; border-color: var(--acento); font-weight: 600; }
+#admin-panel textarea { font-size: 12px; padding: 6px; border-radius: 6px; resize: vertical;
+                        background: var(--principal); color: var(--texto); border: 1px solid var(--border);
+                        font-family: var(--font-sans); }
+/* Usa la variable como todo el resto: tenía la familia escrita a mano y se quedó afuera del
+   cambio a Courier del 2026-08-07. Segundo caso igual en el mismo archivo. */
+#admin-salida { font-size: 10px; font-family: var(--font-mono); max-height: 190px;
+                overflow: auto; background: rgba(0,0,0,.32); padding: 7px; border-radius: 6px;
+                white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--texto-dim); }
+.admin-nota { font-size: 10px; color: var(--texto-dim); margin: 0; line-height: 1.35; font-family: var(--font-sans); }
+.admin-secundario { opacity:.75; }
+
+/* --- Selector de paletas (2026-08-06) ---------------------------------------------------------
+   Cada opción muestra las tres franjas que definen la paleta (fondo, acento, texto): se reconoce
+   de un vistazo sin tener que aplicarla. La grilla se acomoda sola al ancho del panel. */
+#temas-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+                gap: 10px; margin-top: 10px; }
+.tema-opcion { background: none; border: 1px solid var(--border); border-radius: 8px;
+               padding: 6px; cursor: pointer; display: flex; flex-direction: column;
+               align-items: center; gap: 6px; transition: border-color.15s, transform.1s; }
+.tema-opcion:hover { border-color: var(--texto-dim); }
+.tema-opcion:active { transform: scale(0.97); }
+.tema-opcion.elegido { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+.tema-muestra { width: 100%; height: 34px; border-radius: 5px; border: 1px solid var(--border); }
+.tema-nombre { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans);
+               text-align: center; line-height: 1.2; }
+.tema-opcion.elegido.tema-nombre { color: var(--texto); }
+.settings-label { display: block; font-size: 12px; color: var(--texto-dim);
+                  font-family: var(--font-sans); margin: 4px 0; }
+
+/* Formato dentro de las respuestas (negrita, cursiva, listas, codigo). Los margenes van chicos a
+   proposito: la burbuja ya tiene su padding, y los valores por defecto del navegador para h3-h5,
+   ul y pre le meterian un aire enorme a cada respuesta que use una lista. */
+.bubble.mentis strong { font-weight: 650; color: #fff; }
+.bubble.mentis em { font-style: italic; }
+.bubble.mentis h3,.bubble.mentis h4,.bubble.mentis h5 {
+  margin: 12px 0 6px; font-family: var(--font-sans); font-weight: 600; line-height: 1.3;
+}
+.bubble.mentis h3 { font-size: 1.12em; }
+.bubble.mentis h4 { font-size: 1.05em; }
+.bubble.mentis h5 { font-size: 1em; color: var(--texto-dim); }
+.bubble.mentis ul,.bubble.mentis ol { margin: 6px 0; padding-left: 22px; }
+.bubble.mentis li { margin: 3px 0; }
+.bubble.mentis code {
+  /* Usa la variable como todo el resto (2026-08-07): tenia la familia escrita a mano y se
+     quedaba afuera del cambio de tipografia. El fondo gris ya distingue el codigo del texto. */
+  font-family: var(--font-mono); font-size: 0.9em;
+  background: rgba(255,255,255,0.07); padding: 1px 5px; border-radius: 4px;
+}
+.bubble.mentis pre.bloque-codigo {
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin: 8px 0; overflow-x: auto;   /* el codigo largo scrollea SOLO,
+                                                            sin estirar la burbuja ni la ventana */
+  white-space: pre; font-size: 0.88em; line-height: 1.5;
+}
+.bubble.mentis pre.bloque-codigo code { background: none; padding: 0; font-size: 1em; }
+
+/* Respuesta llegando en vivo. Se distingue apenas de una definitiva -- el borde punteado y el
+   cursor titilando alcanzan para leer "esto todavia se esta escribiendo" sin que parezca otra
+   cosa. Cuando el turno cierra, el historial la reemplaza por la burbuja de verdad. */
+.bubble.mentis.streaming { border-style: dashed; opacity: 0.92; }
+.bubble.mentis.streaming::after {
+  content: '▍'; margin-left: 2px; opacity: 0.75;
+  animation: mentis-cursor-parpadeo 1s steps(2, start) infinite;
+}
+@keyframes mentis-cursor-parpadeo { to { visibility: hidden; } }
+
+/* Edición de mensajes con ramas (pedido del usuario, 2026-07-14) -- envuelve el bubble de usuario en
+   una fila que ademas trae el boton Editar (visible al hover/foco) y el slot de navegacion entre
+   ramas..bubble.usuario ya no necesita margin-left:auto -- ahora es la FILA la que se alinea a la
+   derecha, para que el bubble y su toolbar se muevan juntos como una unidad. */
+.message-row { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 10px; }
+.message-row.bubble.usuario { margin-bottom: 4px; }
+
+/* Miniatura de adjuntos ya mandados (pedido del usuario, 2026-07-14): mismo look que la
+   previsualización del composer (.attach-chip--image), pero en el historial de la conversación.
+   flex+justify-content en vez de margin-left:auto porque este bloque aparece tanto envuelto en
+.message-row (flex-column) como suelto en #messages (burbuja optimista antes de recargar). */
+.message-attach-row { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.message-attach-thumb {
+  width: 160px; height: 160px; object-fit: cover; border-radius: 4px; border: 1px solid var(--acento);
+}
+.message-attach-file-chip {
+  font-size: 12px; color: var(--texto-dim); background: var(--fondo); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px 8px;
+}
+.message-toolbar {
+  display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity 0.1s ease-out;
+  font-family: var(--font-sans); font-size: 11px;
+}
+.message-row:hover.message-toolbar,.message-row:focus-within.message-toolbar,.message-row.editing.message-toolbar { opacity: 1; }
+.message-edit-btn {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer; padding: 2px 4px; font-size: 11px;
+  font-family: var(--font-sans); text-decoration: underline;
+}
+.message-edit-btn:hover,.message-edit-btn:focus-visible { color: var(--acento); }
+.branch-nav-slot:empty { display: none; }
+.branch-nav-btn {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--texto-dim);
+  cursor: pointer; padding: 1px 6px; font-size: 12px; line-height: 1.4;
+}
+.branch-nav-btn:hover:not(:disabled),.branch-nav-btn:focus-visible:not(:disabled) { border-color: var(--acento); color: var(--acento); }
+.branch-nav-btn:disabled { opacity: 0.35; cursor: default; }
+.branch-nav-label { color: var(--texto-dim); font-size: 11px; }
+.message-row.editing { align-items: stretch; width: 100%; }
+.message-edit-textarea {
+  width: 100%; min-height: 70px; background: var(--fondo); border: 1px solid var(--acento); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 14px; font-family: var(--font-sans); resize: vertical;
+}
+.message-edit-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.message-edit-actions button {
+  background: var(--fondo); color: var(--texto); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-sans);
+}
+.message-edit-actions button.primary { background: var(--acento); color: var(--fondo); border-color: var(--acento); font-weight: 600; }
+.message-edit-actions button:hover { filter: brightness(1.1); }
+
+.artifact-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 10px 0; }
+.artifact-chip {
+  background: var(--acento-soft); border: 1px solid var(--acento); color: var(--acento);
+  border-radius: var(--radius); padding: 5px 10px; font-family: var(--font-sans); font-size: 12px;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.artifact-chip:hover { background: var(--acento); color: var(--fondo); }
+.artifact-chip:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
+.artifact-chip[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.question-card {
+  max-width: 70%; background: var(--secundario); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px;
+  font-family: var(--font-serif);
+}
+.question-title { font-size: 16px; color: var(--texto); font-weight: 700; }
+.question-options { display: flex; flex-direction: column; gap: 6px; }
+.question-option {
+  display: flex; align-items: flex-start; gap: 8px; background: var(--fondo);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; cursor: pointer; font-size: 14px;
+}
+.question-option:has(input:checked) { border-color: var(--acento); }
+.question-option input { margin-top: 3px; accent-color: var(--acento); }
+.question-option-desc { color: var(--texto-dim); font-family: var(--font-sans); font-size: 13px; }
+.question-custom-input {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans);
+}
+.question-custom-input:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
+.question-submit {
+  align-self: flex-end; background: var(--acento); color: var(--fondo); border: none; font-weight: 600;
+  border-radius: var(--radius); padding: 7px 16px; font-size: 13px; cursor: pointer; font-family: var(--font-sans);
+}
+.question-submit:hover { filter: brightness(1.1); }
+.question-submit:focus-visible,.question-option:has(input:focus-visible) { outline: 2px solid var(--acento); outline-offset: 1px; }
+.question-submit:disabled,.question-option:has(input:disabled),.question-custom-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#logs-panel { border-top: 1px solid var(--border); background: #080a08; }
+#logs-panel.collapsed #logs-content { display: none; }
+#logs-content { font-family: var(--font-mono); max-height: 140px; overflow-y: auto; margin: 0; padding: 8px 14px; font-size: 12px; color: var(--texto-dim); }
+#btn-toggle-logs { background: none; border: none; color: var(--texto-dim); cursor: pointer; padding: 8px 14px; }
+/* Composer: la fila principal (textarea + cluster de acciones) queda ancla en la esquina
+   inferior derecha -- el textarea achicado a la izquierda, todos los controles (flags MCP,
+   adjuntar, enviar) agrandados y agrupados a la derecha, alineados abajo. */
+/* Cuadro de texto más alto (pedido del usuario, 2026-07-13, referencia visual): más aire arriba y
+   abajo del composer, y el textarea arranca más alto en vez de rozar el borde inferior. */
+#composer { padding: 18px 18px 22px; border-top: 1px solid var(--border); position: relative; }
+/* Catálogo "/" (pedido del usuario, 2026-07-12): flota justo arriba del composer, mismo look que
+   los demás popups del tema (borde dorado en vez del gris de.modal-option para que se note
+   que es un menu "vivo" que sigue lo que escribís, no una lista estatica). */
+#slash-menu {
+  position: absolute; left: 18px; right: 18px; bottom: 100%; margin-bottom: 6px;
+  background: var(--secundario); border: 1px solid var(--acento); border-radius: var(--radius);
+  max-height: 220px; overflow-y: auto; z-index: 8;
+  box-shadow: var(--shadow-tonal);
+}
+#slash-menu.hidden { display: none; }
+.slash-item {
+  display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border); font-family: var(--font-sans); font-size: 13px;
+}
+.slash-item:last-child { border-bottom: none; }
+.slash-item-prefix { color: var(--acento); font-family: var(--font-mono); font-weight: 700; flex: 0 0 auto; }
+.slash-item-desc { color: var(--texto-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slash-item:hover,.slash-item.active { background: var(--acento-soft); }
+
+/* Narración de proceso en vivo (pedido del usuario, 2026-07-12): pasos que van apareciendo
+   mientras Mentis trabaja el turno, arriba del spinner -- y su version colapsada, guardada
+   junto a la respuesta ya persistida en el historial. */
+#live-steps { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+/* Sin emoji (pedido del usuario, 2026-07-13): el estado se distingue por una barra de acento a la
+   izquierda -- dorada en curso, roja si fue un rechazo/fallo -- no por pictograma. */
+.live-step {
+  display: flex; align-items: baseline; font-size: 13px; color: var(--texto-dim);
+  font-family: var(--font-sans); animation: mentis-bubble-in 0.2s ease-out;
+  padding-left: 10px; border-left: 2px solid var(--acento-soft);
+}
+.live-step-error { border-left-color: var(--peligro); color: #f0a8a4; }
+.steps-summary { max-width: 70%; margin-bottom: 6px; font-family: var(--font-sans); font-size: 12px; }
+.steps-summary summary { cursor: pointer; color: var(--texto-dim); list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+.steps-summary summary::-webkit-details-marker { display: none; }
+.steps-summary summary::before { content: '▸'; }
+.steps-summary[open] summary::before { content: '▾'; }
+.steps-summary:hover summary { color: var(--acento); }
+.steps-summary-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; padding-left: 8px; border-left: 2px solid var(--border); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+#attach-preview-row:not(:empty) { margin-bottom: 8px; }
+#composer-main { display: flex; align-items: flex-end; gap: 10px; }
+#message-input {
+  flex: 1 1 auto; min-width: 0; width: auto; min-height: 64px; max-height: 160px;
+  background: var(--secundario); color: var(--texto); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px; resize: vertical; font-family: inherit;
+}
+#message-input:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+#message-input.hidden { display: none; }
+/* Botón Detener (pedido del usuario, 2026-07-16): solo visible mientras hay un turno en curso
+   (togglea en JS junto con setBusy). Circular y rojo como el mic grabando -- mismo lenguaje
+   visual que ya usa la app para "esto corta algo en curso". */
+#btn-stop-turn {
+  width: 28px; height: 28px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--peligro); color: var(--fondo); border: none;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#btn-stop-turn:hover { filter: brightness(1.1); }
+#btn-stop-turn:disabled { opacity: 0.6; cursor: wait; }
+#btn-stop-turn.hidden { display: none; }
+#btn-stop-turn:focus-visible { outline: 2px solid var(--peligro); outline-offset: 2px; }
+/* "Live": reemplaza el textarea mientras está activa (toggle en JS). El mic
+   grande es el foco visual -- circular, dorado cuando graba, para que el estado se note sin
+   tener que leer el texto de abajo. */
+#voice-panel {
+  flex: 1 1 auto; min-height: 40px; display: flex; align-items: center; gap: 12px;
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 16px;
+}
+#voice-panel.hidden { display: none; }
+#btn-mic {
+  width: 48px; height: 48px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--principal); color: var(--texto); border: 2px solid var(--acento);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#btn-mic.recording { background: var(--peligro); border-color: var(--peligro); color: var(--fondo); animation: mentis-mic-pulse 1.4s ease-in-out infinite; }
+#btn-mic:disabled { opacity: 0.6; cursor: wait; }
+#btn-mic:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+@keyframes mentis-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--peligro-soft); }
+  50% { box-shadow: 0 0 0 10px transparent; }
+}
+#voice-status { color: var(--texto-dim); font-size: 13px; font-family: var(--font-sans); }
+/* Cluster de acciones en grilla fija (pedido del usuario, 2026-07-12): antes era una fila que
+   envolvía de forma impredecible y le comía espacio horizontal al cuadro de texto. Con un ancho
+   fijo el textarea de al lado (flex:1 1 auto) crece de forma confiable hacia la derecha en vez
+   de competir por espacio con los botones.
+   Reajustado 2026-07-15 (pedido del usuario): con el checkbox de "Datos externos" ya eran 10
+   elementos -- en 3 columnas quedaba un icono solo y huerfano en una 4ta fila. 5 columnas x 2
+   filas los llenaba exacto, sin filas parciales.
+   2026-07-16: al fusionar "ver pantalla" + "control" en un solo checkbox "Computer-use" quedaron
+   9 elementos -- la 2da fila tiene 4 en vez de 5 (un hueco al final), pero NO un icono huerfano
+   solo en una 3ra fila, que era el problema real que se evitó acá. Se deja en 5 columnas
+   (no se achica a 3x3) para no angostar el cluster y no correr el textarea de lugar. */
+#action-cluster {
+  display: grid; grid-template-columns: repeat(5, 48px); grid-auto-rows: 48px; gap: 8px;
+  justify-items: center; align-items: center; flex: 0 0 auto;
+}
+.flag-toggle, #btn-attach {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; border-radius: var(--radius);
+  color: var(--texto-dim); border: 1px solid var(--border);
+  background: transparent; cursor: pointer; padding: 0;
+}
+/* Tamaño de ícono más cómodo (pedido del usuario, 2026-07-13, calibrado contra su referencia
+   visual) -- las celdas crecieron a 48px, el ícono acompaña en vez de quedar chico y perdido. */
+.flag-toggle svg, #btn-attach svg { width: 22px; height: 22px; }
+.flag-toggle:has(input:checked) {
+  color: var(--fondo); background: var(--acento); border-color: var(--acento);
+}
+.flag-toggle:has(input:focus-visible) { outline: 2px solid var(--acento); outline-offset: 2px; }
+/* "Modo sin frenos": mismo control que los demas toggles, pero en rojo (no dorado) para que
+   se note a simple vista que es un interruptor distinto -- desactiva una proteccion, no
+   habilita una capacidad mas. */
+.flag-toggle-danger:hover { border-color: var(--peligro); color: var(--peligro); }
+.flag-toggle-danger:has(input:checked) {
+  color: var(--fondo); background: var(--peligro); border-color: var(--peligro);
+}
+.flag-toggle-danger:has(input:focus-visible) { outline: 2px solid var(--peligro); outline-offset: 2px; }
+#btn-attach:hover, #btn-attach:focus-visible { border-color: var(--acento); color: var(--acento); }
+
+/* Panel de estadisticas del estado vacio (pedido del usuario, 2026-07-13, imagenes de referencia).
+   El saludo con logo+burbuja que vivia al lado se elimino 2026-07-15 -- ver splash.html/splash.js
+   para el saludo animado nuevo, que ahora corre una sola vez al arrancar la app. */
+#empty-state {
+  height: 100%; display: flex; flex-direction: row; align-items: center;
+  justify-content: center; color: var(--texto-dim);
+}
+@keyframes mentis-breathe {
+  0%, 100% { filter: drop-shadow(0 0 14px rgba(255, 102, 0, 0.45)) drop-shadow(0 0 34px rgba(255, 102, 0, 0.25)); }
+  50% { filter: drop-shadow(0 0 20px rgba(255, 102, 0, 0.75)) drop-shadow(0 0 46px rgba(255, 102, 0, 0.45)); }
+}
+@keyframes mentis-bubble-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Panel de estadísticas (pedido del usuario, 2026-07-13, imagen 4) -- datos reales de
+   conversations/*.jsonl, colores de Mentis (acento dorado sobre fondo oscuro). */
+#usage-stats-panel {
+  flex: 1 1 0; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 14px; padding: 0 24px; max-width: 420px;
+  animation: mentis-bubble-in 0.4s ease-out;
+}
+#usage-stats-panel.hidden { display: none; }
+.usage-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;
+}
+.usage-stat-tile {
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 8px; text-align: center; font-family: var(--font-sans);
+  /* Profundidad por capa de tono en vez de sombra negra: un filo claro tenue arriba,
+     como si la ficha estuviera un poco elevada y agarrara luz. */
+  box-shadow: inset 0 1px 0 rgba(220, 220, 220, 0.06);
+}
+.usage-stat-value { font-size: 20px; font-weight: 700; color: var(--acento); font-family: var(--font-serif); }
+.usage-stat-label { font-size: 10px; color: var(--texto-dim); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+.usage-heatmap { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; width: 100%; }
+.usage-heatmap-cell { aspect-ratio: 1; border-radius: 2px; background: var(--secundario); border: 1px solid var(--border); }
+.usage-heatmap-cell.level-1 { background: rgba(255, 102, 0, 0.28); border-color: transparent; }
+.usage-heatmap-cell.level-2 { background: rgba(255, 102, 0, 0.55); border-color: transparent; }
+.usage-heatmap-cell.level-3 { background: var(--acento); border-color: transparent; }
+.usage-stats-empty { font-size: 12px; color: var(--texto-dim); text-align: center; font-family: var(--font-sans); }
+.usage-stats-costs {
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px; text-align: center; font-family: var(--font-sans); width: 100%;
+}
+.usage-stats-costs-total { font-size: 13px; font-weight: 700; color: var(--acento); }
+.usage-stats-costs-breakdown { font-size: 10px; color: var(--texto-dim); margin-top: 3px; }
+
+@media (max-width: 760px) {
+  #usage-stats-panel { display: none; }
+}
+
+#btn-new-folder, #btn-open-projects, #btn-open-directory, #btn-open-schedule {
+  background: transparent; color: var(--texto-dim); border: 1px dashed var(--border);
+  border-radius: var(--radius); padding: 6px; cursor: pointer; margin-top: 8px; font-size: 12px;
+}
+#btn-new-folder:hover, #btn-open-projects:hover, #btn-open-projects:focus-visible,
+#btn-open-directory:hover, #btn-open-directory:focus-visible,
+#btn-open-schedule:hover, #btn-open-schedule:focus-visible { border-color: var(--acento); color: var(--acento); }
+/* Configuración (pedido del usuario, 2026-07-13): "donde aparece el historial de chats" -- abajo
+   de la lista de conversaciones en la sidebar, separado con un borde propio. */
+#btn-open-settings {
+  background: transparent; color: var(--texto-dim); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px; cursor: pointer; margin-top: 10px;
+  font-size: 12px; font-family: var(--font-sans); display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+#btn-open-settings:hover, #btn-open-settings:focus-visible { border-color: var(--acento); color: var(--acento); }
+.folder-group { margin-top: 10px; }
+.folder-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 8px; color: var(--texto-dim); font-size: 12px; cursor: pointer;
+}
+.folder-header.folder-actions { display: none; gap: 4px; }
+.folder-header:hover.folder-actions { display: flex; }
+.folder-actions button {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: 11px;
+}
+.conv-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px; border-radius: var(--radius); cursor: pointer; color: var(--texto-dim); font-size: 13px;
+  margin-bottom: 4px;
+}
+.conv-item:hover,.conv-item.active { background: rgba(0, 0, 0, 0.2); color: var(--texto); }
+.conv-item.disabled { pointer-events: none; opacity: 0.5; }
+.conv-item.conv-menu-btn { background: none; border: none; color: inherit; cursor: pointer; display: none; }
+.conv-item:hover.conv-menu-btn { display: inline; }
+
+/* Grupo de proyecto en el sidebar (pedido del usuario, 2026-07-14): mismo look que un grupo de
+   carpeta, pero con el encabezado en dorado para distinguirlo de un vistazo de las carpetas
+   normales -- es "más estructural" (tiene una carpeta real en disco detrás). */
+.project-group.folder-header { color: var(--acento); font-weight: 600; }
+.project-group.folder-header:hover { background: var(--acento-soft); }
+.conv-item-new-in-project {
+  color: var(--texto-dim); font-style: italic; justify-content: flex-start;
+}
+.conv-item-new-in-project:hover { color: var(--acento); background: rgba(0, 0, 0, 0.2); }
+
+#btn-attach:hover, #btn-attach:focus-visible { border-color: var(--acento); color: var(--acento); }
+/* Adjuntos múltiples (pedido del usuario, 2026-07-13): antes era una sola fila de texto con 1
+   adjunto; ahora es una fila de chips, uno por archivo, cada uno con su propia miniatura/nombre
+   y botón de quitar individual. */
+#attach-preview-row { display: flex; flex-wrap: wrap; gap: 6px; }
+#attach-preview-row:empty { display: none; }
+.attach-chip {
+  font-size: 12px; color: var(--texto-dim); display: flex; align-items: center; gap: 6px;
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px;
+}
+.attach-thumb { width: 20px; height: 20px; object-fit: cover; border-radius: 1px; border: 1px solid var(--border); }
+.btn-remove-attachment {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.btn-remove-attachment:hover,.btn-remove-attachment:focus-visible { color: var(--peligro); }
+
+/* Miniatura de imagen adjunta grande (pedido del usuario, referencia visual estilo Gemini):
+   thumbnail prominente en vez de chip-pill chico con nombre de archivo. Borde dorado fino y
+   esquina apenas suavizada (pedido del usuario, mejora visual 2026-07-14: "como una foto pegada en
+   un cuaderno de campo" -- no un icono de app redondeado, coherente con --radius:2px del resto). */
+.attach-chip--image {
+  position: relative; background: none; border: none; padding: 0; border-radius: 4px;
+}
+.attach-chip--image.attach-thumb {
+  width: 112px; height: 112px; border-radius: 4px; border: 1px solid var(--acento);
+}
+.attach-chip--image.btn-remove-attachment {
+  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6); color: #fff;
+}
+.attach-chip--image.btn-remove-attachment:hover,
+.attach-chip--image.btn-remove-attachment:focus-visible { background: rgba(0, 0, 0, 0.8); color: #fff; }
+
+#thinking-indicator {
+  display: flex; align-items: center; gap: 10px; padding: 10px 4px; color: var(--acento);
+  animation: mentis-bubble-in 0.25s ease-out;
+}
+/* Brasa/ascua en vez de spinner genérico (pedido del usuario, mejora visual 2026-07-14): un
+   parpadeo tenue de brillo, coherente con la estética de fogata, en vez de rotación mecánica. */
+/* El indicador de "pensando" pasó de una imagen a un canvas con el cuerpo digital (2026-07-27).
+   Un poco más grande que el logo que reemplaza -- a 26px el núcleo era una mancha -- y sin la
+   animación de brasa: el latido ahora lo pone el propio cuerpo, en estado PROCESSING. */
+#thinking-cuerpo {
+  width: 38px; height: 38px;
+  display: block; flex: 0 0 auto;
+}
+#thinking-indicator img {
+  width: 26px; height: 26px;
+  animation: mentis-ember 1.4s ease-in-out infinite;
+}
+#thinking-indicator #thinking-timer {
+  font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px rgba(255, 102, 0, 0.55);
+}
+@keyframes mentis-ember {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 102, 0, 0.35)); }
+  50% { filter: drop-shadow(0 0 11px rgba(255, 102, 0, 0.85)); }
+}
+
+#modal-overlay {
+  position: fixed; inset: 0; background: rgba(5, 5, 7, 0.65);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+  animation: mentis-modal-fade-in 0.15s ease-out;
+}
+#modal-overlay.hidden { display: none; }
+@keyframes mentis-modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+#modal-box {
+  background: rgba(28, 28, 34, 0.9); border: 1px solid var(--border); border-radius: var(--radius);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-tonal);
+  padding: 18px; width: 320px; max-width: calc(100vw - 40px);
+  animation: mentis-modal-in 0.15s ease-out;
+}
+@keyframes mentis-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+#modal-title { margin: 0 0 12px; font-size: 14px; color: var(--texto); font-weight: 600; }
+#modal-body { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+#modal-body input[type="text"] {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 13px; width: 100%;
+}
+#modal-body input[type="text"]:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
+.modal-textarea {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 12px; width: 100%; resize: vertical;
+  font-family: var(--font-mono);
+}
+.modal-textarea:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
+.modal-option {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 13px; text-align: left; cursor: pointer;
+}
+.modal-option:hover,.modal-option.active,.modal-option:focus-visible { border-color: var(--acento); color: var(--acento); }
+.capability-status { font-size: 12px; min-height: 16px; }
+.capability-status.success { color: var(--acento); }
+.capability-status.error { color: #ff7b72; }
+#modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+#modal-actions button {
+  border-radius: var(--radius); padding: 7px 14px; font-size: 13px; cursor: pointer; border: 1px solid var(--border);
+  background: transparent; color: var(--texto-dim);
+}
+#modal-actions button.primary { background: var(--acento); color: var(--fondo); border-color: var(--acento); font-weight: 600; }
+#modal-actions button:hover, #modal-actions button:focus-visible { color: var(--texto); }
+#modal-actions button.primary:hover, #modal-actions button.primary:focus-visible { filter: brightness(1.1); color: var(--fondo); }
+
+/* Directorio (pedido del usuario, 2026-07-13): conectar apps, cargar skills/plugins -- mismo
+   material que el resto de la app (nav lateral en --principal, como la sidebar; tarjetas en
+   --fondo con acento dorado al pasar el mouse). */
+#directory-overlay {
+  position: fixed; inset: 0; background: rgba(5, 5, 7, 0.65);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  animation: mentis-modal-fade-in 0.15s ease-out;
+}
+#directory-overlay.hidden { display: none; }
+#directory-box {
+  width: 720px; max-width: calc(100vw - 60px); height: 78vh; max-height: 640px;
+  background: rgba(28, 28, 34, 0.9); border: 1px solid var(--border); border-radius: var(--radius);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-tonal);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: mentis-modal-in 0.15s ease-out;
+}
+#directory-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+#directory-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#btn-close-directory {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 4px;
+}
+#btn-close-directory:hover, #btn-close-directory:focus-visible { color: var(--acento); }
+#directory-body { display: flex; flex: 1; min-height: 0; }
+#directory-nav {
+  width: 160px; flex-shrink: 0; background: var(--principal); padding: 12px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.directory-tab {
+  background: none; border: none; color: rgba(220, 220, 220, 0.75); cursor: pointer;
+  text-align: left; padding: 9px 10px; border-radius: var(--radius); font-size: 13px;
+  font-family: var(--font-sans); border-left: 2px solid transparent;
+}
+.directory-tab:hover { background: rgba(0, 0, 0, 0.15); color: var(--texto); }
+.directory-tab.active { color: var(--acento); border-left-color: var(--acento); background: rgba(0, 0, 0, 0.15); font-weight: 600; }
+#directory-content { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 16px 20px; overflow: hidden; }
+#directory-toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
+#directory-search {
+  flex: 1; background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans);
+}
+#directory-search:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
+#btn-directory-add {
+  background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+}
+#btn-directory-add:hover { filter: brightness(1.1); }
+#directory-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  overflow-y: auto; align-content: start;
+}
+.directory-card {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+}
+.directory-card:hover { border-color: var(--acento); }
+.directory-card-clickable { cursor: pointer; }
+.directory-card-clickable:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+.directory-card-title { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--texto); display: flex; align-items: center; gap: 8px; }
+.directory-card-desc { font-family: var(--font-sans); font-size: 12px; color: var(--texto-dim); line-height: 1.4; }
+.directory-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--peligro); }
+.directory-status-dot.on { background: var(--acento); }
+#directory-empty { color: var(--texto-dim); font-size: 13px; font-family: var(--font-sans); padding: 20px 0; grid-column: 1 / -1; text-align: center; }
+
+/* Proyectos (pedido del usuario, 2026-07-13): "cuadrados que funcionan como botones" -- mosaico de
+   tiles cuadrados de verdad (aspect-ratio: 1), mismo material que el Directorio. */
+#projects-overlay {
+  position: fixed; inset: 0; background: rgba(5, 5, 7, 0.65);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  animation: mentis-modal-fade-in 0.15s ease-out;
+}
+#projects-overlay.hidden { display: none; }
+#projects-box {
+  width: 720px; max-width: calc(100vw - 60px); height: 78vh; max-height: 640px;
+  background: rgba(28, 28, 34, 0.9); border: 1px solid var(--border); border-radius: var(--radius);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-tonal);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: mentis-modal-in 0.15s ease-out;
+}
+#projects-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+#projects-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#btn-close-projects {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 4px;
+}
+#btn-close-projects:hover, #btn-close-projects:focus-visible { color: var(--acento); }
+#projects-grid {
+  flex: 1; overflow-y: auto; padding: 20px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; align-content: start;
+}
+.project-tile {
+  position: relative; aspect-ratio: 1; background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  padding: 12px; gap: 6px; cursor: pointer; color: var(--texto); font-family: var(--font-sans); font-size: 13px;
+}
+.project-tile:hover,.project-tile:focus-visible { border-color: var(--acento); }
+
+/* Tareas programadas (pedido del usuario, 2026-07-14) -- mismo material visual que Proyectos/Directorio. */
+#schedule-overlay {
+  position: fixed; inset: 0; background: rgba(5, 5, 7, 0.65);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  animation: mentis-modal-fade-in 0.15s ease-out;
+}
+#schedule-overlay.hidden { display: none; }
+#schedule-box {
+  width: 720px; max-width: calc(100vw - 60px); height: 78vh; max-height: 640px;
+  background: rgba(28, 28, 34, 0.9); border: 1px solid var(--border); border-radius: var(--radius);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-tonal);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: mentis-modal-in 0.15s ease-out;
+}
+#schedule-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+#schedule-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#btn-close-schedule {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 4px;
+}
+#btn-close-schedule:hover, #btn-close-schedule:focus-visible { color: var(--acento); }
+#schedule-toolbar { padding: 14px 20px 0; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+#btn-new-scheduled-task {
+  align-self: flex-start; background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#btn-new-scheduled-task:hover { filter: brightness(1.1); }
+#schedule-list { flex: 1; overflow-y: auto; padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+.schedule-card-last { font-style: italic; }
+.schedule-card-actions { display: flex; gap: 8px; margin-top: 6px; }
+.schedule-card-actions button {
+  background: var(--fondo); color: var(--texto); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: var(--font-sans);
+}
+.schedule-card-actions button:hover { border-color: var(--acento); color: var(--acento); }
+#schedule-form-day-row.hidden, #schedule-form-time-row.hidden, #schedule-form-interval-row.hidden { display: none; }
+#schedule-form-error-msg { color: var(--peligro); font-size: 12px; font-family: var(--font-sans); margin-top: 4px; }
+#schedule-form-error-msg.hidden { display: none; }
+.project-tile-name { font-weight: 600; word-break: break-word; }
+.project-tile-date { color: var(--texto-dim); font-size: 11px; }
+/* Botón de borrar (pedido del usuario, 2026-07-14): oculto hasta hover/foco para no ensuciar el
+   mosaico -- mismo patrón que el botón "⋯" de cada conversación en el sidebar. */
+.project-tile-delete {
+  position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: var(--radius);
+  background: var(--secundario); border: 1px solid var(--border); color: var(--texto-dim);
+  display: none; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.project-tile:hover.project-tile-delete,.project-tile:focus-within.project-tile-delete { display: flex; }
+.project-tile-delete:hover,.project-tile-delete:focus-visible { color: var(--peligro); border-color: var(--peligro); }
+.project-tile-new {
+  background: transparent; border: 1px dashed var(--border); color: var(--texto-dim);
+}
+.project-tile-new:hover,.project-tile-new:focus-visible { border-color: var(--acento); color: var(--acento); }
+.project-tile-new-plus { font-size: 26px; line-height: 1; font-family: var(--font-serif); color: var(--acento); }
+
+/* Vista de detalle de un proyecto (pedido del usuario, 2026-07-13): historial SCOPEADO a ese
+   proyecto -- mismo grid de tiles que la vista general, pero solo con SUS conversaciones. */
+.projects-back-btn {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  font-family: var(--font-sans); font-size: 13px; padding: 0; margin-right: 8px;
+}
+.projects-back-btn:hover,.projects-back-btn:focus-visible { color: var(--acento); }
+
+/* Configuración (pedido del usuario, 2026-07-13): mismo material que Directorio/Proyectos. */
+#settings-overlay {
+  position: fixed; inset: 0; background: rgba(5, 5, 7, 0.65);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  animation: mentis-modal-fade-in 0.15s ease-out;
+}
+#settings-overlay.hidden { display: none; }
+#settings-box {
+  width: 560px; max-width: calc(100vw - 60px); max-height: 80vh;
+  background: rgba(28, 28, 34, 0.9); border: 1px solid var(--border); border-radius: var(--radius);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-tonal);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: mentis-modal-in 0.15s ease-out;
+}
+#settings-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+#settings-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#btn-close-settings {
+  background: none; border: none; color: var(--texto-dim); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 4px;
+}
+#btn-close-settings:hover, #btn-close-settings:focus-visible { color: var(--acento); }
+#settings-body { padding: 18px 20px; overflow-y: auto; }
+.settings-section { margin-bottom: 20px; }
+.settings-section:last-child { margin-bottom: 0; }
+.settings-section h3 { margin: 0 0 6px; font-family: var(--font-sans); font-size: 14px; color: var(--texto); font-weight: 600; }
+.settings-hint { margin: 0 0 12px; font-size: 12px; color: var(--texto-dim); line-height: 1.5; }
+.settings-hint a { color: var(--acento); }
+.settings-section input[type="text"],.settings-section input[type="password"],
+.settings-section select,.settings-section textarea {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans); width: 100%;
+}
+.settings-section textarea { resize: vertical; font-family: inherit; margin-bottom: 8px; }
+.settings-section input:focus-visible,.settings-section select:focus-visible,.settings-section textarea:focus-visible {
+  outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento);
+}
+.settings-section > button {
+  background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.settings-section > button:hover { filter: brightness(1.1); }
+/* Feedback de guardado inequívoco (pedido del usuario, 2026-07-13: no se notaba si Ideogram había
+   guardado la key) -- el botón mismo cambia de texto y color un momento, en vez de depender
+   solo de una línea de estado que se podía pasar por alto. Mismo patrón para cualquier "Guardar"
+   de Configuración (perfil, memoria, modelos, Ideogram). */
+.settings-section > button.save-flash-ok { background: #2f8f4e; color: #eafff0; }
+
+/* Estado de conexión reusable (Ideogram hoy, cualquier conector/clave futura después): punto +
+   texto, siempre visible como fila propia, no una línea de texto que se confunde con el resto. */
+.key-status {
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  padding: 6px 10px; background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 12px; color: var(--texto-dim); font-family: var(--font-sans);
+}
+.key-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--peligro); flex-shrink: 0; }
+.key-status-dot.on { background: #7ee787; box-shadow: 0 0 6px rgba(126, 231, 135, 0.6); }
+.key-status.on { color: var(--texto); border-color: rgba(126, 231, 135, 0.4); }
+
+#ideogram-form, #runway-form { display: flex; gap: 8px; }
+#ideogram-form input, #runway-form input { flex: 1; }
+/* Botón "Guardar" de las API keys (Ideogram/Runway) -- el de Runway quedaba con el estilo
+   default del navegador por faltarle esta regla compartida. Selector compartido para no
+   repetir Y para no volver a olvidarse la proxima vez que se agregue un conector con su
+   propia key (bug real reportado por el usuario dos veces, 2026-07-15). */
+#btn-save-ideogram, #btn-save-runway {
+  background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  font-family: var(--font-sans);
+}
+#btn-save-ideogram:hover, #btn-save-runway:hover { filter: brightness(1.1); }
+#btn-save-ideogram.save-flash-ok, #btn-save-runway.save-flash-ok { background: #2f8f4e; color: #eafff0; }
+
+#replicate-form { display: flex; gap: 8px; }
+#replicate-form input { flex: 1; }
+#btn-save-replicate {
+  background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+}
+#btn-save-replicate:hover { filter: brightness(1.1); }
+#btn-save-replicate.save-flash-ok { background: #2f8f4e; color: #eafff0; }
+
+/* Perfil (pedido del usuario, 2026-07-13): avatar circular + campos, mismo material que el resto. */
+#profile-form { display: flex; gap: 14px; margin-bottom: 10px; }
+#btn-pick-avatar {
+  flex-shrink: 0; width: 64px; height: 64px; border-radius: 50%; padding: 0; cursor: pointer;
+  background: var(--fondo); border: 1px dashed var(--border); color: var(--texto-dim);
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+#btn-pick-avatar:hover, #btn-pick-avatar:focus-visible { border-color: var(--acento); color: var(--acento); }
+#profile-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+#profile-avatar-img.hidden { display: none; }
+#profile-avatar-fallback { font-size: 24px; font-family: var(--font-serif); }
+#profile-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+#profile-role-custom.hidden { display: none; }
+#profile-instructions { margin-top: 4px; }
+#profile-save-status { margin-left: 10px; }
+
+/* Modelos por rol: lista de acordeón (pedido del usuario, 2026-07-13 -- reemplaza el form siempre
+   expuesto con selects/inputs a la vista todo el tiempo). Cada rol es una fila compacta;
+   solo se ve el form de edición del rol que se clickeó. */
+#settings-models-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.cm-row {
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 12px; font-family: var(--font-sans); color: var(--texto); overflow: hidden;
+}
+.cm-row-header {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: none; border: none; color: inherit; cursor: pointer; padding: 9px 10px; text-align: left;
+}
+.cm-row-header:hover { background: rgba(0, 0, 0, 0.15); }
+.cm-row-name { font-weight: 600; }
+.cm-row-badge { color: var(--texto-dim); font-size: 11px; }
+.cm-row-badge.configured { color: var(--acento); }
+.cm-row.open.cm-row-header { border-bottom: 1px solid var(--border); }
+.cm-row-form { display: none; flex-direction: column; gap: 8px; padding: 10px; }
+.cm-row.open.cm-row-form { display: flex; }
+.cm-row-form-actions { display: flex; gap: 8px; }
+.cm-row-form-actions button {
+  border-radius: var(--radius); padding: 7px 12px; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
+  background: transparent; color: var(--texto-dim); font-family: var(--font-sans);
+}
+.cm-row-form-actions.cm-save { background: var(--acento); color: var(--fondo); border-color: var(--acento); font-weight: 600; }
+.cm-row-form-actions.cm-save:hover { filter: brightness(1.1); }
+.cm-row-form-actions.cm-remove:hover { color: var(--peligro); border-color: var(--peligro); }
+
+/* Splash de arranque (pedido del usuario, 2026-07-15): tapa TODA la interfaz con un fondo liso
+   (nada de la app visible atras) mientras el logo "habla" el saludo con hora/clima -- z-index
+   por encima de cualquier otra cosa (modales incluidos, hasta ~210) porque tiene que ser
+   literalmente lo primero que se ve. Se desvanece con opacity (fade-out) recien cuando termina
+   de hablar, y solo AHI se revela la interfaz real (ver runStartupSplash en renderer.js). */
+#splash-overlay {
+  position: fixed; inset: 0; background: var(--fondo); z-index: 500;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.6s ease-out;
+}
+#splash-overlay.fade-out { opacity: 0; }
+#splash-overlay.hidden { display: none; }
+/* El cuerpo digital ocupa el lugar del logo. Grande en el splash porque es la presentación de
+   Mentis; el pulso y el "hablar" ya no son animaciones de CSS sino estados del propio cuerpo 3D
+   (ver cuerpo-digital.js), así que acá solo se define el tamaño. */
+/* Subtítulos en vivo del modo voz. Van FIJOS abajo y por encima de todo (incluido el splash),
+   porque tienen que verse igual con el cuerpo digital a pantalla completa. */
+/* Los subtítulos son parte de la columna del cuerpo, no una capa flotante (2026-07-28).
+   Antes: position:fixed anclado a la ventana, bottom:46px, z-index 520 -- o sea, encima de todo,
+   incluidos los botones de acción y el propio núcleo. Y como estaba pegado a la ventana y no a
+   una sección, seguía visible en cualquier pantalla de la app.
+   Ahora ocupa su lugar debajo del núcleo: empuja en vez de tapar, y desaparece junto con la
+   columna del cuerpo. El max-height evita que una respuesta larga le coma la pantalla al cuerpo. */
+#subtitulos-voz {
+  width: min(760px, 100%);
+  margin-top: 10px;
+  max-height: 28%;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  pointer-events: none; text-align: center;
+  flex: 0 0 auto;
+}
+#subtitulos-voz.hidden { display: none; }
+.subtitulo {
+  max-width: 100%; padding: 8px 16px; border-radius: 18px;
+  font-size: 17px; line-height: 1.45; opacity: 0;
+  transition: opacity 0.25s ease;
+  background: rgba(5, 5, 7, 0.72); backdrop-filter: blur(6px);
+}
+.subtitulo.visible { opacity: 1; }
+/* Lo que dijo el usuario va en gris y más chico: es el eco de lo que acaba de decir, no la respuesta. */
+#subtitulo-usuario { color: var(--texto-dim); font-size: 15px; font-style: italic; }
+/* Lo que dice Mentis, en el naranja del cuerpo: es la voz que estás escuchando. */
+#subtitulo-mentis { color: var(--acento); font-weight: 500; }
+
+/* El saludo va a ventana completa (pedido del usuario, 2026-07-27: "dale pantalla completa").
+   Se puede porque el encuadre ya no depende del tamaño: la cámara se aleja según la forma del
+   canvas, así que el cuerpo entra entero tanto acá como en un rincón de 38 px. */
+#splash-cuerpo {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ===== ZONA CENTRAL: el cuerpo digital vive en el cuadro de los mensajes (2026-07-27) =====
+   Reemplaza al overlay a pantalla completa de la Fase 5. el usuario lo pidió explícito: el cuerpo va
+   en este cuadro, porque el resto de la interfaz (barra lateral, título, Logs, botones) hace
+   falta y taparla no servía de nada. */
+/* Dos columnas: el cuerpo a la IZQUIERDA, los mensajes a la DERECHA.
+   Es flex y no posicionamiento absoluto (como estaba hasta la versión del rincón) porque así las
+   dos columnas se reparten el ancho solas y nunca se pisan: el problema anterior era justamente
+   que el texto pasaba por encima del núcleo. */
+#zona-central { flex: 1; display: flex; min-height: 0; }
+
+#columna-cuerpo {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  min-width: 0;
+  /* Sin esto, al aparecer los subtítulos el contenido de la columna excede su alto y se DESBORDA
+     hacia abajo, encima del cuadro de botones -- que es exactamente el problema que vinimos a
+     resolver, sólo que desde adentro. Con overflow:hidden y min-height:0 la columna contiene lo
+     suyo y el núcleo cede el espacio que hagan falta los subtítulos. */
+  overflow: hidden;
+  min-height: 0;
+  /* Sin conversación abierta el cuerpo se queda con todo el cuadro. */
+  flex: 1 1 100%;
+  transition: flex-basis 0.45s ease;
+}
+#zona-central #messages { flex: 1 1 0; min-width: 0; }
+/* Sin conversación no hay nada que mostrar: la columna de mensajes ni ocupa lugar. */
+#zona-central:not(.con-mensajes) #messages { display: none; }
+/* Con conversación: el cuerpo cede el ancho y se queda con la franja izquierda. */
+#zona-central.con-mensajes #columna-cuerpo { flex: 0 0 40%; }
+
+#cuerpo-principal {
+  display: block;
+  cursor: pointer;
+  /* Que el núcleo pueda achicarse cuando los subtítulos piden lugar (antes no cedía nada y
+     empujaba todo hacia afuera de la columna). */
+  min-height: 0; flex-shrink: 1;
+  /* Cuadrado y limitado por el lado más chico de su columna: así entra entero tanto cuando ocupa
+     todo como cuando está en el 40%, sin deformarse. */
+  width: min(100%, 62vh); height: auto; aspect-ratio: 1;
+  max-height: 100%;
+  border-radius: 50%;   /* el foco de teclado sigue la forma del núcleo, no una caja cuadrada */
+  transition: width 0.45s ease;
+}
+#cuerpo-principal:focus-visible { outline: 2px solid var(--acento); outline-offset: 8px; }
+
+/* El cartel de estado, debajo del cuerpo. Vive DENTRO de la columna, así queda centrado bajo el
+   núcleo tanto a pantalla completa como en la franja del 40%. */
+#voz-estado {
+  margin-top: 14px; text-align: center; pointer-events: none;
+  font-family: var(--font-sans);
+  font-size: 15px; letter-spacing: 0.04em;
+  color: var(--texto-dim);
+  text-transform: lowercase;
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+/* LA EXCEPCION a la regla global `.hidden { display:none !important }`. Este cartel no desaparece:
+   se DESVANECE, con la transición de opacidad de acá arriba, y sigue ocupando su lugar debajo del
+   núcleo. Si lo sacáramos del layout, el cuerpo digital saltaría cada vez que cambia el estado de
+   la voz. Por eso se le devuelve el display a mano. */
+#voz-estado.hidden { display: block !important; opacity: 0; }
+#zona-central.escuchando #voz-estado { color: var(--texto); }
+
+/* El recuadro donde se apoyaba el micrófono se retira (pedido del usuario, 2026-07-27: "no sirve de
+   nada por la transcripción en tiempo real"). Hablar se hace tocando el núcleo, y lo que Mentis
+   entendió se ve en los subtítulos: el botón de abajo era un tercer lugar diciendo lo mismo.
+   El botón NO se borra del DOM -- el núcleo le reenvía los clicks y ahí vive toda la lógica de
+   grabar y transcribir; lo que se saca es el cajón visual. */
+#composer {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding-top: 0;
+}
+#voice-panel { display: none !important; }
+#onboarding-cuerpo {
+  width: 150px;
+  height: 150px;
+  display: block;
+}
+@keyframes mentis-talk {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 16px rgba(255, 102, 0, 0.55)) drop-shadow(0 0 36px rgba(255, 102, 0, 0.35));
+  }
+  50% {
+    transform: scale(1.07);
+    filter: drop-shadow(0 0 28px rgba(255, 102, 0, 0.9)) drop-shadow(0 0 52px rgba(255, 102, 0, 0.6));
+  }
+}
+
+/* Onboarding (pedido del usuario, 2026-07-13): pantalla guiada del primer arranque, mismo look que
+   el empty-state (logo que respira) pero de pantalla completa, con pasos. */
+#onboarding-overlay {
+  position: fixed; inset: 0; background: var(--fondo); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+#onboarding-overlay.hidden { display: none; }
+#onboarding-box { display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 440px; padding: 20px; text-align: center; }
+#onboarding-step-content h2 { font-family: var(--font-serif); color: var(--acento); font-size: 22px; margin: 0 0 10px; }
+#onboarding-step-content p { font-family: var(--font-sans); color: var(--texto); font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
+#onboarding-step-content ul { text-align: left; font-size: 13px; color: var(--texto-dim); line-height: 1.6; margin: 8px 0 0; padding-left: 20px; }
+#onboarding-dots { display: flex; gap: 6px; }
+.onboarding-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+.onboarding-dot.active { background: var(--acento); }
+#onboarding-actions { display: flex; gap: 10px; align-items: center; }
+#btn-onboarding-skip { background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: 13px; font-family: var(--font-sans); }
+#btn-onboarding-skip:hover { color: var(--texto); }
+#btn-onboarding-next {
+  background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
+  padding: 9px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+#btn-onboarding-next:hover { filter: brightness(1.1); }
+
+@media (prefers-reduced-motion: reduce) {
+  #thinking-indicator img { animation: none; }
+  #thinking-indicator, #modal-overlay, #modal-box, #directory-overlay, #directory-box, #projects-overlay, #projects-box, #settings-overlay, #settings-box, #schedule-overlay, #schedule-box {
+    animation: none;
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "fable-browser-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor local de navegacion web real para Fable (Playwright), controlado por nv-agent.sh via HTTP.",
+  "main": "server.js",
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}
