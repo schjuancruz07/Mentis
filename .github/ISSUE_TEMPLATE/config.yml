@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Problema de seguridad
+    url: https://github.com/schjuancruz07/Mentis/security/advisories/new
+    about: NO lo abras como issue público. Reportalo en privado por acá.
+  - name: No sé si es un problema o soy yo
+    url: https://github.com/schjuancruz07/Mentis/blob/main/README.md
+    about: Antes de abrir un issue, probá con "bash mentis-diagnostico.sh" y mirá el README.

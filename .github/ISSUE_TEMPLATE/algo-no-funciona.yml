@@ -1,0 +1,56 @@
+name: Algo no funciona
+description: Mentis hace algo que no debería, o no hace algo que debería
+labels: ["problema"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportarlo. Cuanto más concreto, más chances de que se pueda arreglar.
+
+        **Antes de pegar nada**: revisá que no haya claves ni tokens en lo que copies.
+        Mentis los oculta solos en sus registros, pero mirá igual.
+
+  - type: textarea
+    id: que-paso
+    attributes:
+      label: Qué esperabas y qué pasó
+      description: Las dos cosas. "No anda" solo es casi imposible de arreglar.
+      placeholder: |
+        Esperaba que me generara un documento de Word.
+        En vez de eso me contestó con un listado de archivos y no creó nada.
+    validations:
+      required: true
+
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Cómo hacer que vuelva a pasar
+      description: Lo que le escribiste, y qué tenías prendido en Conectores.
+      placeholder: |
+        1. Abrí Mentis
+        2. Le escribí "hacete un documento sobre X"
+        3. Esperé y pasó esto
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostico
+    attributes:
+      label: Salida de mentis-diagnostico.sh
+      description: |
+        Corré `bash mentis-diagnostico.sh` y pegá el resultado. Dice qué está instalado
+        y qué falta, y suele resolver el caso solo.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Versión de Mentis
+      description: Está en el archivo VERSION, o abajo en Configuración.
+      placeholder: "0.2.1"
+
+  - type: input
+    id: windows
+    attributes:
+      label: Versión de Windows
+      placeholder: "Windows 11"

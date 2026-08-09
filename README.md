@@ -48,6 +48,20 @@ Cuando termine, abrís Mentis desde el menú de inicio.
 
 Si algo no anda, corré `bash mentis-diagnostico.sh`: revisa todo y te dice qué falta en castellano.
 
+## Actualizarlo
+
+```bash
+bash mentis-actualizar.sh buscar     # ve si hay algo nuevo y qué cambió
+bash mentis-actualizar.sh instalar   # lo instala (pregunta antes)
+```
+
+Nunca se actualiza solo. Antes de tocar nada hace un respaldo, y si modificaste algún archivo de
+Mentis **frena y te avisa** en vez de pisarte el trabajo. Si algo sale mal:
+`bash mentis-actualizar.sh volver`.
+
+Tus conversaciones, tu memoria y tus claves no se tocan nunca: viven en archivos que las
+actualizaciones ni miran.
+
 ## Lo que conviene saber antes de usarlo
 
 Esto no es la letra chica: es lo que hay que entender **antes** de instalarlo. Mentis puede hacer
@@ -117,6 +131,13 @@ muchas decisiones tienen al lado la medición que las justifica.
 
 Se publica por si a alguien le sirve, entero o en partes. No hay soporte ni garantías: es un
 proyecto personal, no un producto.
+
+## Si querés participar
+
+- **[Cómo contribuir](CONTRIBUTING.md)** — cómo reportar un problema y cómo mandar código.
+- **[Código de conducta](CODE_OF_CONDUCT.md)** — es corto: tratá a los demás con respeto.
+- **[Seguridad](SECURITY.md)** — si encontraste un agujero, **no lo abras como issue público**:
+  ahí está el canal privado.
 
 ## Licencia
 

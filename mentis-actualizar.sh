@@ -1,288 +1,158 @@
 #!/usr/bin/env bash
-# mentis-actualizar.sh -- traer las mejoras que publica el administrador. Corre en TODAS las copias.
+# mentis-actualizar.sh -- traer las mejoras publicadas. Corre en las copias instaladas con git.
 #
-# ESTE ARCHIVO EJECUTA CODIGO QUE VIENE DE OTRA COMPUTADORA. Es la parte mas delicada de Mentis, y
-# todo lo que sigue existe para que eso sea seguro:
+# QUE CAMBIO (2026-08-08): antes esto bajaba paquetes firmados de un repositorio aparte y
+# verificaba una firma Ed25519 antes de instalar. Ahora Mentis vive en un repositorio publico y
+# se instala con `git clone`, asi que actualizar es `git pull`. El sistema de firma no se tira --
+# sigue teniendo sentido si algun dia se distribuye fuera de GitHub -- pero para cinco personas y
+# un repositorio publico, la complejidad no se paga: el riesgo real no era que alguien modificara
+# un paquete en el camino, era que la actualizacion nunca llegara porque el proceso tenia
+# demasiados pasos.
 #
-#   1. NADA se instala sin firma valida. Si la firma no verifica -- por lo que sea -- no se instala.
-#      Un "no se" significa "no". Es lo unico que impide que alguien que se meta en el medio del
-#      canal ejecute lo que quiera en la maquina de cinco personas.
-#   2. Se pregunta ANTES. Nunca se actualiza solo. Quien usa esta computadora decide.
-#   3. Se respalda antes de tocar nada, y `volver` deshace.
-#   4. Si la persona modifico un archivo de Mentis, se FRENA y se avisa. No se pisa el trabajo de
-#      nadie en silencio.
-#   5. Los datos NO se tocan nunca: conversaciones, memorias, claves y configuracion se quedan
-#      como estan. Se actualiza el codigo, no la vida de la persona.
+# LO QUE SE MANTIENE, porque no era complejidad al pedo:
+#   1. Se pregunta ANTES. Nunca se actualiza solo.
+#   2. Se respalda antes de tocar nada, y `volver` deshace.
+#   3. Si modificaste un archivo de Mentis, se FRENA y se avisa. No se pisa el trabajo de nadie.
+#   4. Los datos NO se tocan nunca: conversaciones, memorias, claves y configuracion se quedan
+#      donde estan. Estan en .gitignore, asi que git ni los mira.
+#
+# Uso:
+#   mentis-actualizar.sh buscar     ve si hay algo nuevo y que cambio, sin instalar
+#   mentis-actualizar.sh instalar   actualiza (pregunta antes)
+#   mentis-actualizar.sh volver     deshace la ultima actualizacion
+
 set -uo pipefail
 MA_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$MA_HERE/engine/nv-firma-lib.sh" 2>/dev/null || { echo "ERROR: falta engine/nv-firma-lib.sh" >&2; exit 1; }
-
-MA_PUB="$MA_HERE/mentis-firma-publica.pem"
-MA_VERSION_ARCH="$MA_HERE/VERSION"
-MA_CACHE="${MENTIS_ACTUALIZAR_CACHE:-$MA_HERE/.actualizaciones-cache}"
 MA_RESPALDOS="${MENTIS_RESPALDOS_DIR:-$MA_HERE/.respaldos-actualizacion}"
-MA_HUELLAS="$MA_HERE/.archivos-instalados.sha256"
-# De donde se bajan. Se configura una vez; sale de mentis-settings.json o de la variable.
-MA_ORIGEN="${MENTIS_ORIGEN_ACTUALIZACIONES:-}"
 
-# Lo que NUNCA se pisa, pase lo que pase. Aunque el paquete lo traiga.
-MA_INTOCABLE=(
-  "mentis-settings.json" "modelos-override.json" ".custom-models-secrets.env"
-  "conversations" "memoria" "engine/logs" "engine/index" "engine/recall-corpus"
-  "engine/sombras" "engine/.web-token" "engine/.nv-secrets" "workspace" "avatar"
-  "scheduled-runs" "knowledge" ".firma"
-)
+_ma_es_clon() { [ -d "$MA_HERE/.git" ]; }
 
-_ma_uso() {
+# Una instalacion que no vino de `git clone` no se puede actualizar asi, y hay que decirlo claro
+# en vez de fallar con un error de git. Es tambien el caso de la maquina donde se DESARROLLA
+# Mentis: esa no se actualiza desde el repositorio publico, porque es la que publica.
+if ! _ma_es_clon; then
   cat <<'FIN'
-Uso:
-  mentis-actualizar.sh revisar     ¿hay algo nuevo? (no toca nada)
-  mentis-actualizar.sh instalar    lo instala, despues de preguntar
-  mentis-actualizar.sh volver      deshace la ultima actualizacion
-  mentis-actualizar.sh origen <url-del-repo>   configura de donde bajarlas
+Esta instalación de Mentis no vino de `git clone`, así que no se actualiza por acá.
+
+Puede ser por dos motivos:
+
+  1. La instalaste copiando la carpeta desde otra computadora.
+     Para pasarte al sistema de actualizaciones, volvé a instalarla con:
+         git clone https://github.com/schjuancruz07/Mentis.git
+     y copiá tus datos (conversations/, memoria/, y los archivos de claves) a la carpeta nueva.
+
+  2. Es la máquina donde se desarrolla Mentis.
+     Esa no se actualiza desde el repositorio: es la que publica.
 FIN
-}
+  exit 1
+fi
 
-_ma_version() { tr -d ' \r\n' < "$MA_VERSION_ARCH" 2>/dev/null || printf '0.0.0'; }
+cd "$MA_HERE" || exit 1
 
-_ma_mayor_que() {
-  local a="$1" b="$2"
-  [ "$a" = "$b" ] && return 1
-  [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -1)" = "$a" ]
-}
-
-_ma_origen() {
-  [ -n "$MA_ORIGEN" ] && { printf '%s' "$MA_ORIGEN"; return 0; }
-  python3 -c '
-import json, io, sys
-try:
-    with io.open(sys.argv[1], encoding="utf-8") as f:
-        print(((json.load(f).get("actualizaciones") or {}).get("origen") or "").strip())
-except Exception:
-    pass
-' "$(nv_winpath "$MA_HERE/mentis-settings.json" 2>/dev/null || printf '%s' "$MA_HERE/mentis-settings.json")" 2>/dev/null | tr -d ' \r\n'
-}
-
-# --- traer el manifiesto -----------------------------------------------------------------------
-_ma_bajar() {
-  local origen; origen="$(_ma_origen)"
-  if [ -z "$origen" ]; then
-    echo "No esta configurado de donde bajar las actualizaciones." >&2
-    echo "  Pedile la direccion a quien te instalo Mentis y corre:" >&2
-    echo "  mentis-actualizar.sh origen <url>" >&2
-    return 2
+# --- buscar -----------------------------------------------------------------------------------
+_ma_buscar() {
+  echo "== Buscando novedades =="
+  if ! timeout 60 git fetch --quiet origin 2>/dev/null; then
+    echo "No pude consultar el repositorio. ¿Hay internet?"
+    return 1
   fi
-  # Un origen local (una carpeta) sirve para probar sin red y para quien reparta por pendrive.
-  if [ -d "$origen" ]; then
-    mkdir -p "$MA_CACHE" 2>/dev/null || true
-    cp -f "$origen/manifiesto.json" "$MA_CACHE/" 2>/dev/null || return 1
-    mkdir -p "$MA_CACHE/paquetes" 2>/dev/null || true
-    cp -f "$origen"/paquetes/*.tar.gz "$MA_CACHE/paquetes/" 2>/dev/null || true
+  local atras
+  atras="$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
+  if [ "${atras:-0}" -eq 0 ]; then
+    echo "Ya tenés la última versión."
     return 0
   fi
-  if [ -d "$MA_CACHE/.git" ]; then
-    ( cd "$MA_CACHE" && git pull --quiet 2>/dev/null ) || { echo "No pude traer novedades (¿internet? ¿permisos del repo?)" >&2; return 1; }
-  else
-    rm -rf "$MA_CACHE" 2>/dev/null
-    git clone --quiet --depth 1 "$origen" "$MA_CACHE" 2>/dev/null || {
-      echo "No pude bajar del repo. Revisa la direccion y que tengas acceso." >&2; return 1; }
-  fi
-}
-
-_ma_campo() {
-  python3 -c '
-import json, io, sys
-try:
-    with io.open(sys.argv[1], encoding="utf-8") as f:
-        print(json.load(f).get(sys.argv[2], "") or "")
-except Exception:
-    pass
-' "$(nv_winpath "$MA_CACHE/manifiesto.json" 2>/dev/null || printf '%s' "$MA_CACHE/manifiesto.json")" "$1" 2>/dev/null
-}
-
-# --- revisar -----------------------------------------------------------------------------------
-_ma_revisar() {
-  local mia; mia="$(_ma_version)"
-  echo "Tu version: $mia"
-  _ma_bajar || return 1
-  [ -f "$MA_CACHE/manifiesto.json" ] || { echo "No hay ninguna actualizacion publicada."; return 0; }
-  local nueva; nueva="$(_ma_campo version)"
-  if [ -z "$nueva" ]; then echo "El manifiesto no dice que version es. No hago nada."; return 1; fi
-  if ! _ma_mayor_que "$nueva" "$mia"; then
-    echo "Estas al dia."
-    return 0
-  fi
+  echo "Hay $atras cambio(s) nuevo(s):"
   echo
-  echo "== Hay una version nueva: $nueva =="
-  echo "  publicada: $(_ma_campo fecha)"
-  echo "  que cambia:"
-  printf '    %s\n' "$(_ma_campo notas)"
+  git log --format='  - %s' HEAD..origin/main 2>/dev/null | head -20
   echo
-  echo "Para instalarla:  mentis-actualizar.sh instalar"
+  echo "Para instalarlos:  bash mentis-actualizar.sh instalar"
   return 0
 }
 
-# --- huellas: para saber si la persona toco algun archivo --------------------------------------
-_ma_guardar_huellas() {
-  local lista="$1"
-  ( cd "$MA_HERE" && while IFS= read -r f; do
-      [ -f "$f" ] && printf '%s  %s\n' "$(openssl dgst -sha256 "$f" 2>/dev/null | sed -E 's/.*= *//')" "$f"
-    done < "$lista" ) > "$MA_HUELLAS" 2>/dev/null
-}
-
-# Devuelve la lista de archivos que cambiaron desde la ultima instalacion.
-_ma_modificados() {
-  [ -f "$MA_HUELLAS" ] || return 0
-  ( cd "$MA_HERE" && while read -r sha archivo; do
-      [ -n "$archivo" ] || continue
-      [ -f "$archivo" ] || continue
-      local ahora; ahora="$(openssl dgst -sha256 "$archivo" 2>/dev/null | sed -E 's/.*= *//')"
-      [ "$ahora" = "$sha" ] || printf '%s\n' "$archivo"
-    done < "$MA_HUELLAS" )
-}
-
-# --- instalar ----------------------------------------------------------------------------------
+# --- instalar ---------------------------------------------------------------------------------
 _ma_instalar() {
-  local mia; mia="$(_ma_version)"
-  _ma_bajar || return 1
-  [ -f "$MA_CACHE/manifiesto.json" ] || { echo "No hay nada publicado."; return 0; }
+  timeout 60 git fetch --quiet origin 2>/dev/null || { echo "No pude consultar el repositorio."; return 1; }
 
-  local nueva firma sha arch
-  nueva="$(_ma_campo version)"; firma="$(_ma_campo firma)"
-  sha="$(_ma_campo sha256)";    arch="$(_ma_campo archivo)"
-  if ! _ma_mayor_que "$nueva" "$mia"; then echo "Ya estas en la $mia. No hay nada que instalar."; return 0; fi
+  local atras; atras="$(git rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
+  if [ "${atras:-0}" -eq 0 ]; then echo "Ya tenés la última versión."; return 0; fi
 
-  local tgz="$MA_CACHE/$arch"
-  [ -f "$tgz" ] || { echo "ERROR: el manifiesto habla de $arch pero el archivo no llego." >&2; return 1; }
-
-  # --- LA VERIFICACION. Todo lo demas depende de esto. ---
-  echo "-- verificando que la actualizacion sea legitima"
-  if [ ! -f "$MA_PUB" ]; then
-    echo "FRENO: no tengo la clave publica del administrador ($MA_PUB)." >&2
-    echo "  Sin eso no puedo saber si esto lo publico quien dice. No instalo nada." >&2
-    return 1
-  fi
-  local sha_real; sha_real="$(openssl dgst -sha256 "$tgz" 2>/dev/null | sed -E 's/.*= *//')"
-  if [ -n "$sha" ] && [ "$sha_real" != "$sha" ]; then
-    echo "FRENO: el paquete no coincide con lo que dice el manifiesto." >&2
-    echo "  Puede ser una descarga cortada, o que alguien lo haya cambiado. No instalo." >&2
-    return 1
-  fi
-  if ! nv_firma_verificar "$tgz" "$firma" "$MA_PUB"; then
-    echo "FRENO: LA FIRMA NO ES VALIDA." >&2
-    echo "  Esta actualizacion NO la publico quien tiene la clave de administrador." >&2
-    echo "  No se instala nada. Avisale a quien te instalo Mentis." >&2
-    return 1
-  fi
-  echo "   firma correcta (huella del administrador: $(nv_firma_huella "$MA_PUB"))"
-
-  # --- ¿toco algo la persona? ---
-  local modificados; modificados="$(_ma_modificados)"
-  if [ -n "$modificados" ]; then
+  # FRENO: si tocaste archivos de Mentis, se para acá. `git pull` los pisaría o daría un conflicto
+  # a mitad de camino, y ninguna de las dos es forma de tratar el trabajo de otro.
+  # Los datos (conversaciones, claves, configuración) no cuentan: están en .gitignore.
+  local sucios; sucios="$(git status --porcelain 2>/dev/null | grep -v '^??' | head -5)"
+  if [ -n "$sucios" ]; then
+    echo "PARO: modificaste archivos de Mentis y la actualización los pisaría."
     echo
-    echo "FRENO: estos archivos los modificaste vos desde la ultima actualizacion:"
-    printf '   %s\n' $modificados | head -10
+    printf '%s\n' "$sucios" | sed 's/^/  /'
     echo
-    echo "  Si sigo, pierdo esos cambios. No lo hago sin que lo sepas."
-    echo "  Hablalo con quien te instalo Mentis, o guarda una copia de esos archivos y volve a intentar."
-    return 2
+    echo "Si los cambios te importan, guardalos antes (copialos a otro lado)."
+    echo "Si no te importan y querés la versión nueva igual:"
+    echo "    git checkout -- .   &&   bash mentis-actualizar.sh instalar"
+    return 1
   fi
 
-  # --- pedir permiso. Nunca se actualiza sin que la persona diga que si. ---
+  echo "== Se van a instalar $atras cambio(s) =="
   echo
-  echo "== Actualizacion $mia -> $nueva =="
-  echo "  que cambia: $(_ma_campo notas)"
+  git log --format='  - %s' HEAD..origin/main 2>/dev/null | head -20
   echo
-  echo "  Tus conversaciones, memorias y claves NO se tocan."
-  printf '  ¿La instalo? [s/N]: '
-  local r=""; read -r r
-  case "$r" in
-    s|S|si|SI|Si|y|Y) ;;
-    *) echo "No se instalo nada."; return 0 ;;
+  printf "¿Actualizamos? (s/N): "
+  read -r _resp
+  case "${_resp:-}" in
+    s|S|si|SI|Si|sí|Sí) ;;
+    *) echo "No se instaló nada."; return 0 ;;
   esac
 
-  # --- respaldo ---
+  # RESPALDO antes de tocar nada. Se guarda el punto exacto del historial, que es todo lo que hace
+  # falta para volver: los archivos se reconstruyen desde ahí.
+  mkdir -p "$MA_RESPALDOS" 2>/dev/null
   local sello; sello="$(date +%Y%m%d-%H%M%S)"
-  local resp="$MA_RESPALDOS/$sello-v$mia"
-  mkdir -p "$resp" 2>/dev/null || true
-  echo "-- respaldando la version actual en $(basename "$resp")"
-  local lista_nueva; lista_nueva="$(mktemp)"
-  tar -tzf "$tgz" 2>/dev/null | grep -v '/$' | sed 's|^\./||' > "$lista_nueva"
-  # Solo se respalda lo que el paquete va a pisar: copiar todo seria copiar tambien los datos.
-  ( cd "$MA_HERE" && while IFS= read -r f; do
-      [ -f "$f" ] || continue
-      mkdir -p "$resp/$(dirname "$f")" 2>/dev/null
-      cp -f "$f" "$resp/$f" 2>/dev/null
-    done < "$lista_nueva" )
-  printf '%s' "$mia" > "$resp/.version-anterior"
+  git rev-parse HEAD > "$MA_RESPALDOS/$sello.punto" 2>/dev/null
+  echo "  respaldo: $sello (para deshacer: bash mentis-actualizar.sh volver)"
 
-  # --- aplicar, salteando lo intocable ---
-  echo "-- instalando"
-  local tmp; tmp="$(mktemp -d)"
-  tar -xzf "$tgz" -C "$tmp" 2>/dev/null || { echo "ERROR: el paquete no se pudo abrir" >&2; rm -rf "$tmp"; return 1; }
-  local saltados=0
-  while IFS= read -r f; do
-    local salta=0
-    for x in "${MA_INTOCABLE[@]}"; do
-      case "$f" in "$x"|"$x"/*) salta=1; break ;; esac
-    done
-    if [ "$salta" = "1" ]; then saltados=$((saltados+1)); continue; fi
-    [ -f "$tmp/$f" ] || continue
-    mkdir -p "$MA_HERE/$(dirname "$f")" 2>/dev/null
-    cp -f "$tmp/$f" "$MA_HERE/$f" 2>/dev/null
-  done < "$lista_nueva"
-  rm -rf "$tmp"
-
-  _ma_guardar_huellas "$lista_nueva"
-  rm -f "$lista_nueva"
-  printf '%s\n' "$nueva" > "$MA_VERSION_ARCH"
-
-  echo
-  echo "Listo: ahora tenes la version $nueva."
-  [ "$saltados" -gt 0 ] && echo "  ($saltados archivo(s) tuyos quedaron intactos, como corresponde)"
-  echo
-  echo "Si algo quedo raro:  mentis-actualizar.sh volver"
-  echo "Si cambio la ventana de Mentis, cerrala y corre:  cd app && npm run empaquetar"
+  if timeout 180 git pull --ff-only origin main 2>&1 | tail -3; then
+    echo
+    echo "Listo. Versión: $(cat VERSION 2>/dev/null | tr -d '\r')"
+    # Si cambió algo de la ventana, hay que rearmarla: el .exe no se actualiza solo.
+    if git diff --name-only "$(cat "$MA_RESPALDOS/$sello.punto")" HEAD 2>/dev/null | grep -q '^app/'; then
+      echo
+      echo "OJO: cambió la ventana de Mentis. Cerrala y corré:"
+      echo "    cd app && npm run empaquetar"
+    fi
+  else
+    echo "La actualización falló. No se cambió nada. Para volver: bash mentis-actualizar.sh volver"
+    return 1
+  fi
 }
 
-# --- volver ------------------------------------------------------------------------------------
+# --- volver -----------------------------------------------------------------------------------
 _ma_volver() {
-  local ultimo; ultimo="$(ls -1d "$MA_RESPALDOS"/*/ 2>/dev/null | sort | tail -1)"
-  if [ -z "$ultimo" ]; then echo "No hay ningun respaldo para volver."; return 1; fi
-  local antes; antes="$(cat "$ultimo/.version-anterior" 2>/dev/null || echo "?")"
-  echo "Volviendo a la version $antes (respaldo: $(basename "$ultimo"))"
-  ( cd "$ultimo" && find. -type f ! -name ".version-anterior" -print | sed 's|^\./||' | while IFS= read -r f; do
-      mkdir -p "$MA_HERE/$(dirname "$f")" 2>/dev/null
-      cp -f "$ultimo/$f" "$MA_HERE/$f" 2>/dev/null
-    done )
-  [ "$antes" != "?" ] && printf '%s\n' "$antes" > "$MA_VERSION_ARCH"
-  echo "Listo: volviste a la $antes."
-}
+  local ultimo; ultimo="$(ls -1 "$MA_RESPALDOS"/*.punto 2>/dev/null | sort | tail -1)"
+  if [ -z "$ultimo" ]; then echo "No hay ninguna actualización para deshacer."; return 1; fi
+  local punto; punto="$(cat "$ultimo" 2>/dev/null | tr -d '\r')"
+  if [ -z "$punto" ]; then echo "El respaldo está vacío."; return 1; fi
 
-# --- origen ------------------------------------------------------------------------------------
-_ma_origen_set() {
-  local url="${1:?falta la direccion}"
-  MAO_URL="$url" python3 -c '
-import json, io, os, sys
-ruta = sys.argv[1]
-try:
-    with io.open(ruta, encoding="utf-8") as f: d = json.load(f)
-except Exception:
-    d = {}
-d.setdefault("actualizaciones", {})["origen"] = os.environ["MAO_URL"]
-tmp = ruta + ".tmp"
-with io.open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
-os.replace(tmp, ruta)
-' "$(nv_winpath "$MA_HERE/mentis-settings.json" 2>/dev/null || printf '%s' "$MA_HERE/mentis-settings.json")" \
-    && echo "Origen guardado. Proba:  mentis-actualizar.sh revisar"
-}
-
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
-  case "${1:-}" in
-    revisar)  _ma_revisar ;;
-    instalar) _ma_instalar ;;
-    volver)   _ma_volver ;;
-    origen)   _ma_origen_set "${2:-}" ;;
-    *) _ma_uso; exit 2 ;;
+  echo "Vas a volver al punto anterior a la última actualización:"
+  git log --format='  %h  %s' -1 "$punto" 2>/dev/null
+  printf "¿Seguimos? (s/N): "
+  read -r _resp
+  case "${_resp:-}" in
+    s|S|si|SI|Si|sí|Sí) ;;
+    *) echo "No se tocó nada."; return 0 ;;
   esac
-fi
+
+  if git reset --hard "$punto" 2>&1 | tail -1; then
+    echo "Listo, volviste a la versión anterior."
+    rm -f "$ultimo" 2>/dev/null
+  else
+    echo "No se pudo volver."
+    return 1
+  fi
+}
+
+case "${1:-}" in
+  buscar)   _ma_buscar ;;
+  instalar) _ma_instalar ;;
+  volver)   _ma_volver ;;
+  *) sed -n '18,21p' "$0" ;;
+esac

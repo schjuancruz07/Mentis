@@ -1,0 +1,32 @@
+name: Una idea
+description: Algo que Mentis podría hacer y todavía no hace
+labels: ["idea"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Las ideas son bienvenidas. Aviso honesto: este es un proyecto personal y tiene una
+        dirección propia, así que una idea buena puede igual no entrar. No es nada personal.
+
+  - type: textarea
+    id: problema
+    attributes:
+      label: Qué problema resolvería
+      description: |
+        Empezá por el problema, no por la solución. "Quiero que tenga un botón X" cuenta
+        menos que "cada vez que hago Y tengo que dar cuatro vueltas".
+      placeholder: Cada vez que quiero X tengo que hacer Y y Z a mano, y me olvido siempre.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Cómo te lo imaginás
+      description: Si tenés una idea de cómo sería, contala. Si no, con el problema alcanza.
+
+  - type: textarea
+    id: alternativas
+    attributes:
+      label: Qué hacés hoy en su lugar
+      description: Sirve para entender cuánto molesta de verdad.
