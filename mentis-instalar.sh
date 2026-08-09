@@ -369,11 +369,112 @@ os.replace(tmp, ruta)
   echo
   echo "Falta instalar lo de la app (una sola vez):"
   echo "   cd app && npm install && npm run empaquetar"
+
+  # Los servicios externos se PIDEN acá, en vez de mandar a leer otro archivo. Antes esta parte
+  # decía "está todo explicado en INSTALAR.md", y ese archivo ni siquiera viaja en la version
+  # publica: quien clonara el repositorio se encontraba con una referencia a la nada.
+  _configurar_mcp
+
   echo
-  echo "Y si queres Google Workspace (Drive, Docs, Gmail, Calendar), Tailscale o el telefono,"
-  echo "esta todo explicado en INSTALAR.md -- son tramites largos y conviene que te los haga tu Claude."
+  echo "Falta el telefono y el acceso remoto (Tailscale), que son tramites aparte:"
+  echo "  telefono:  bash mentis-telefono.sh --ayuda"
+  echo "  remoto:    https://tailscale.com/download"
   echo
   _revisar
+}
+
+# Las credenciales de los servidores MCP van a OTRO archivo: mcp-bridge/.secrets.env, que es de
+# donde las lee mcp-bridge/mcp-client.js. Escribirlas en.custom-models-secrets.env seria
+# escribirlas donde nadie las busca.
+_guardar_secreto_mcp() {
+  local nombre="$1" valor="$2"
+  local archivo="$MI_HERE/mcp-bridge/.secrets.env"
+  mkdir -p "$MI_HERE/mcp-bridge" 2>/dev/null
+  if [ ! -f "$archivo" ]; then
+    printf '# Credenciales de los servidores MCP -- NO se versiona, NO viaja en las copias.\n' > "$archivo"
+    chmod 600 "$archivo" 2>/dev/null || true
+  fi
+  if grep -q "^${nombre}=" "$archivo" 2>/dev/null; then
+    local tmp; tmp="$(mktemp)"
+    grep -v "^${nombre}=" "$archivo" > "$tmp" && mv -f "$tmp" "$archivo"
+  fi
+  printf '%s=%s\n' "$nombre" "$valor" >> "$archivo"
+  echo "  guardada en mcp-bridge/.secrets.env"
+}
+
+# --- Los servicios que se conectan por MCP (2026-08-08) ----------------------------------------
+# Antes esta parte no existia: el instalador detectaba que a Google Workspace le faltaban las
+# credenciales y te mandaba a leer INSTALAR.md, un archivo que ni siquiera viaja en la version
+# publica. "Anda a leer otro documento" no es instalar.
+_configurar_mcp() {
+  echo
+  echo "== Servicios externos (opcionales, se pueden dejar para despues) =="
+  echo
+
+  # --- GitHub ---
+  echo "GitHub -- para que Mentis pueda leer tus repositorios, buscar codigo y mirar issues."
+  echo "  Se saca en: GitHub -> Settings -> Developer settings -> Personal access tokens ->"
+  echo "  Tokens (classic) -> Generate new token. Alcanza con marcar 'repo'."
+  echo "  (Si solo vas a usar repositorios publicos, con 'public_repo' te sobra.)"
+  printf "  Pegá el token (o Enter para saltear): "
+  read -r _gh_token
+  if [ -n "${_gh_token:-}" ]; then
+    _guardar_secreto_mcp "GITHUB_PERSONAL_ACCESS_TOKEN" "$_gh_token"
+    # El binario NO viaja en el paquete: pesa 25 MB y hay uno por sistema operativo.
+    if [ ! -f "$MI_HERE/mcp-bridge/bin/github-mcp-server.exe" ]; then
+      echo "  Falta el programa del servidor. Se baja del release oficial de GitHub:"
+      echo "     https://github.com/github/github-mcp-server/releases"
+      echo "  Descomprimilo en mcp-bridge/bin/ (ver mcp-bridge/bin/COMO-OBTENER.md)."
+    else
+      echo "  El servidor ya esta instalado."
+    fi
+    echo "  Arranca en modo SOLO LECTURA y apagado. Se prende desde Conectores."
+  else
+    echo "  Salteado."
+  fi
+  echo
+
+  # --- Google Workspace ---
+  echo "Google Workspace -- Drive, Docs, Sheets, Gmail y Calendar."
+  echo "  Es el tramite mas largo, pero se hace una sola vez:"
+  echo "   1. Entra a https://console.cloud.google.com/ y crea un proyecto."
+  echo "   2. En 'APIs y servicios' habilita: Drive, Docs, Sheets, Gmail y Calendar."
+  echo "   3. En 'Credenciales' crea un 'ID de cliente de OAuth' de tipo 'Aplicacion de escritorio'."
+  echo "   4. Copia el ID y el secreto que te muestra."
+  printf "  Pegá el ID de cliente (o Enter para saltear): "
+  read -r _g_id
+  if [ -n "${_g_id:-}" ]; then
+    printf "  Pegá el secreto de cliente: "
+    read -r _g_secret
+    if [ -n "${_g_secret:-}" ]; then
+      _guardar_secreto_mcp "GOOGLE_CLIENT_ID" "$_g_id"
+      _guardar_secreto_mcp "GOOGLE_CLIENT_SECRET" "$_g_secret"
+      echo "  Listo. La primera vez que lo uses te va a abrir el navegador para dar permiso."
+    else
+      echo "  Sin el secreto no sirve el ID solo. Salteado."
+    fi
+  else
+    echo "  Salteado."
+  fi
+  echo
+
+  # --- Gemini ---
+  echo "Google Gemini -- como alternativa a los modelos de NVIDIA. VIENE APAGADO."
+  echo
+  echo "  ANTES DE PONER LA CLAVE, LEE ESTO:"
+  echo "  El plan GRATUITO de Google USA LO QUE LE MANDES PARA ENTRENAR SUS MODELOS, y hay"
+  echo "  revisores humanos que pueden llegar a leerlo. El plan pago no."
+  echo "  Si vas a hablar de cosas privadas -- salud, plata, trabajo, otras personas -- dejalo."
+  echo "  NVIDIA sigue siendo el proveedor principal y no hace falta tocar nada."
+  echo "  La clave, si la queres, se saca gratis en https://aistudio.google.com"
+  printf "  Pegá la clave de Gemini (o Enter para saltear): "
+  read -r _gem_key
+  if [ -n "${_gem_key:-}" ]; then
+    _guardar_secreto "CUSTOM_MODEL_KEY_GEMINI" "$_gem_key"
+    echo "  Guardada. Sigue APAGADO: se prende por rol desde la configuracion."
+  else
+    echo "  Salteado (es lo mas prudente)."
+  fi
 }
 
 # Las claves de Ideogram, Runway y NASA NO van al settings.json: van a.custom-models-secrets.env,

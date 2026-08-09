@@ -14,7 +14,7 @@
 #   2. Se respalda antes de tocar nada, y `volver` deshace.
 #   3. Si modificaste un archivo de Mentis, se FRENA y se avisa. No se pisa el trabajo de nadie.
 #   4. Los datos NO se tocan nunca: conversaciones, memorias, claves y configuracion se quedan
-#      donde estan. Estan en .gitignore, asi que git ni los mira.
+#      donde estan. Estan en.gitignore, asi que git ni los mira.
 #
 # Uso:
 #   mentis-actualizar.sh buscar     ve si hay algo nuevo y que cambio, sin instalar
@@ -38,7 +38,7 @@ Puede ser por dos motivos:
 
   1. La instalaste copiando la carpeta desde otra computadora.
      Para pasarte al sistema de actualizaciones, volvé a instalarla con:
-         git clone https://github.com/schjuancruz07/Mentis.git
+         git clone https://github.com/usuario/Mentis.git
      y copiá tus datos (conversations/, memoria/, y los archivos de claves) a la carpeta nueva.
 
   2. Es la máquina donde se desarrolla Mentis.
@@ -79,7 +79,7 @@ _ma_instalar() {
 
   # FRENO: si tocaste archivos de Mentis, se para acá. `git pull` los pisaría o daría un conflicto
   # a mitad de camino, y ninguna de las dos es forma de tratar el trabajo de otro.
-  # Los datos (conversaciones, claves, configuración) no cuentan: están en .gitignore.
+  # Los datos (conversaciones, claves, configuración) no cuentan: están en.gitignore.
   local sucios; sucios="$(git status --porcelain 2>/dev/null | grep -v '^??' | head -5)"
   if [ -n "$sucios" ]; then
     echo "PARO: modificaste archivos de Mentis y la actualización los pisaría."
@@ -88,7 +88,7 @@ _ma_instalar() {
     echo
     echo "Si los cambios te importan, guardalos antes (copialos a otro lado)."
     echo "Si no te importan y querés la versión nueva igual:"
-    echo "    git checkout -- .   &&   bash mentis-actualizar.sh instalar"
+    echo "    git checkout --.   &&   bash mentis-actualizar.sh instalar"
     return 1
   fi
 
@@ -113,7 +113,7 @@ _ma_instalar() {
   if timeout 180 git pull --ff-only origin main 2>&1 | tail -3; then
     echo
     echo "Listo. Versión: $(cat VERSION 2>/dev/null | tr -d '\r')"
-    # Si cambió algo de la ventana, hay que rearmarla: el .exe no se actualiza solo.
+    # Si cambió algo de la ventana, hay que rearmarla: el.exe no se actualiza solo.
     if git diff --name-only "$(cat "$MA_RESPALDOS/$sello.punto")" HEAD 2>/dev/null | grep -q '^app/'; then
       echo
       echo "OJO: cambió la ventana de Mentis. Cerrala y corré:"
