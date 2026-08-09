@@ -57,6 +57,32 @@ if command -v curl >/dev/null 2>&1; then _ok "curl"; else
   FALTAN=$((FALTAN+1))
 fi
 
+# GIT BASH NO ES OPCIONAL, aunque no lo parezca. La ventana de Mentis busca bash.exe de Git para
+# Windows en rutas fijas (ver resolveBashPath en app/main.js) y sin eso no arranca: el motor entero
+# es bash. Antes solo se chequeaba curl, que viene con Git -- pero alguien puede tener curl por
+# otro lado, pasar el chequeo y encontrarse con una aplicacion que abre y no responde.
+BASH_GIT=""
+for c in "/c/Program Files/Git/bin/bash.exe" "/c/Program Files/Git/usr/bin/bash.exe" \
+         "/c/Program Files (x86)/Git/bin/bash.exe" "/c/Program Files (x86)/Git/usr/bin/bash.exe"; do
+  [ -f "$c" ] && { BASH_GIT="$c"; break; }
+done
+if [ -n "$BASH_GIT" ]; then
+  _ok "Git Bash"
+else
+  _falta "Git para Windows -> https://git-scm.com/download/win"
+  echo "         Es lo que hace funcionar el motor de Mentis; sin esto la ventana abre y no responde."
+  FALTAN=$((FALTAN+1))
+fi
+
+# VS Code es OPCIONAL: sirve para que Mentis pueda abrirte archivos en el editor, y ese conector
+# arranca apagado. Se avisa, no se exige -- pedir algo que no hace falta es una barrera inventada.
+if command -v code >/dev/null 2>&1 || [ -d "$HOME/AppData/Local/Programs/Microsoft VS Code" ]; then
+  _ok "Visual Studio Code (opcional, para abrir archivos en el editor)"
+else
+  printf '  \033[33m--\033[0m    Visual Studio Code no está. Es OPCIONAL: sin él, Mentis funciona igual,\n'
+  printf '        solo que no puede abrirte archivos en el editor. https://code.visualstudio.com/\n'
+fi
+
 if [ "$FALTAN" -gt 0 ]; then
   echo ""
   echo "  Faltan $FALTAN cosa(s). Instalalas, cerrá esta ventana, abrí una nueva y volvé a correr:"

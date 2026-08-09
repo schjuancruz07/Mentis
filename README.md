@@ -50,21 +50,51 @@ Si algo no anda, corré `bash mentis-diagnostico.sh`: revisa todo y te dice qué
 
 ## Lo que conviene saber antes de usarlo
 
-**Lo que escribís viaja a un modelo de IA.** Mentis usa los modelos de NVIDIA en la nube, así que
-lo que le contás sale de tu computadora. Antes de mandar, se ocultan automáticamente las claves,
-tokens y contraseñas que detecte; el resto del texto va tal cual.
+Esto no es la letra chica: es lo que hay que entender **antes** de instalarlo. Mentis puede hacer
+cosas reales en tu computadora, y conviene que sepas cuáles.
 
-**Podés usar Google Gemini como alternativa, y viene apagado.** Si lo prendés, tené en cuenta que
-el plan gratuito de Google **usa lo que le mandás para entrenar sus modelos**, y hay revisores
-humanos que pueden llegar a leerlo. El plan pago no. Mentis te lo avisa antes de encenderlo.
+### Lo que escribís sale de tu computadora
 
-**Las capacidades invasivas arrancan apagadas.** La cámara, el control del mouse y el acceso al
-teléfono se prenden a mano, de a una, desde Conectores. La cámara además tiene un tope de usos por
-turno, para que no pueda quedarse sacando fotos aunque algo salga mal.
+Mentis usa modelos de IA en la nube (NVIDIA por defecto), así que lo que le contás viaja por
+internet. Antes de mandar, se ocultan automáticamente las claves, tokens y contraseñas que
+detecte; **el resto del texto va tal cual**.
 
-**Puede ejecutar comandos en tu máquina.** Es parte de para qué sirve. Los comandos destructivos
-están bloqueados salvo que los habilites explícitamente, y las acciones delicadas te piden permiso
-en una ventana antes de correr.
+Si además prendés **Google Gemini** —que viene apagado— tené en cuenta que el plan gratuito de
+Google **usa lo que le mandás para entrenar sus modelos**, y hay revisores humanos que pueden
+llegar a leerlo. El plan pago no. Mentis te lo avisa antes de encenderlo.
+
+### Lo que puede hacer en tu máquina
+
+| Capacidad | Qué significa |
+|---|---|
+| **Escribir y borrar archivos** | Crea, modifica y elimina archivos en la carpeta de trabajo. Es para lo que sirve, pero es real. |
+| **Ejecutar comandos** | Corre programas en tu sistema. Los comandos destructivos están bloqueados salvo que habilites el modo sin frenos. |
+| **Ver tu pantalla** | Puede sacar capturas de lo que tenés abierto y mandárselas al modelo para entender qué estás mirando. |
+| **Manejar el mouse y el teclado** | Puede operar tu computadora como lo harías vos. |
+| **Encender la cámara** | Saca fotos con la webcam. Tiene un tope de usos por turno para que no pueda quedarse sacando fotos aunque algo salga mal. |
+| **Navegar la web** | Abre páginas y las opera. |
+| **Controlar hardware** | Si conectás una placa Arduino o similar, puede compilar y grabarle programas: eso mueve cosas en el mundo físico. |
+| **Acceder a tu teléfono** | Si lo vinculás, lee notificaciones y mensajes. |
+
+**Todas arrancan apagadas** menos escribir archivos y ejecutar comandos, que son el corazón del
+programa. Se prenden de a una, a mano, desde Conectores. Las acciones delicadas piden permiso en
+una ventana antes de correr, y el botón **"Frenar ya"** aparece mientras alguna capacidad de
+riesgo esté activa.
+
+### Si conectás servicios externos
+
+Mentis puede conectarse a **Google Workspace** (Drive, Docs, Sheets, Gmail y Calendar) y a
+**GitHub**. Si lo hacés, Mentis pasa a tener acceso a tu correo, tus documentos y tus
+repositorios con tus propios permisos.
+
+GitHub arranca en **modo sólo lectura**, y ninguno de los dos se conecta hasta que vos pongas las
+credenciales. Pero vale decirlo claro: conectar tu Gmail es darle acceso a tu Gmail.
+
+### Lo que no hace
+
+No manda nada a ningún servidor del proyecto: no hay cuentas, ni telemetría, ni servidor central.
+Tus conversaciones y tu memoria quedan en tu disco. Las claves que cargues quedan en archivos
+locales que nunca viajan.
 
 ## Cómo está armado
 
