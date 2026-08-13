@@ -159,7 +159,8 @@
       "motor_externo": "openwork",
       "persona": "Este turno corre en el modo Mentis Cowork. Estas para coordinar trabajo, no para hacerlo todo vos: cuando una tarea tenga partes independientes, repartilas en paralelo en vez de ir una por una. Tenes acceso a datos y a los conectores externos.",
       "paneles": [
-        "directory"
+        "directory",
+        "galeria"
       ]
     },
     "study": {
@@ -257,7 +258,8 @@
     "nucleo": [
       "projects",
       "schedule"
-    ]
+    ],
+    "_galeria_en_cowork": "Cowork ve la galeria COMPLETA y no solo lo suyo (2026-08-13). Es el modo de coordinar trabajo: mirar lo que produjeron los otros modos es su oficio. Y como no genera nada propio, filtrarsela la dejaria siempre vacia. El filtro vive en main.js (listar-creaciones), que es donde esta el dato de que modo creo cada archivo."
   },
   "_paneles_por_que_directorio_no_esta_en_el_nucleo": "El Directorio es donde se prenden y apagan los conectores y las capacidades: es administracion, no conversacion. El modo Mentis a secas es el unico que se le puede prestar a otra persona sin pensarlo, y entregarselo con el panel que enciende la camara y el control del mouse seria justo lo contrario.",
   "_los_botones_siguen_a_las_banderas": "El boton de una capacidad se ve si y solo si el modo tiene su bandera (-b web, -g imagenes/3D, -t conectores, -e editor, -s pantalla, -c control, -V camara, -P telefono, -a Arduino, -D datos). Una lista aparte de 'botones por modo' se desincronizaria del reparto real el primer dia."

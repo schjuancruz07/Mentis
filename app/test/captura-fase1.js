@@ -17,10 +17,35 @@
 const path = require('path');
 const fs = require('fs');
 
+const http = require('http');
+
 const RAIZ = path.join(__dirname, '..', '..');
 const { chromium } = require(path.join(RAIZ, 'browser-server', 'node_modules', 'playwright'));
-const INDEX = 'file:///' + path.join(RAIZ, 'app', 'renderer', 'index.html').replace(/\\/g, '/');
+const RENDERER = path.join(RAIZ, 'app', 'renderer');
 const SALIDA = path.resolve(process.argv[2] || path.join(__dirname));
+
+// SE SIRVE POR HTTP Y CON UN PUENTE DE MENTIRA, no con file:// pelado (corregido 2026-08-13).
+// Sin window.mentisAPI, renderer.js explota en su primera llamada al puente y deja de ejecutar
+// TODO lo que viene despues -- incluida la mudanza de los controles al pie del compositor. El
+// test seguia dando 7/7 porque medía cosas ya pintadas, pero las fotos mostraban una app a medio
+// arrancar: el "+" al lado del cuadro cuando en la app real ya estaba abajo.
+// Un arnes que carga la interfaz distinto de como la carga la app no esta probando la app.
+const MIMES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+                '.woff2': 'font/woff2', '.png': 'image/png', '.svg': 'image/svg+xml' };
+function servir() {
+  return new Promise((resolve) => {
+    const srv = http.createServer((req, res) => {
+      const u = decodeURIComponent(req.url.split('?')[0]);
+      const abs = path.join(RENDERER, u === '/' ? 'index.html' : u);
+      if (!abs.startsWith(RENDERER) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+        res.writeHead(404); res.end('no'); return;
+      }
+      res.writeHead(200, { 'Content-Type': MIMES[path.extname(abs).toLowerCase()] || 'application/octet-stream' });
+      fs.createReadStream(abs).pipe(res);
+    });
+    srv.listen(0, '127.0.0.1', () => resolve({ srv, puerto: srv.address().port }));
+  });
+}
 
 let ok = 0, mal = 0;
 const _ok = (m) => { ok++; console.log('  OK   ' + m); };
@@ -31,7 +56,15 @@ const _mal = (m) => { mal++; console.log('  MAL  ' + m); };
   const pagina = await navegador.newPage({ viewport: { width: 1280, height: 860 } });
   const fallos = [];
   pagina.on('requestfailed', (r) => fallos.push(r.url().split('/').pop()));
-  await pagina.goto(INDEX, { waitUntil: 'networkidle' }).catch(() => {});
+  await pagina.addInitScript(() => {
+    window.mentisAPI = new Proxy({ onboardingStatus: async () => ({ ok: true, done: true }) }, {
+      get: (o, p) => (p in o ? o[p]
+        : (typeof p === 'string' && /^(list|get)/.test(p) ? async () => [] : async () => ({ ok: true }))),
+    });
+  });
+  const { srv, puerto } = await servir();
+  await pagina.goto(`http://127.0.0.1:${puerto}/index.html`, { waitUntil: 'networkidle' }).catch(() => {});
+  await pagina.waitForTimeout(500);
   await pagina.evaluate(() => document.fonts.ready).catch(() => {});
 
   // --- 1. Michroma en el modo science ---
@@ -87,6 +120,32 @@ const _mal = (m) => { mal++; console.log('  MAL  ' + m); };
       : _mal(`el cuadro esta corrido: su centro cae en ${col.centroComposer} y el de la zona en ${col.centroZona}`);
   }
 
+  // --- 2b. Los controles viven DEBAJO del cuadro de texto (2026-08-13) ---
+  const abajo = await pagina.evaluate(() => {
+    const ta = document.getElementById('message-input');
+    const mas = document.getElementById('btn-mas');
+    const mic = document.getElementById('btn-mic');
+    const fila = document.getElementById('composer-acciones');
+    if (!ta || !mas || !mic || !fila) return null;
+    const rt = ta.getBoundingClientRect(), rm = mas.getBoundingClientRect();
+    const ri = mic.getBoundingClientRect(), rf = fila.getBoundingClientRect();
+    return { masDebajo: rm.top >= rt.bottom - 2, micDebajo: ri.top >= rt.bottom - 2,
+             masIzq: Math.round(rm.left), micIzq: Math.round(ri.left),
+             filaIzq: Math.round(rf.left), filaDer: Math.round(rf.right),
+             padreMas: mas.parentElement.id, padreMic: mic.parentElement.id };
+  });
+  if (!abajo) { _mal('falta alguno de los controles del compositor'); }
+  else {
+    abajo.masDebajo && abajo.micDebajo
+      ? _ok('el "+" y el microfono quedaron DEBAJO del cuadro de texto')
+      : _mal(`siguen al costado: mas=${abajo.padreMas} mic=${abajo.padreMic}`);
+    // El "+" pegado al borde izquierdo de la columna y el microfono al derecho: es el reparto
+    // que se pidio, y si alguno se corre al medio la fila deja de leerse como dos extremos.
+    (abajo.masIzq - abajo.filaIzq <= 12) && (abajo.filaDer - abajo.micIzq <= 46)
+      ? _ok('el "+" quedo a la izquierda y el microfono al otro extremo')
+      : _mal(`mal repartidos: + en ${abajo.masIzq}, mic en ${abajo.micIzq}, fila ${abajo.filaIzq}-${abajo.filaDer}`);
+  }
+
   // --- 3. El panel abierto NO se superpone con la conversacion ---
   await pagina.evaluate(() => {
     document.getElementById('status-panel').classList.remove('collapsed');
@@ -115,11 +174,42 @@ const _mal = (m) => { mal++; console.log('  MAL  ' + m); };
   }
   await pagina.screenshot({ path: path.join(SALIDA, '_fase1-panel-abierto.png') });
 
+  // --- 4. AGRANDAR crece a lo ALTO, no a lo ancho (2026-08-13) ---
+  // Antes tomaba min(78%, 900px) y cubria la conversacion entera. Lo que se mide es justamente
+  // eso: que al agrandarse gane ALTO y NO gane ancho, y que siga sin pisar el chat.
+  const antes = await pagina.evaluate(() => {
+    const r = document.getElementById('status-panel').getBoundingClientRect();
+    return { w: Math.round(r.width), h: Math.round(r.height) };
+  });
+  await pagina.evaluate(() => {
+    document.getElementById('status-panel').classList.add('pantalla-completa');
+  });
+  await pagina.waitForTimeout(400);
+  const grande = await pagina.evaluate(() => {
+    const p = document.getElementById('status-panel').getBoundingClientRect();
+    const z = document.getElementById('zona-central');
+    const rz = z.getBoundingClientRect();
+    const util = rz.right - parseFloat(getComputedStyle(z).paddingRight || '0');
+    return { w: Math.round(p.width), h: Math.round(p.height),
+             izq: Math.round(p.left), zonaDer: Math.round(util) };
+  });
+  grande.h > antes.h
+    ? _ok(`agrandar gana alto (${antes.h} -> ${grande.h}px)`)
+    : _mal(`agrandar no gano alto (${antes.h} -> ${grande.h}px)`);
+  grande.w <= antes.w + 2
+    ? _ok(`agrandar NO gana ancho (${antes.w} -> ${grande.w}px)`)
+    : _mal(`agrandar se expandio a lo ancho: ${antes.w} -> ${grande.w}px`);
+  grande.zonaDer <= grande.izq + 1
+    ? _ok('agrandado sigue sin tapar la conversacion')
+    : _mal(`agrandado tapa: conversacion hasta ${grande.zonaDer}, panel desde ${grande.izq}`);
+  await pagina.screenshot({ path: path.join(SALIDA, '_fase1-panel-agrandado.png') });
+
   const woff = fallos.filter((f) => f.endsWith('.woff2'));
   woff.length === 0 ? _ok('no fallo ningun archivo de fuente')
                     : _mal('fuentes que no cargaron: ' + woff.join(', '));
 
   await navegador.close();
+  srv.close();
   console.log(`\n== ${ok} OK, ${mal} MAL ==`);
   console.log(`Fotos: ${path.join(SALIDA, '_fase1-science.png')} y _fase1-panel-abierto.png`);
   process.exit(mal === 0 ? 0 : 1);

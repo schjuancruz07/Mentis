@@ -245,6 +245,14 @@ function buildArtifactRow(artifacts) {
   const row = document.createElement('div');
   row.className = 'artifact-row';
   artifacts.forEach((artifact) => {
+    // CADA CREACIÓN QUEDA ANOTADA CON EL MODO EN EL QUE SALIÓ (2026-08-13). Es acá y no en el
+    // motor porque el archivo por sí solo no dice de qué modo vino, y este es el punto donde la
+    // app sabe las dos cosas a la vez: qué se creó y en qué modo está. Sin esto, la galería por
+    // modo tendría que adivinar por el nombre para siempre, y adivinar sólo alcanza para lo que
+    // ya existía antes de hoy.
+    if (MODO_ACTUAL_UI && !/^https?:\/\//i.test(artifact) && window.mentisAPI.anotarCreacion) {
+      window.mentisAPI.anotarCreacion(artifact, MODO_ACTUAL_UI).catch(() => {});
+    }
     const btn = document.createElement('button');
     btn.className = 'artifact-chip';
     btn.type = 'button';
@@ -3030,6 +3038,17 @@ function estadoPonerEstado(nombre) {
   const texto = document.getElementById('estado-texto');
   if (punto) punto.className = e.clase;
   if (texto) texto.textContent = e.texto;
+  // EL PANEL DE STUDY SIGUE A ESTA MISMA SEÑAL (2026-08-13). Mientras hay un turno corriendo
+  // muestra la actividad y al terminar vuelve a los nueve formatos. Va enganchado acá y no a un
+  // temporizador porque este es el único lugar por el que pasan TODOS los cambios de estado --
+  // un contador de tiempo se desincronizaría con el primer turno que dure más de lo previsto.
+  //
+  // SE CONSULTA POR window Y NO POR EL NOMBRE SUELTO. 'panelEstudio' es un const declarado al
+  // final del archivo, y esta función corre durante el arranque, o sea ANTES: con un const, esa
+  // ventana es zona muerta y hasta `typeof panelEstudio` tira ReferenceError en vez de devolver
+  // "undefined" (a diferencia de una variable que no existe). La guarda con typeof parecía
+  // suficiente y no protegía nada -- el error cortaba el arranque entero del renderer.
+  if (window.panelEstudio) window.panelEstudio.trabajando(nombre !== 'listo');
 }
 
 function estadoPonerTiempo(txt) {
@@ -3038,14 +3057,39 @@ function estadoPonerTiempo(txt) {
 }
 
 (function lineaDeEstado() {
-  const linea = document.getElementById('linea-estado');
-  const mic = document.getElementById('btn-mic');
-  // EL MICRÓFONO SE MUDA, NO SE DUPLICA. Mover el nodo conserva sus escuchas y toda su lógica de
-  // grabar/transcribir/enviar: hay una sola implementación y cualquier arreglo futuro vale para
-  // el único botón que existe. Duplicarlo habría sido dos micrófonos en pantalla y dos caminos
-  // para el mismo trabajo.
-  if (linea && mic) linea.appendChild(mic);
   estadoPonerEstado('listo');
+})();
+
+// LOS CONTROLES VIVEN DEBAJO DEL CUADRO DE TEXTO (pedido del usuario, 2026-08-13).
+// Antes el modo y el "+" estaban DENTRO de la caja de texto (a la derecha del textarea) y el
+// micrófono se mudaba a la línea de estado, arriba. O sea: el lugar donde se escribe compartía
+// espacio con tres controles, y un cuarto quedaba lejos de los demás.
+//
+// SE MUDAN LOS NODOS, NO SE REHACEN. Es el mismo criterio con el que ya viajaba el micrófono:
+// mover conserva sus escuchas y su lógica -- hay una sola implementación de cada control y
+// cualquier arreglo futuro vale para el único que existe. Rehacerlos habría sido cuatro
+// oportunidades de romper algo que hoy anda.
+//
+// 'action-cluster' viaja con el "+" porque es su menú desplegable; se posiciona contra #composer
+// (que es position:relative), así que cambiar de padre no lo mueve de lugar.
+(function moverControlesAbajo() {
+  const fila = document.getElementById('composer-acciones');
+  if (!fila) return;
+  const izquierda = document.createElement('div');
+  izquierda.id = 'composer-acciones-izq';
+  const derecha = document.createElement('div');
+  derecha.id = 'composer-acciones-der';
+  fila.appendChild(izquierda);
+  fila.appendChild(derecha);
+
+  const fichas = document.getElementById('modo-fichas');
+  const mas = document.getElementById('btn-mas');
+  const cluster = document.getElementById('action-cluster');
+  const mic = document.getElementById('btn-mic');
+  if (fichas) izquierda.appendChild(fichas);
+  if (mas) izquierda.appendChild(mas);
+  if (cluster) izquierda.appendChild(cluster);
+  if (mic) derecha.appendChild(mic);
 })();
 
 // --- Mostrar/ocultar la barra lateral (2026-08-10) --------------------------------------------
@@ -3084,7 +3128,7 @@ function estadoPonerTiempo(txt) {
     // Abrirlo en grande y dejarlo colapsado a la vez sería una pantalla completa vacía.
     if (full) panel.classList.remove('collapsed');
     btn.setAttribute('aria-pressed', String(full));
-    btn.title = full ? 'Volver al tamaño normal' : 'Pantalla completa';
+    btn.title = full ? 'Volver al tamaño normal' : 'Agrandar';
     agrandar.classList.toggle('hidden', full);
     achicar.classList.toggle('hidden', !full);
   }
@@ -3248,6 +3292,11 @@ function estadoPonerTiempo(txt) {
     // ESE modo. Va acá y no en el manejador del botón porque el modo también cambia por otras
     // vías (al arrancar, desde el celular), y todas pasan por esta función.
     MODO_ACTUAL_UI = modo && modo.id ? modo.id : null;
+    // Publicado para visor.js, que es un modulo aparte y no comparte alcance con este archivo.
+    // La galeria lo usa para mostrar solo lo creado en el modo en el que estas.
+    window.MENTIS_MODO_ACTUAL = MODO_ACTUAL_UI;
+    // El panel de la derecha cambia con el modo: en Study son los nueve formatos.
+    if (window.panelEstudio) window.panelEstudio.aplicar(MODO_ACTUAL_UI);
     refreshConversationList().catch(() => {});
     pintarLogotipo(modo);
     pintarPaneles(modo);
@@ -4555,3 +4604,184 @@ window.mentisAPI.onReplayGreeting(() => {
     });
   }
 })();
+
+// ===== EL PANEL DE ESTUDIO (pedido del usuario, 2026-08-13) =========================================
+// En Mentis Study el panel de la derecha deja de ser el previsualizador y pasa a ser la botonera
+// de los nueve formatos. Al tocar uno, pregunta CÓMO generarlo antes de disparar nada: un audio
+// de 5 minutos y uno de 20 son cosas distintas, y hasta ahora Mentis elegía solo.
+//
+// LAS PREGUNTAS SON FIJAS POR FORMATO Y NO LAS INVENTA UN MODELO. Se responden tocando, salen al
+// instante y no cuestan una llamada; además, al ser siempre las mismas, se contestan de memoria
+// después de la segunda vez. Cada formato tiene las suyas porque lo que hay que decidir es
+// distinto: en un cuestionario importa la dificultad, en un mapa mental la profundidad.
+//
+// El resultado NO se ejecuta solo: se escribe en el cuadro de texto la línea de /material lista
+// para enviar. Study no tiene 'exec', así que quien dispara es el usuario -- y de paso ve exactamente
+// qué se va a pedir antes de que pase.
+const ESTUDIO_FORMATOS = [
+  { id: 'audio', titulo: 'Resumen en audio', icono: '♪', preguntas: [
+      { clave: 'duracion', texto: 'Cuánto querés que dure', ops: ['5 minutos', '10 minutos', '20 minutos'] },
+      { clave: 'tono', texto: 'Cómo te lo cuenta', ops: ['Explicándote', 'Dos personas conversando', 'Repaso rápido'] } ] },
+  { id: 'video', titulo: 'Resumen en video', icono: '▶', preguntas: [
+      { clave: 'duracion', texto: 'Cuánto querés que dure', ops: ['Corto (2-3 min)', 'Completo (5-8 min)'] },
+      { clave: 'placas', texto: 'Qué muestran las placas', ops: ['Sólo títulos', 'Títulos y datos clave'] } ] },
+  { id: 'presentacion', titulo: 'Presentación', icono: '▭', preguntas: [
+      { clave: 'cantidad', texto: 'Cuántas diapositivas', ops: ['6', '10', '15'] },
+      { clave: 'uso', texto: 'Para qué la vas a usar', ops: ['Estudiar yo', 'Exponerla'] } ] },
+  { id: 'mapa', titulo: 'Mapa mental', icono: '⌗', preguntas: [
+      { clave: 'profundidad', texto: 'Hasta dónde abre', ops: ['Sólo ramas principales', 'Con sub-ideas'] } ] },
+  { id: 'informe', titulo: 'Informe', icono: '▤', preguntas: [
+      { clave: 'extension', texto: 'Qué tan largo', ops: ['Una carilla', 'Completo'] },
+      { clave: 'conclusiones', texto: 'Incluye conclusiones', ops: ['Sólo lo que dice el material', 'Con conclusiones'] } ] },
+  { id: 'tarjetas', titulo: 'Tarjetas didácticas', icono: '▥', preguntas: [
+      { clave: 'cantidad', texto: 'Cuántas tarjetas', ops: ['10', '20', '30'] },
+      { clave: 'estilo', texto: 'De qué tipo', ops: ['Definiciones', 'Pregunta y respuesta', 'Para completar'] } ] },
+  { id: 'cuestionario', titulo: 'Cuestionario', icono: '?', preguntas: [
+      { clave: 'cantidad', texto: 'Cuántas preguntas', ops: ['8', '12', '20'] },
+      { clave: 'dificultad', texto: 'Qué nivel', ops: ['De fácil a difícil', 'Nivel de examen'] },
+      { clave: 'respuestas', texto: 'Las respuestas', ops: ['Tapadas', 'A la vista'] } ] },
+  { id: 'infografia', titulo: 'Infografía', icono: '◫', preguntas: [
+      { clave: 'foco', texto: 'Qué destaca', ops: ['Las cifras', 'El proceso paso a paso', 'Una comparación'] } ] },
+  { id: 'tabla', titulo: 'Tabla de datos', icono: '▦', preguntas: [
+      { clave: 'contenido', texto: 'Qué ordena', ops: ['Conceptos y definiciones', 'Datos numéricos', 'Comparación'] } ] },
+];
+
+const panelEstudio = (function () {
+  const panel = document.getElementById('panel-estudio');
+  const grilla = document.getElementById('panel-estudio-grilla');
+  const zonaPreg = document.getElementById('panel-estudio-preguntas');
+  const preview = document.getElementById('preview-content');
+  const etiqueta = document.getElementById('status-panel-label');
+  if (!panel || !grilla || !zonaPreg) return { aplicar() {}, trabajando() {} };
+
+  let modoActualId = null;
+  let enActividad = false;
+
+  function pintarGrilla() {
+    grilla.replaceChildren();
+    for (const f of ESTUDIO_FORMATOS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'estudio-tarjeta';
+      b.dataset.formato = f.id;
+      const i = document.createElement('span');
+      i.className = 'estudio-icono';
+      i.textContent = f.icono;
+      const t = document.createElement('span');
+      t.className = 'estudio-titulo';
+      t.textContent = f.titulo;
+      b.append(i, t);
+      b.addEventListener('click', () => preguntar(f));
+      grilla.appendChild(b);
+    }
+  }
+
+  // Las preguntas se muestran TODAS juntas, no una por vez: son dos o tres y verlas de un vistazo
+  // deja elegir en cualquier orden y cambiar de opinión sin volver atrás.
+  function preguntar(f) {
+    const elegido = {};
+    zonaPreg.replaceChildren();
+    grilla.classList.add('hidden');
+    zonaPreg.classList.remove('hidden');
+
+    const volver = document.createElement('button');
+    volver.type = 'button';
+    volver.className = 'estudio-volver';
+    volver.textContent = 'Volver';
+    volver.addEventListener('click', cerrarPreguntas);
+    zonaPreg.appendChild(volver);
+
+    const h = document.createElement('p');
+    h.className = 'estudio-preg-titulo';
+    h.textContent = f.titulo;
+    zonaPreg.appendChild(h);
+
+    for (const p of f.preguntas) {
+      const bloque = document.createElement('div');
+      bloque.className = 'estudio-preg';
+      const et = document.createElement('span');
+      et.className = 'estudio-preg-texto';
+      et.textContent = p.texto;
+      bloque.appendChild(et);
+      const ops = document.createElement('div');
+      ops.className = 'estudio-ops';
+      for (const o of p.ops) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'estudio-op';
+        b.textContent = o;
+        b.addEventListener('click', () => {
+          elegido[p.clave] = o;
+          ops.querySelectorAll('.estudio-op').forEach((x) => x.classList.remove('elegida'));
+          b.classList.add('elegida');
+        });
+        ops.appendChild(b);
+      }
+      bloque.appendChild(ops);
+      zonaPreg.appendChild(bloque);
+    }
+
+    // El tema es lo único que no se puede ofrecer en opciones: depende de lo que el usuario cargó.
+    const tema = document.createElement('input');
+    tema.type = 'text';
+    tema.className = 'estudio-tema';
+    tema.placeholder = 'Sobre qué tema (opcional)';
+    zonaPreg.appendChild(tema);
+
+    const listo = document.createElement('button');
+    listo.type = 'button';
+    listo.className = 'estudio-listo';
+    listo.textContent = 'Preparar el pedido';
+    listo.addEventListener('click', () => {
+      const detalles = f.preguntas
+.filter((p) => elegido[p.clave])
+.map((p) => p.texto.toLowerCase() + ': ' + elegido[p.clave]);
+      let linea = '/material ' + f.id;
+      const t = tema.value.trim();
+      if (t) linea += ' ' + t;
+      if (detalles.length) linea += ' -- ' + detalles.join('; ');
+      const input = document.getElementById('message-input');
+      if (input) {
+        input.value = linea;
+        input.focus();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      cerrarPreguntas();
+    });
+    zonaPreg.appendChild(listo);
+  }
+
+  function cerrarPreguntas() {
+    zonaPreg.classList.add('hidden');
+    zonaPreg.replaceChildren();
+    grilla.classList.remove('hidden');
+  }
+
+  // Qué se ve en el panel AHORA. En Study manda el modo, salvo mientras hay un turno corriendo:
+  // ahí lo que importa es ver qué está haciendo, y al terminar vuelve solo a los formatos.
+  function repintar() {
+    const esStudy = modoActualId === 'study';
+    const mostrarFormatos = esStudy && !enActividad;
+    panel.classList.toggle('hidden', !mostrarFormatos);
+    // En Study el panel se ABRE solo. Es la herramienta principal del modo: si quedara colapsado
+    // como en los demas, la botonera existiria pero nadie la veria hasta descubrir el botón del
+    // ojo. En los otros modos no se toca -- ahí el panel es opcional y manda lo que eligió el usuario.
+    if (mostrarFormatos) {
+      const caja = document.getElementById('status-panel');
+      if (caja) caja.classList.remove('collapsed');
+    }
+    if (preview) preview.classList.toggle('hidden', mostrarFormatos);
+    if (etiqueta) etiqueta.textContent = mostrarFormatos ? 'Crear con tu material' : 'Previsualización';
+    if (mostrarFormatos && !grilla.childElementCount) pintarGrilla();
+  }
+
+  return {
+    aplicar(id) { modoActualId = id; cerrarPreguntas(); repintar(); },
+    trabajando(v) { enActividad = !!v; repintar(); },
+  };
+})();
+
+// Publicado en window a proposito: 'const' de nivel superior NO crea propiedad global (a
+// diferencia de 'function'), asi que sin esto ni el arnes de pruebas ni ningun otro archivo
+// pueden tocar el panel. Es la misma razon por la que MENTIS_MODO_ACTUAL viaja por window.
+window.panelEstudio = panelEstudio;

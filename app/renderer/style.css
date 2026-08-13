@@ -215,14 +215,25 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    El previsualizador vive a la derecha; agrandarlo tiene que hacerlo CRECER hacia la izquierda,
    no MUDARSE. Con `left: auto` el borde derecho queda fijo y sólo se mueve el izquierdo, que es
    lo que el ojo espera de un botón de agrandar. */
+/* AGRANDAR CRECE A LO ALTO, NO A LO ANCHO (2026-08-13, corrección del usuario: "al abrirlo en la
+   versión agrandada tapa todo el resto... que cuando lo agrande no se expanda hacia la izquierda
+   sino hacia arriba y abajo").
+   La versión anterior tomaba min(78%, 900px) de ancho y cubría la conversación entera. Ahora
+   conserva su ancho de siempre -- el mismo que ya tiene reservado la zona de trabajo, así que al
+   agrandarse NO empieza a tapar nada -- y se estira de arriba abajo. El resultado es una columna
+   alta a la derecha, que además es la forma correcta para lo que muestra: una lista de acciones
+   que crece hacia abajo.
+   Ojo con el ancho: usa la MISMA variable que el hueco que deja #zona-central (menos el margen),
+   para que el panel no se salga del espacio que le abrieron ni deje una franja vacía al lado. */
 #status-panel.pantalla-completa {
-  position: absolute; top: 0; right: 0; bottom: 0; left: auto;
-  width: min(78%, 900px);
+  position: absolute; top: 8px; right: 12px; bottom: 8px; left: auto;
+  width: calc(var(--ancho-panel-estado) - 24px);
   z-index: 30;
-  margin: 0; border-radius: 0; max-height: none;
+  margin: 0; max-height: none;
+  border-radius: var(--radius);
   display: flex; flex-direction: column;
-  background: var(--principal);
-  border-left: 1px solid var(--border);
+  background: var(--secundario);
+  border: 1px solid var(--border);
 }
 #status-panel.pantalla-completa #preview-content {
   flex: 1; overflow: auto; font-size: 13px; line-height: 1.6;
@@ -433,12 +444,10 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   transition: padding-right 0.16s ease;
 }
 #zona-central, #composer, #linea-estado { transition: padding-right 0.16s ease; }
-/* A pantalla completa el panel SÍ tiene que cubrir: es lo que el usuario pidió el 2026-08-10 y ahí el
-   chat no se lee de todos modos. Sin esta excepción, el contenido se correría 384px y además
-   quedaría tapado por un panel del 78%. */
-#main:has(#status-panel.pantalla-completa) #zona-central,
-#main:has(#status-panel.pantalla-completa) #composer,
-#main:has(#status-panel.pantalla-completa) #linea-estado { padding-right: 0; }
+/* La excepción que anulaba el corrimiento cuando el panel estaba agrandado se RETIRÓ el
+   2026-08-13. Existía porque el panel agrandado ocupaba el 78% del ancho y cubría todo, así que
+   correr el contenido no servía de nada. Ahora que crece a lo alto y conserva su ancho, el
+   corrimiento de siempre es exactamente lo que hace falta: el panel agrandado tampoco tapa. */
 /* Sin tabs (pedido del usuario, 2026-07-13, sacó el panel "Tareas"): una sola sección,
    "Previsualización", con su etiqueta fija y el botón de cerrar. */
 #status-tabs {
@@ -895,12 +904,18 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   #usage-stats-panel { display: none; }
 }
 
-#btn-new-folder, #btn-open-projects, #btn-open-directory, #btn-open-schedule {
+/* Los botones de la barra lateral. La lista es por ID y no por una clase compartida, que es de
+   donde salio el bug de 2026-08-13: al agregar "Galería" quedo fuera de esta regla y el navegador
+   le puso su estilo de fabrica -- fondo gris claro y texto negro, gritando entre cuatro botones
+   discretos. Si maniana aparece un boton nuevo, tiene que sumarse a los DOS selectores de abajo. */
+#btn-new-folder, #btn-open-projects, #btn-open-directory, #btn-open-schedule, #btn-open-galeria {
   background: transparent; color: var(--texto-dim); border: 1px dashed var(--border);
   border-radius: var(--radius); padding: 6px; cursor: pointer; margin-top: 8px; font-size: 12px;
+  font-family: var(--font-sans);
 }
 #btn-new-folder:hover, #btn-open-projects:hover, #btn-open-projects:focus-visible,
 #btn-open-directory:hover, #btn-open-directory:focus-visible,
+#btn-open-galeria:hover, #btn-open-galeria:focus-visible,
 #btn-open-schedule:hover, #btn-open-schedule:focus-visible { border-color: var(--acento); color: var(--acento); }
 /* Configuración (pedido del usuario, 2026-07-13): "donde aparece el historial de chats" -- abajo
    de la lista de conversaciones en la sidebar, separado con un borde propio. */
@@ -1664,3 +1679,80 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .visor-ficha strong { color: var(--texto); font-size: 13px; font-weight: 600; }
 .visor-ficha span { color: var(--acento); font-size: 12px; }
 .visor-ficha em { color: var(--texto-dim); font-size: 11px; font-style: normal; line-height: 1.4; }
+
+/* ===== LA FILA DE CONTROLES DEBAJO DEL CUADRO DE TEXTO (2026-08-13) =====
+   el usuario: "quiero mover todo lo que señalo a abajo del cuadro de texto donde escribo". El modo y
+   el "+" quedan a la izquierda, el micrófono al otro extremo -- que es donde cae la mano cuando
+   se termina de escribir. El cuadro de texto queda sólo para escribir.
+   Comparte el ancho de la columna de lectura, así los controles arrancan y terminan sobre el
+   mismo eje que el cuadro y que los mensajes. */
+#composer-acciones {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  max-width: var(--ancho-lectura); margin: 8px auto 0;
+}
+#composer-acciones-izq, #composer-acciones-der { display: flex; align-items: center; gap: 8px; }
+/* El "+" baja de 40 a 34 px para igualar al micrófono: en una fila propia, dos botones del mismo
+   peso visual se leen como un par; con tamaños distintos, uno parece más importante que el otro. */
+#composer-acciones #btn-mas { width: 34px; height: 34px; }
+#composer-acciones #btn-mas svg { width: 18px; height: 18px; }
+/* El botón "Galería" del visor cuando ya estás en la galería: marcado y sin acción. Antes
+   repintaba lo mismo sin ninguna señal y se leía como un botón roto. */
+#visor-acciones button.activo {
+  border-color: var(--acento); color: var(--acento); background: var(--secundario);
+}
+#visor-acciones button:disabled { cursor: default; opacity: 1; }
+#visor-acciones button.hidden { display: none; }
+
+/* ===== PANEL DE ESTUDIO: los nueve formatos (2026-08-13) =====
+   Es la referencia que trajo el usuario (la botonera de NotebookLM) pero con los colores de Mentis: el
+   terracota del acento sobre el gris de siempre, en vez de la paleta de morados y verdes del
+   original. Dos columnas porque el panel mide 384px: con tres, cada tarjeta queda más angosta que
+   su propio título. */
+#panel-estudio { padding: 10px; overflow-y: auto; }
+#panel-estudio.hidden { display: none; }
+#panel-estudio-grilla { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#panel-estudio-grilla.hidden { display: none; }
+.estudio-tarjeta {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  background: var(--secundario); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 10px; cursor: pointer; text-align: left;
+  font-family: var(--font-sans); color: var(--texto);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.estudio-tarjeta:hover { border-color: var(--acento); background: var(--principal); }
+.estudio-tarjeta:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+.estudio-icono { color: var(--acento); font-size: 15px; line-height: 1; }
+.estudio-titulo { font-size: 12px; line-height: 1.3; }
+/* Las preguntas reemplazan a la grilla en el mismo lugar: es un paso adelante en el mismo panel,
+   no una ventana nueva encima. */
+#panel-estudio-preguntas.hidden { display: none; }
+.estudio-volver {
+  background: transparent; border: 0; color: var(--texto-dim); cursor: pointer;
+  font-family: var(--font-sans); font-size: 12px; padding: 4px 0 10px;
+  display: block;
+}
+.estudio-volver:hover { color: var(--acento); }
+.estudio-preg-titulo { margin: 0 0 12px; color: var(--acento); font-size: 14px; font-weight: 600; font-family: var(--font-sans); }
+.estudio-preg { margin-bottom: 14px; }
+.estudio-preg-texto { display: block; font-size: 12px; color: var(--texto-dim); margin-bottom: 6px; font-family: var(--font-sans); }
+.estudio-ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.estudio-op {
+  background: var(--secundario); border: 1px solid var(--border); border-radius: 999px;
+  color: var(--texto); padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-sans);
+}
+.estudio-op:hover { border-color: var(--acento); }
+/* La elegida se pinta con el acento: en una lista de píldoras grises, la seleccionada tiene que
+   distinguirse de un vistazo o hay que releer todas para saber qué se eligió. */
+.estudio-op.elegida { background: var(--acento); border-color: var(--acento); color: var(--fondo); }
+.estudio-tema {
+  width: 100%; margin: 4px 0 12px; padding: 8px 10px; font-size: 12px;
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--texto); font-family: var(--font-sans);
+}
+.estudio-tema:focus { outline: none; border-color: var(--acento); }
+.estudio-listo {
+  width: 100%; background: var(--acento); border: 0; border-radius: var(--radius);
+  color: var(--fondo); padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: var(--font-sans);
+}
+.estudio-listo:hover { filter: brightness(1.08); }

@@ -1678,24 +1678,70 @@ ipcMain.handle('mentis:ver-artefacto', async (_event, artifact) => {
   return { ok: true, tipo, nombre, ext, dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
 });
 
+// A QUÉ MODO PERTENECE UNA CREACIÓN (2026-08-13, "la galería tiene que ser por modos").
+// De ahora en más cada archivo queda anotado en creaciones-modos.json cuando se crea. Pero las
+// que ya existían no tienen esa anotación, y en vez de dejarlas sin modo se deducen por su tipo:
+// una estructura.mol3d.json sólo la pudo hacer Science, unas tarjetas sólo Study. No es exacto
+// -- una imagen suelta pudo salir de cualquier lado -- y por eso es sólo el respaldo para lo
+// viejo, no el mecanismo principal.
+const CREACIONES_MODOS = path.join(MENTIS_CREATIONS_DIR, '.modos.json');
+function _modoPorNombre(n) {
+  const b = n.toLowerCase();
+  if (b.endsWith('.mol3d.json')) return 'science';
+  if (/^(tarjetas|cuestionario|mapa|infografia|informe|presentacion|tabla|audio|video)-/.test(b)) return 'study';
+  if (/\.(png|jpg|jpeg|webp|gif|svg|glb|gltf)$/.test(b)) return 'designe';
+  return null;
+}
+function _leerModosCreaciones() {
+  try { return JSON.parse(fsSync.readFileSync(CREACIONES_MODOS, 'utf8')); } catch { return {}; }
+}
+
 // La lista de todo lo que Mentis creó, más nuevo primero. Es la galería: sin esto, ver algo de
 // hace tres turnos obliga a buscar el mensaje donde apareció el chip.
-ipcMain.handle('mentis:listar-creaciones', async () => {
+//
+// El filtro por modo se hace acá y no en el renderer porque el dato de qué modo creó cada archivo
+// vive de este lado. 'cowork' es la excepción declarada: ve TODO. Es el modo de coordinar
+// trabajo, así que ver lo que produjeron los demás modos es literalmente su oficio -- y además,
+// como no genera nada propio, filtrarle su galería la dejaría siempre vacía.
+ipcMain.handle('mentis:listar-creaciones', async (_event, modo) => {
   try {
     if (!fsSync.existsSync(MENTIS_CREATIONS_DIR)) return { ok: true, archivos: [] };
     const nombres = await fsSync.promises.readdir(MENTIS_CREATIONS_DIR);
+    const anotados = _leerModosCreaciones();
     const archivos = [];
     for (const n of nombres) {
+      if (n.startsWith('.')) continue;
       const abs = path.join(MENTIS_CREATIONS_DIR, n);
       let st;
       try { st = await fsSync.promises.stat(abs); } catch { continue; }
       if (!st.isFile()) continue;
       const ext = path.extname(n).toLowerCase();
+      const suModo = anotados[n] || _modoPorNombre(n);
       archivos.push({ nombre: n, ruta: abs, ext, tipo: VISOR_TIPOS[ext] || 'externo',
-                      bytes: st.size, cuando: st.mtimeMs });
+                      bytes: st.size, cuando: st.mtimeMs, modo: suModo });
     }
     archivos.sort((a, b) => b.cuando - a.cuando);
-    return { ok: true, archivos: archivos.slice(0, 200) };
+    const filtrados = (!modo || modo === 'cowork')
+      ? archivos
+      : archivos.filter((a) => a.modo === modo);
+    return { ok: true, archivos: filtrados.slice(0, 200), total: archivos.length, modo: modo || null };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+});
+
+// Anota el modo de una creación recién hecha. Lo llama el renderer cuando aparece un artefacto en
+// un turno: ahí sabe en qué modo estaba, cosa que el archivo por sí solo no dice.
+ipcMain.handle('mentis:anotar-creacion', async (_event, ruta, modo) => {
+  try {
+    if (!ruta || !modo) return { ok: false, error: 'faltan datos' };
+    const n = path.basename(String(ruta));
+    const d = _leerModosCreaciones();
+    if (d[n] === modo) return { ok: true };
+    d[n] = modo;
+    await fsSync.promises.mkdir(MENTIS_CREATIONS_DIR, { recursive: true }).catch(() => {});
+    await fsSync.promises.writeFile(CREACIONES_MODOS, JSON.stringify(d, null, 2));
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }

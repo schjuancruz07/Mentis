@@ -75,7 +75,8 @@ contextBridge.exposeInMainWorld('mentisAPI', {
   // Ver adentro de la app en vez de abrir una app de Windows (2026-08-12). 'verArtefacto' trae el
   // contenido para dibujarlo acá; 'listarCreaciones' es la galería de todo lo que Mentis hizo.
   verArtefacto: (artifact) => ipcRenderer.invoke('mentis:ver-artefacto', artifact),
-  listarCreaciones: () => ipcRenderer.invoke('mentis:listar-creaciones'),
+  listarCreaciones: (modo) => ipcRenderer.invoke('mentis:listar-creaciones', modo),
+  anotarCreacion: (ruta, modo) => ipcRenderer.invoke('mentis:anotar-creacion', ruta, modo),
   forceStop: () => ipcRenderer.invoke('mentis:force-stop'),
   transcribeAudio: (buffer) => ipcRenderer.invoke('mentis:transcribe-audio', buffer),
   tts: (texto) => ipcRenderer.invoke('mentis:tts', texto),

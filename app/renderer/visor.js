@@ -24,11 +24,27 @@ const $ = (id) => document.getElementById(id);
 let visorActual = null;   // la ruta que se esta mirando, para el boton "Abrir afuera"
 let limpiar3D = null;     // corta el bucle de animacion al cerrar; sin esto sigue girando invisible
 
+// El estado de la barra: que boton tiene sentido AHORA. Estando en la galeria, "Galeria" repinta
+// lo mismo -- funciona, pero no pasa nada visible y se lee como un boton roto (el usuario lo reporto
+// asi el 2026-08-13). Y "Abrir afuera" no tiene que abrir nada porque no hay un archivo elegido.
+// Un boton que no puede hacer nada tiene que DECIRLO, no quedarse mudo.
+function pintarBarra(enGaleria) {
+  const gal = $('visor-galeria');
+  const afuera = $('visor-afuera');
+  if (gal) {
+    gal.disabled = !!enGaleria;
+    gal.classList.toggle('activo', !!enGaleria);
+    gal.title = enGaleria ? 'Ya estás en la galería' : 'Ver todo lo que Mentis creó';
+  }
+  if (afuera) afuera.classList.toggle('hidden', !!enGaleria);
+}
+
 function cerrarVisor() {
   if (limpiar3D) { limpiar3D(); limpiar3D = null; }
   $('visor').classList.add('hidden');
   $('visor-cuerpo').replaceChildren();
   visorActual = null;
+  pintarBarra(false);
 }
 
 function ponerCuerpo(nodo) {
@@ -274,6 +290,7 @@ async function abrirVisor(ruta) {
   }
   visorActual = ruta;
   $('visor').classList.remove('hidden');
+  pintarBarra(false);
   $('visor-nombre').textContent = r.nombre || '';
 
   if (r.tipo === 'imagen') {
@@ -310,17 +327,31 @@ async function abrirVisor(ruta) {
 
 // ---------------------------------------------------------------------------------------------
 // La galeria: todo lo que Mentis creo, lo mas nuevo primero.
+// LA GALERÍA ES POR MODO (2026-08-13). Muestra lo que se creó en el modo en el que estás, no
+// todo junto: en Designe querés ver tus imágenes, no las moléculas de Science. La excepción es
+// Cowork, que ve todo -- coordinar trabajo es justamente mirar lo que hicieron los demás.
+// El modo lo publica renderer.js en window.MENTIS_MODO_ACTUAL; si no está, se listan todas, que
+// es el comportamiento viejo y nunca deja la galería vacía por un dato que faltó.
 async function abrirGaleria() {
-  const r = await window.mentisAPI.listarCreaciones();
+  const modo = window.MENTIS_MODO_ACTUAL || null;
+  const r = await window.mentisAPI.listarCreaciones(modo);
   $('visor').classList.remove('hidden');
-  $('visor-nombre').textContent = 'Todo lo que creó Mentis';
+  $('visor-nombre').textContent = modo && modo !== 'cowork'
+    ? `Lo que creaste en ${modo}` : 'Todo lo que creó Mentis';
   visorActual = null;
+  pintarBarra(true);
   if (!r || !r.ok) {
     ponerCuerpo(mensaje('No pude leer la carpeta de creaciones.', (r && r.error) || ''));
     return;
   }
   if (!r.archivos.length) {
-    ponerCuerpo(mensaje('Todavía no creó nada.', 'Pedile una imagen, un modelo 3D o un documento.'));
+    // Se distingue "no creaste nada" de "no creaste nada EN ESTE MODO": el segundo caso tiene
+    // solución (cambiar de modo) y el primero no, así que decir lo mismo en los dos sería
+    // mandar al usuario a buscar algo que no existe o a rendirse con algo que sí.
+    ponerCuerpo(r.total
+      ? mensaje(`Todavía no creaste nada en este modo.`,
+                `Hay ${r.total} creaciones en otros modos; en Cowork se ven todas.`)
+      : mensaje('Todavía no creó nada.', 'Pedile una imagen, un modelo 3D o un documento.'));
     return;
   }
   const grilla = document.createElement('div');

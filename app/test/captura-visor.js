@@ -111,10 +111,15 @@ function glbDeUnTriangulo() {
                                            texto: 'hola desde el visor' };
         return { ok: false, error: 'tipo no simulado' };
       },
-      listarCreaciones: async () => ({ ok: true, archivos: [
-        { nombre: 'render.png', ruta: 'C:/x/render.png', ext: '.png', tipo: 'imagen', bytes: 10, cuando: 2 },
-        { nombre: 'informe.docx', ruta: 'C:/x/informe.docx', ext: '.docx', tipo: 'externo', bytes: 10, cuando: 1 },
-      ] }),
+      // El stub imita al handler real: filtra por modo y cowork ve todo.
+      listarCreaciones: async (modo) => {
+        const todas = [
+          { nombre: 'render.png', ruta: 'C:/x/render.png', ext: '.png', tipo: 'imagen', bytes: 10, cuando: 2, modo: 'designe' },
+          { nombre: 'informe.docx', ruta: 'C:/x/informe.docx', ext: '.docx', tipo: 'externo', bytes: 10, cuando: 1, modo: 'study' },
+        ];
+        const f = (!modo || modo === 'cowork') ? todas : todas.filter((a) => a.modo === modo);
+        return { ok: true, archivos: f, total: todas.length, modo: modo || null };
+      },
       openArtifact: async () => ({ ok: true }),
       // el usuario ya pasó el onboarding hace meses. Sin esto el stub lo declara pendiente y la
       // pantalla de bienvenida se dibuja ENCIMA del visor: el test seguía midiendo bien el DOM,
@@ -225,6 +230,57 @@ function glbDeUnTriangulo() {
         : _mal('el cristal no explica lo que muestra: ' + JSON.stringify(cri));
       await pagina.screenshot({ path: path.join(__dirname, '_visor-cristal.png') });
     }
+
+    // --- el boton "Galeria" de ADENTRO del visor: se CLIQUEA, no se llama la funcion ---
+    // el usuario reporto que no funciona. Llamar a MentisVisor.galeria() no lo probaria: lo que puede
+    // estar roto es el listener del boton, no la funcion que ejecuta.
+    await pagina.evaluate(() => window.MentisVisor.abrir('C:/x/render.png'));
+    await pagina.waitForTimeout(400);
+    await pagina.click('#visor-galeria');
+    await pagina.waitForTimeout(700);
+    const trasClick = await pagina.evaluate(() => ({
+      tarjetas: document.querySelectorAll('#visor-cuerpo.visor-tarjeta').length,
+      titulo: document.getElementById('visor-nombre').textContent,
+    }));
+    trasClick.tarjetas > 0
+      ? _ok(`el boton "Galeria" del visor abre la galeria (${trasClick.tarjetas} tarjetas)`)
+      : _mal(`el boton "Galeria" del visor NO hace nada (titulo quedo en "${trasClick.titulo}")`);
+
+    // El escenario EXACTO que reporto el usuario ("el boton galeria dentro de galeria no funciona").
+    // No estaba roto: repintaba lo mismo sin ninguna senial, que se lee igual que un boton muerto.
+    // Ahora queda deshabilitado y marcado, asi que lo que se comprueba es que DIGA su estado.
+    await pagina.evaluate(() => window.MentisVisor.galeria());
+    await pagina.waitForTimeout(500);
+    const yaEnGaleria = await pagina.evaluate(() => {
+      const g = document.getElementById('visor-galeria');
+      return { deshabilitado: g.disabled, titulo: g.title,
+               tarjetas: document.querySelectorAll('#visor-cuerpo.visor-tarjeta').length };
+    });
+    yaEnGaleria.deshabilitado && /ya est/i.test(yaEnGaleria.titulo) && yaEnGaleria.tarjetas > 0
+      ? _ok('estando en la galeria, el boton avisa que ya estas ahi en vez de quedarse mudo')
+      : _mal('el boton no dice su estado: ' + JSON.stringify(yaEnGaleria));
+
+    // --- la galeria filtra por modo, y cowork ve todo ---
+    await pagina.evaluate(() => { window.MENTIS_MODO_ACTUAL = 'designe'; });
+    await pagina.evaluate(() => window.MentisVisor.galeria());
+    await pagina.waitForTimeout(600);
+    const enDesigne = await pagina.evaluate(() => document.querySelectorAll('#visor-cuerpo.visor-tarjeta').length);
+    enDesigne === 1 ? _ok('en Designe la galeria muestra solo lo suyo (1 de 2)')
+                    : _mal(`en Designe mostro ${enDesigne} tarjetas, esperaba 1`);
+    await pagina.evaluate(() => { window.MENTIS_MODO_ACTUAL = 'cowork'; });
+    await pagina.evaluate(() => window.MentisVisor.galeria());
+    await pagina.waitForTimeout(600);
+    const enCowork = await pagina.evaluate(() => document.querySelectorAll('#visor-cuerpo.visor-tarjeta').length);
+    enCowork === 2 ? _ok('en Cowork la galeria muestra TODO (2 de 2)')
+                   : _mal(`en Cowork mostro ${enCowork} tarjetas, esperaba 2`);
+    const barra = await pagina.evaluate(() => {
+      const g = document.getElementById('visor-galeria');
+      return { deshabilitado: g.disabled, marcado: g.classList.contains('activo'),
+               afueraOculto: document.getElementById('visor-afuera').classList.contains('hidden') };
+    });
+    barra.deshabilitado && barra.marcado && barra.afueraOculto
+      ? _ok('estando en la galeria el boton se marca y "Abrir afuera" se esconde')
+      : _mal('la barra no refleja que ya estas en la galeria: ' + JSON.stringify(barra));
 
     // --- cerrar con Esc ---
     await pagina.keyboard.press('Escape');

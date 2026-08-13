@@ -118,8 +118,10 @@
                apuntan hacia afuera para agrandar y hacia adentro para volver: el mismo gesto que
                en cualquier reproductor, y el ícono cambia solo según en cuál de los dos estados
                estés. Sin ese cambio, el botón no dice si vas a agrandar o achicar. -->
-          <button id="btn-status-full" aria-label="Ver el previsualizador en pantalla completa"
-                  aria-pressed="false" title="Pantalla completa" type="button">
+          <!-- "Agrandar" y ya no "pantalla completa" (2026-08-13): desde que crece a lo alto en
+               vez de a lo ancho, el nombre viejo prometía algo que el botón no hace. -->
+          <button id="btn-status-full" aria-label="Agrandar el previsualizador a lo alto"
+                  aria-pressed="false" title="Agrandar" type="button">
             <svg class="icono-agrandar" viewBox="0 0 24 24" width="14" height="14" fill="none"
                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
@@ -139,6 +141,16 @@
           </button>
         </div>
         <div id="preview-content">Sin actividad todavía en este turno.</div>
+        <!-- EL PANEL DE ESTUDIO (pedido del usuario, 2026-08-13): en Mentis Study, en vez del
+             previsualizador va la botonera de los nueve formatos. No es otro panel: es el MISMO,
+             mostrando otra cosa según el modo. Y mientras Mentis trabaja vuelve a mostrar la
+             actividad, porque en ese rato lo que importa es qué está haciendo.
+             Las tarjetas las pinta el JS desde una sola tabla (ver panelEstudio en renderer.js):
+             una lista escrita a mano acá y otra allá se desincronizan el primer día. -->
+        <div id="panel-estudio" class="hidden">
+          <div id="panel-estudio-grilla"></div>
+          <div id="panel-estudio-preguntas" class="hidden"></div>
+        </div>
       </div>
       <!-- ZONA CENTRAL (rediseño 2026-07-27, pedido del usuario: el modo voz pasa a ser el único).
            El cuerpo digital vive ACÁ, en el mismo cuadro donde antes estaban las estadísticas --
@@ -353,6 +365,15 @@
             </button>
           </div>
         </div>
+        <!-- LA FILA DE CONTROLES, DEBAJO DEL CUADRO DE TEXTO (pedido del usuario, 2026-08-13).
+             Antes el modo, el "+" y el microfono vivian a la derecha DENTRO de la caja de texto y
+             en la linea de estado, asi que el cuadro donde se escribe compartia espacio con cuatro
+             controles. Ahora la caja es solo para escribir y los controles tienen su propia fila:
+             modo y "+" a la izquierda, microfono al otro extremo.
+             Nace vacia: los nodos se MUDAN aca desde el JS (ver moverControlesAbajo), que es el
+             mismo criterio que ya se usaba con el microfono -- mover conserva sus escuchas y su
+             logica; rehacerlos seria cuatro oportunidades de romper algo que hoy anda. -->
+        <div id="composer-acciones"></div>
       </div>
     </main>
   </div>
