@@ -8,13 +8,11 @@
     "start": "electron.",
     "test": "node --test --test-force-exit --test-timeout=200000 test/*.test.js",
     "empaquetar": "node empaquetar.js",
-    "empaquetar:directo": "electron-packager. Mentis --platform=win32 --arch=x64 --icon=renderer/assets/mentis-cuerpo.ico --out=../dist --overwrite --app-version=0.1.0 --win32metadata.FileDescription=Mentis --win32metadata.ProductName=Mentis --ignore=\"^/test$\" --ignore=\"^/dist$\""
+    "empaquetar:directo": "electron-packager. Mentis --platform=win32 --arch=x64 --icon=renderer/assets/mentis-app.ico --out=../dist --overwrite --app-version=0.1.0 --win32metadata.FileDescription=Mentis --win32metadata.ProductName=Mentis --ignore=\"^/test$\" --ignore=\"^/dist$\""
   },
   "devDependencies": {
     "@electron/packager": "^20.0.4",
     "electron": "^43.0.0"
   },
-  "dependencies": {
-    "three": "^0.185.1"
-  }
+  "dependencies": {}
 }

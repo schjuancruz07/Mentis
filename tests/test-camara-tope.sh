@@ -27,20 +27,53 @@ _ok()  { ok=$((ok+1));       printf '  ok    %s\n' "$1"; }
 _mal() { fallo=$((fallo+1)); printf '  FALLA %s -- %s\n' "$1" "$2"; }
 
 echo "== el tope existe y es un numero, no un pedido =="
-grep -q 'WEBCAM_MAX="\${MENTIS_WEBCAM_MAX:-3}"' "$A" \
-  && _ok "hay un tope de 3 usos por turno, configurable" \
-  || _mal "existe WEBCAM_MAX" "sin tope, el bucle solo para al agotarse el presupuesto"
-grep -q 'WEBCAM_USOS=0' "$A" \
-  && _ok "el contador arranca en cero cada turno" \
-  || _mal "WEBCAM_USOS se inicializa" "un contador sin inicializar no cuenta"
-grep -qE 'elif \[ "\$WEBCAM_USOS" -ge "\$WEBCAM_MAX" \]' "$A" \
+grep -q 'declare -A TOPE_MAX=(' "$A" \
+  && _ok "hay una tabla de topes por herramienta" \
+  || _mal "existe TOPE_MAX" "sin tope, el bucle solo para al agotarse el presupuesto"
+grep -q '\[webcam\]="\${MENTIS_WEBCAM_MAX:-3}"' "$A" \
+  && _ok "la camara sigue en 3 usos por turno, configurable" \
+  || _mal "el tope de la camara" "era 3 y no hay motivo para haberlo cambiado"
+grep -q 'declare -A TOPE_USOS=()' "$A" \
+  && _ok "los contadores arrancan vacios cada turno" \
+  || _mal "TOPE_USOS se inicializa" "un contador sin inicializar no cuenta"
+grep -q 'elif _tope_alcanzado webcam; then' "$A" \
   && _ok "se rechaza la camara al llegar al tope" \
   || _mal "hay rechazo por tope" "el contador no sirve si nadie lo mira"
+
+echo "== y ahora LAS CINCO invasivas, no solo la camara =="
+# Cuando se cerro el agujero de la camara (2026-08-08) quedo escrito, en la propia bitacora, que
+# faltaban las otras cuatro: 'screen', 'control', 'telefono' y 'arduino' tenian permiso de
+# encendido y ningun limite de uso. Se cerraron el 2026-08-10 junto con el sistema de modos,
+# porque repartir capacidades obliga a pasar por exactamente ese punto del codigo.
+for _h in webcam screen control telefono arduino; do
+  grep -q "\[$_h\]=" "$A" \
+    && _ok "'$_h' tiene tope declarado" \
+    || _mal "tope de '$_h'" "un permiso responde '¿puede?'; falta responder '¿cuantas veces?'"
+  grep -q "_tope_alcanzado $_h" "$A" \
+    && _ok "'$_h' se rechaza al llegar al tope" \
+    || _mal "rechazo de '$_h'" "un tope declarado y no aplicado no protege de nada"
+  grep -q "_tope_sumar $_h" "$A" \
+    && _ok "'$_h' cuenta sus usos" \
+    || _mal "contador de '$_h'" "sin contar, el tope nunca se alcanza"
+done
+
+echo "== el tope se suma apenas entra, no al terminar =="
+# En las cuatro nuevas el _tope_sumar es la PRIMERA linea despues del else, a proposito: si se
+# contara al final, un fallo a mitad de camino dejaria el contador quieto y el bucle podria seguir
+# eternamente a base de intentos fallidos -- que es justamente como se comporta un bucle.
+for _h in screen control telefono arduino; do
+  if grep -A 1 "elif _tope_alcanzado $_h; then" "$A" >/dev/null 2>&1 && \
+     grep -A 4 "elif _tope_alcanzado $_h; then" "$A" | grep -q "^        _tope_sumar $_h$"; then
+    _ok "'$_h' suma el uso al entrar"
+  else
+    _mal "orden del contador de '$_h'" "si suma al final, los intentos fallidos no cuentan"
+  fi
+done
 
 echo "== se cuenta ANTES de sacar la foto =="
 # Si se contara despues, un fallo a mitad de camino dejaria el contador quieto y el bucle podria
 # seguir para siempre a base de intentos fallidos.
-if awk '/mirar\|leer\|presencia\)/,/;;/' "$A" | grep -B 20 'webcam \$WACTION ->' | grep -q 'WEBCAM_USOS=\$((WEBCAM_USOS + 1))'; then
+if awk '/mirar\|leer\|presencia\)/,/;;/' "$A" | grep -B 20 'webcam \$WACTION ->' | grep -q '_tope_sumar webcam'; then
   _ok "el contador sube antes de encender la camara"
 else
   _mal "el contador sube antes" "si sube despues, los intentos fallidos no cuentan y el bucle sigue"
@@ -62,7 +95,7 @@ if grep -qE 'echo "\[nv-agent\] iter \$it: webcam \$WACTION -> \$\(_win_path "\$
 else
   _mal "el formato de la linea de la foto" "si cambia, la app deja de mostrar lo que la camara vio"
 fi
-grep -q 'uso \$WEBCAM_USOS de \$WEBCAM_MAX' "$A" \
+grep -q 'uso \${TOPE_USOS\[webcam\]} de \$WEBCAM_MAX' "$A" \
   && _ok "el contador se informa en la linea de al lado" \
   || _mal "se informa el uso" "conviene que se vea cuantos quedan"
 

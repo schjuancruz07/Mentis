@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Mentis — hoja de identidad</title>
+<!--
+  identidad-preview.html -- la hoja de identidad de Mentis, armada con los archivos DE VERDAD.
+
+  POR QUE EXISTE (2026-08-10): la interfaz completa no se puede fotografiar fuera de Electron --
+  renderer.js depende del puente IPC y sin el la pantalla queda en negro. Pero la identidad
+  (colores, letras, logo) es CSS puro, y eso si se puede mirar. Esta pagina importa temas.js y
+  fuentes.css REALES, no copias: si alguien cambia un color en temas.js, esta hoja cambia sola.
+  Si fuera una copia con los valores escritos a mano, mostraria una identidad que ya no existe.
+
+  LO QUE ESTA HOJA NO PRUEBA, y hay que decirlo: que la app entera se vea bien. Prueba que la
+  paleta, las cinco fuentes y el isotipo cargan y combinan. El resto -- que el logo se vea bien en
+  la barra de tareas de Windows, que no haya un panel con el color viejo -- necesita abrir Mentis.
+-->
+<link rel="stylesheet" href="../renderer/assets/fonts/fuentes.css" />
+<style>
+  body {
+    margin: 0; padding: 40px;
+    background: var(--fondo); color: var(--texto);
+    font-family: "Google Sans Flex", "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h2 { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+       color: var(--texto-dim); font-weight: 600; margin: 44px 0 16px; }
+.fila { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.caja { background: var(--principal); border: 1px solid var(--border);
+          border-radius: 10px; padding: 20px 24px; }
+
+  /* --- logotipos de modo: la UNICA parte de la app que cambia de letra --- */
+.marca { display: flex; align-items: baseline; gap: 10px; }
+.marca.etq { font-size: 10px; color: var(--texto-dim); letter-spacing: 0.14em;
+                text-transform: uppercase; width: 128px; flex: none; }
+.m-chat   { font-family: "Google Sans Flex", sans-serif; font-weight: 700;
+              font-size: 20px; letter-spacing: 0.18em; color: var(--acento); }
+.m-code   { font-family: "Silkscreen", monospace; font-weight: 700;
+              font-size: 17px; letter-spacing: 0.10em; color: var(--acento); }
+.m-designe{ font-family: "Syne", sans-serif; font-weight: 800;
+              font-size: 20px; letter-spacing: 0.14em; color: var(--acento); }
+.m-designe i { font-family: "Playfair Display", serif; font-weight: 800;
+                 font-style: italic; font-size: 26px; letter-spacing: 0; }
+.m-cowork { font-family: "Plus Jakarta Sans", sans-serif; font-weight: 800;
+              font-size: 21px; letter-spacing: -0.01em; color: var(--acento); }
+
+  /* --- paleta --- */
+.muestra { width: 104px; }
+.muestra.chip { height: 64px; border-radius: 8px; border: 1px solid var(--border); }
+.muestra.hex { font-size: 11px; color: var(--texto-dim); margin-top: 6px;
+                  font-variant-numeric: tabular-nums; }
+.muestra.cual { font-size: 11px; margin-top: 2px; }
+
+  /* --- piezas reales de la interfaz --- */
+.burbuja { max-width: 460px; padding: 10px 14px; border-radius: 10px; font-size: 14px; line-height: 1.6; }
+.burbuja.usuario { background: var(--bubble-usuario); }
+.burbuja.mentis { background: var(--secundario); border: 1px solid var(--border); }
+  button { border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600;
+           font-family: inherit; cursor: pointer; border: 1px solid var(--border);
+           background: var(--principal); color: var(--texto); }
+  button.acento { background: var(--acento); border-color: var(--acento); color: #1a0f0b; }
+  button.peligro { background: transparent; border-color: var(--peligro); color: var(--peligro); }
+
+.pesos p { margin: 4px 0; font-size: 21px; }
+.real { display: flex; gap: 20px; align-items: flex-end; }
+.real figure { margin: 0; text-align: center; }
+.real figcaption { font-size: 10px; color: var(--texto-dim); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+  <div class="fila" style="gap:20px">
+    <img id="isotipo" src="../renderer/assets/mentis-app-256.png" width="72" height="72" alt="Isotipo Mentis" />
+    <div>
+      <div style="font-size:26px;font-weight:700;letter-spacing:0.16em">MENTIS</div>
+      <div style="font-size:12px;color:var(--texto-dim);margin-top:4px">
+        Terracota, blanco y negro · Google Sans Flex · isotipo M3 Editorial
+      </div>
+    </div>
+  </div>
+
+  <h2>Logotipo por modo</h2>
+  <div class="caja" style="display:flex;flex-direction:column;gap:14px">
+    <div class="marca"><span class="etq">Mentis</span><span class="m-chat">MENTIS</span></div>
+    <div class="marca"><span class="etq">Mentis Code</span><span class="m-code">MENTIS CODE</span></div>
+    <div class="marca"><span class="etq">Mentis Designe</span><span class="m-designe">MENTIS <i>Designe</i></span></div>
+    <div class="marca"><span class="etq">Mentis Cowork</span><span class="m-cowork">Mentis.Cowork</span></div>
+  </div>
+
+  <h2>Paleta</h2>
+  <div class="fila" id="paleta"></div>
+
+  <h2>Tipografía — Google Sans Flex (variable, 100–900)</h2>
+  <div class="caja pesos">
+    <p style="font-weight:300">Mentis administra tu negocio mientras dormís. 0123456789</p>
+    <p style="font-weight:400">Mentis administra tu negocio mientras dormís. 0123456789</p>
+    <p style="font-weight:600">Mentis administra tu negocio mientras dormís. 0123456789</p>
+    <p style="font-weight:800">Mentis administra tu negocio mientras dormís. 0123456789</p>
+    <p style="font-size:13px;color:var(--texto-dim);font-weight:400;margin-top:12px">
+      Acentos y eñes: ñ á é í ó ú ü ¿? ¡! — si alguno sale con otra letra, falta el subconjunto latin-ext.
+    </p>
+  </div>
+
+  <h2>Piezas de la interfaz</h2>
+  <div class="caja" style="display:flex;flex-direction:column;gap:12px;align-items:flex-start">
+    <div class="burbuja usuario">¿Podés pasarme el resumen de ayer?</div>
+    <div class="burbuja mentis">Sí. Lo tengo en <code>workspace/resumen.md</code>. Te lo abro o te lo pego acá.</div>
+    <div class="fila" style="gap:10px;margin-top:6px">
+      <button class="acento">Aceptar</button>
+      <button>Cancelar</button>
+      <button class="peligro">Borrar todo</button>
+    </div>
+  </div>
+
+  <h2>Isotipo a tamaño real (barra de tareas)</h2>
+  <div class="caja real" id="reales"></div>
+
+<script type="module">
+  // Se importa el archivo REAL de temas. Si esta hoja copiara los colores, mostraria una
+  // identidad que puede haber cambiado hace tres commits.
+  import { TEMAS, TEMA_POR_DEFECTO, aplicarTema } from '../renderer/temas.js';
+
+  // ?tema=mentis-claro para ver la otra mitad de la identidad. Los dos temas tienen que aguantar
+  // la misma hoja: si el claro necesitara una hoja distinta para verse bien, no seria el mismo
+  // sistema visual dado vuelta sino otro tema.
+  const pedido = new URLSearchParams(location.search).get('tema');
+  const elegido = TEMAS[pedido] ? pedido : TEMA_POR_DEFECTO;
+  aplicarTema(elegido);
+  document.title = `Mentis — identidad (${TEMAS[elegido].nombre})`;
+
+  const nombres = {
+    '--fondo': 'fondo', '--principal': 'paneles', '--secundario': 'burbuja',
+    '--texto': 'texto', '--texto-dim': 'texto tenue', '--acento': 'acento',
+    '--peligro': 'peligro', '--border': 'borde', '--bubble-usuario': 'burbuja el usuario',
+  };
+  const vars = TEMAS[elegido].vars;
+  document.getElementById('paleta').innerHTML = Object.entries(nombres).map(([k, n]) =>
+    `<div class="muestra"><div class="chip" style="background:${vars[k]}"></div>
+       <div class="hex">${vars[k]}</div><div class="cual">${n}</div></div>`).join('');
+
+  // El tema decide cual de los dos logos se ve, asi que la hoja tiene que mostrar el que
+  // corresponde: si mostrara siempre el mismo, mentiria justo sobre lo que quiere ilustrar.
+  const suf = TEMAS[elegido].logo === 'oscuro' ? '-oscuro' : '';
+  document.getElementById('isotipo').src = `../renderer/assets/mentis-app${suf}-256.png`;
+  document.getElementById('reales').innerHTML = [16, 24, 32, 48, 64].map((t) =>
+    `<figure><img src="../renderer/assets/mentis-app${suf}.ico" width="${t}" height="${t}" alt="">
+       <figcaption>${t}px</figcaption></figure>`).join('');
+</script>
+</body>
+</html>

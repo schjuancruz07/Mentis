@@ -32,6 +32,12 @@ NVDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # relativo a NVDIR, que asumia el motor un nivel ARRIBA de mentis-env -- ahora es al reves,
 # engine/ (donde vive este script) es hijo de la raiz de Mentis.
 MENTIS_ROOT="$(cd "$NVDIR/.." && pwd)"
+# Exportada para que los comandos de 'exec' puedan llamar a las capabilities de Mentis. El exec
+# corre con el CWD en la carpeta de TRABAJO del turno, no en la raiz de Mentis, asi que un
+# `bash capabilities/estructura.sh` falla con 127 y el modelo se queda buscando la carpeta
+# (2026-08-12: paso exactamente eso en el primer turno del 3D de Science). Con esto, la forma
+# correcta es `bash "$MENTIS_ROOT/capabilities/<lo que sea>.sh"` y funciona desde cualquier lado.
+export MENTIS_ROOT
 # shellcheck source=/dev/null
 source "$NVDIR/nv-lib.sh"
 
@@ -96,8 +102,53 @@ WEBCAM_PREVIEW="$MENTIS_ROOT/workspace/webcam-live.jpg"
 # El tope es POR TURNO y no por conversacion a proposito: cada mensaje nuevo del usuario es una
 # intencion nueva, y no queremos que la camara quede inutilizada porque hace media hora hubo un
 # bucle. Se puede subir con MENTIS_WEBCAM_MAX si algun dia hace falta de verdad.
-WEBCAM_MAX="${MENTIS_WEBCAM_MAX:-3}"
-WEBCAM_USOS=0
+#
+# 2026-08-10: EL MISMO TOPE, AHORA PARA LAS CINCO INVASIVAS. Cuando se cerro el agujero de la
+# camara quedo escrito que faltaba hacer lo mismo con `screen`, `control`, `telefono` y `arduino`:
+# todas tenian permiso de encendido y ninguna tenia limite de uso. La regla que salio de aquello
+# es la que se aplica aca: **un permiso responde "¿puede?"; hace falta responder "¿cuantas veces?"**.
+#
+# DE DONDE SALEN LOS NUMEROS: no son raciones, son cortacircuitos. Estan puestos bien por encima
+# de lo que necesita un uso legitimo y bien por debajo de lo que gasta un bucle. Por eso `control`
+# tiene 25 y la camara 3: llenar un formulario son veinte clicks razonables, mirar la habitacion
+# veinte veces no es razonable nunca. Si alguno molesta en uso real, se sube por variable de
+# entorno -- pero antes de subirlo conviene mirar POR QUE se llego al tope.
+declare -A TOPE_MAX=(
+  [webcam]="${MENTIS_WEBCAM_MAX:-3}"
+  [screen]="${MENTIS_SCREEN_MAX:-6}"
+  [control]="${MENTIS_CONTROL_MAX:-25}"
+  [telefono]="${MENTIS_TELEFONO_MAX:-8}"
+  [arduino]="${MENTIS_ARDUINO_MAX:-15}"
+)
+declare -A TOPE_USOS=()
+
+# ¿Ya se paso del tope esta herramienta? Devuelve 0 (verdadero en bash) si YA NO puede usarse.
+_tope_alcanzado() {
+  local t="$1" max="${TOPE_MAX[$1]:-0}"
+  [ "$max" -gt 0 ] || return 1          # sin tope declarado = sin limite
+  [ "${TOPE_USOS[$t]:-0}" -ge "$max" ]
+}
+
+# Se suma SIEMPRE antes de ejecutar, nunca despues. Si se contara al terminar, un fallo a mitad de
+# camino dejaria el contador quieto y el bucle podria seguir eternamente a base de intentos
+# fallidos -- que es exactamente como se comporta un bucle.
+_tope_sumar() {
+  local t="$1"
+  TOPE_USOS[$t]=$(( ${TOPE_USOS[$t]:-0} + 1 ))
+}
+
+# El mensaje de rechazo le dice al modelo que NO INSISTA y que cierre con lo que tenga. Sin esa
+# ultima parte un modelo obstinado gasta el resto del presupuesto reintentando contra una puerta
+# cerrada, y el turno termina sin respuesta igual.
+_tope_mensaje() {
+  local t="$1"
+  printf 'ERROR: ya usaste "%s" %s veces en este turno, que es el maximo. No la pidas de nuevo: cerra con '"'"'done'"'"' explicando lo que conseguiste hasta aca, o segui con otra herramienta.' \
+    "$t" "${TOPE_USOS[$t]:-0}"
+}
+
+# Se dejan los dos nombres viejos porque el bloque de la camara ya los usaba y son mas legibles
+# ahi. Apuntan al mismo lugar que el resto.
+WEBCAM_MAX="${TOPE_MAX[webcam]}"
 # Los ojos de Mentis (2026-07-28). Saca UNA foto con la webcam y se la manda al modelo multimodal
 # con el prompt que corresponda al uso. La cámara se prende y se apaga en el acto -- no hay ningún
 # proceso mirando de fondo, y la luz de la webcam queda como la señal honesta de que se usó.
@@ -156,6 +207,44 @@ _caged() {
     "$ROOT"/*) printf '%s' "$abs"; return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Igual que _caged pero para el CORPUS DE ESTUDIO (modo Study), que vive fuera de la carpeta de
+# trabajo. Devuelve la ruta solo si cae adentro del corpus: misma jaula, otro patio.
+#
+# POR QUE SE PERMITE LEERLO (2026-08-12): el corpus es material que el usuario cargo a proposito con
+# '/estudiar sumar' para que Mentis lo estudie, y el prompt se lo cita como 'materia/archivo.md'.
+# Al principio esto se rechazaba y se le explicaba al modelo que el contenido ya lo tenia en el
+# prompt. No alcanzo: insistia con 'read' hasta que saltaba el detector de bucles y el turno se
+# perdia entero (ERR-143). Y tenia razon en insistir -- el bloque del prompt trae los fragmentos
+# mas parecidos a la pregunta, no el documento completo, asi que para resumir un apunte entero
+# necesita abrirlo. Pelearle a un modelo que quiere hacer lo correcto es perder dos veces.
+#
+# NO ES UN AGUJERO: solo resuelve dentro de MENTIS_CORPUS_DIR, que solo esta seteada en un modo
+# con corpus declarado, y cuyo contenido lo puso el usuario explicitamente para que se lea. El realpath
+# es el que corta los '..' -- sin esa comprobacion, 'x/../../../etc/passwd' saldria del corpus.
+_caged_corpus() {
+  local req="$1" abs raiz
+  [ -n "${MENTIS_CORPUS_DIR:-}" ] || return 1
+  raiz="$(realpath -m -- "$MENTIS_CORPUS_DIR" 2>/dev/null || true)"
+  [ -n "$raiz" ] || return 1
+  abs="$(realpath -m -- "$raiz/$req" 2>/dev/null || true)"
+  [ -z "$abs" ] && return 1
+  case "$abs/" in
+    "$raiz"/*) printf '%s' "$abs"; return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# La ruta que 'read' va a abrir: primero la carpeta de trabajo y, si ahi no esta, el corpus de
+# estudio. En ese orden, para que un archivo del turno nunca quede tapado por uno del corpus.
+_ruta_leible() {
+  local req="$1" abs
+  if abs="$(_caged "$req")" && [ -e "$abs" ]; then printf '%s' "$abs"; return 0; fi
+  if abs="$(_caged_corpus "$req")" && [ -e "$abs" ]; then printf '%s' "$abs"; return 0; fi
+  # Nada existe: se devuelve la de la jaula igual, para que los mensajes de error de mas abajo
+  # sigan hablando de la carpeta de trabajo, que es lo correcto cuando no hay corpus de por medio.
+  _caged "$req"
 }
 
 # ¿La ruta que pidió el modelo es ABSOLUTA, en cualquiera de las formas que conviven en esta
@@ -668,6 +757,31 @@ _blocked_cmd() {
 # _dispatch_tool sin setear estas variables falla con un error críptico de variable no ligada.
 _dispatch_tool() {
   local it="$1"
+  # SEGUNDA CAPA del apagado por modo (-n). La primera es sacar la herramienta del protocolo, que
+  # evita el 99% de los casos porque el modelo no sabe que existe. Esta es para el 1%: un modelo
+  # que la recuerda de su entrenamiento, o una respuesta copiada de un turno anterior donde si
+  # estaba. La leccion de la camara (ERR-133) es exactamente esta: una defensa que vive solo en el
+  # texto del prompt es una sugerencia, no una defensa.
+  # 'done' nunca se puede apagar: sin ella el turno no tiene forma de terminar.
+  # El `:-` no es decorativo: SIN_TOOLS se asigna en el bloque de arranque, que solo corre cuando
+  # este archivo se EJECUTA. Otros scripts lo SOURCEAN para reusar sus funciones (ver la guarda
+  # BASH_SOURCE mas abajo) y ahi la variable no existe -- con `set -u` eso mata al que sourcea, en
+  # una linea que no tiene nada que ver con lo que estaba haciendo.
+  _sin="${SIN_TOOLS:-}"
+  if [ -n "${_sin// }" ] && [ "$TOOL" != "done" ] && [[ ",${_sin// /}," == *",$TOOL,"* ]]; then
+    # CON UN CORPUS ACTIVO (modo Study), 'gen' tiene un reemplazo concreto y hay que nombrarlo.
+    # Sin esto el modelo pedia 'gen' tres veces seguidas -- queria armarle las tarjetas al usuario, que
+    # es lo correcto -- y el turno moria en el corta-bucles. Negar sin ofrecer la alternativa es lo
+    # mismo que ya paso con el corpus (ERR-143): el modelo insiste porque tiene razon en querer.
+    if [ "$TOOL" = "gen" ] && [ -n "${MENTIS_CORPUS_DIR:-}" ]; then
+      OBS="La herramienta 'gen' esta apagada en este modo, pero lo que queres hacer SI se puede: el material de estudio se convierte a audio, video, presentacion, informe, tabla, mapa mental, tarjetas, cuestionario o infografia con '/material <formato> <tema>'. Eso lo escribe USUARIO, no vos. Terminá ahora con 'done' diciendole que le conviene y pasandole la linea exacta -- por ejemplo '/material tarjetas fotosintesis'."
+    else
+    OBS="ERROR: la herramienta '$TOOL' no esta disponible en este modo de Mentis. No la vuelvas a pedir. Resolvé con las que tenés, o si de verdad hace falta, terminá con 'done' avisando que esto necesita otro modo."
+    fi
+    echo "[nv-agent] iter $it: $TOOL RECHAZADO (apagada en este modo)" >&2
+    return 0
+  fi
+
   case "$TOOL" in
     done)
       # Bandera en vez de `continue` (2026-07-29): el `continue` que había acá estaba DENTRO de
@@ -712,7 +826,7 @@ $OBS"
         OBS="No puedo subir a Drive en este turno: subir es una accion de escritura y este turno no las tiene habilitadas (pasa en el modo remoto, desde la pagina del celular). Decile al usuario que lo pida desde la app."
         echo "[nv-agent] iter $it: drive rechazado (sin permiso de escritura)" >&2
       elif [ ! -f "$MENTIS_ROOT/mentis-drive.sh" ]; then
-        OBS="ERROR: falta mentis-drive.sh."
+        OBS="ERROR: falta mentis-drive.sh. NO repitas la misma llamada sin ese campo: completalo, o si el pedido no lo necesita, seguí con otra herramienta o cerrá con 'done'."
         echo "[nv-agent] iter $it: drive rechazado (falta mentis-drive.sh)" >&2
       else
         DACC="$(_b64d "${ACTION_B64:-}" 2>/dev/null || true)"; [ -n "$DACC" ] || DACC="estado"
@@ -800,7 +914,7 @@ $CAPTXT"
       fi ;;
     read)
       REL="$(_b64d "$PATH_B64")"
-      if ABS="$(_caged "$REL")" && [ -f "$ABS" ]; then
+      if ABS="$(_ruta_leible "$REL")" && [ -f "$ABS" ]; then
         # Bug real (2026-07-14): leer un binario (imagen/audio/video/etc) con cat metía sus bytes
         # crudos en la observación, y esa basura rompía el JSON de la respuesta del modelo en el
         # turno siguiente ("el modelo no devolvió JSON válido"). Si ya está adjunto de verdad via
@@ -900,7 +1014,7 @@ $CAPTXT"
           OBS="ERROR: '$REL' es una ruta ABSOLUTA. 'read' abre archivos SOLO dentro de tu carpeta de trabajo, y la ruta va relativa a ella (por ejemplo 'notas/pendientes.txt', no 'C:/Users/...' ni '/c/Users/...'). Escribirla de otra forma va a fallar igual. Si no sabés dónde está el archivo, buscalo con {\"tool\":\"search\",\"query\":\"...\"}."
         fi
         echo "[nv-agent] iter $it: read RECHAZADO (ruta absoluta): $REL" >&2
-      elif ABS="$(_caged "$REL")" && [ -d "$ABS" ]; then
+      elif ABS="$(_ruta_leible "$REL")" && [ -d "$ABS" ]; then
         # Existe, está en la jaula, pero es un DIRECTORIO: el `[ -f ]` de arriba lo dejaba pasar al
         # error genérico. Es exactamente lo que pasó con '.mentis-obs' (2026-07-30).
         if [ "${REL%/}" = "$OBSDIR_REL" ]; then
@@ -911,7 +1025,14 @@ $(ls -1 -- "$ABS" 2>/dev/null | head -10 || true)"
         fi
         echo "[nv-agent] iter $it: read RECHAZADO (es un directorio): $REL" >&2
       else
-        OBS="ERROR: no existe el archivo '$REL' dentro de tu carpeta de trabajo (las rutas van relativas a ella). No lo intentes con otra escritura de la misma ruta: si no sabés el nombre exacto, buscalo con {\"tool\":\"search\",\"query\":\"...\"}."
+        # Con un corpus de estudio activo, el archivo pudo no existir en NINGUNO de los dos lados
+        # (ver _ruta_leible). Decirle solo "no esta en tu carpeta de trabajo" lo manda a buscarlo
+        # ahi para siempre, cuando el material que le interesa esta en el otro patio.
+        if [ -n "${MENTIS_CORPUS_DIR:-}" ]; then
+          OBS="ERROR: no existe '$REL' ni en tu carpeta de trabajo ni en el material de estudio. Las rutas del material van como te las cita el bloque 'TUS FUENTES DE ESTUDIO' ('materia/archivo.md'), sin la parte del numero de linea. No lo intentes con otra escritura de la misma ruta: si el dato que buscas no aparece en ese bloque, es que no esta en el material -- y eso es lo que hay que responder."
+        else
+          OBS="ERROR: no existe el archivo '$REL' dentro de tu carpeta de trabajo (las rutas van relativas a ella). No lo intentes con otra escritura de la misma ruta: si no sabés el nombre exacto, buscalo con {\"tool\":\"search\",\"query\":\"...\"}."
+        fi
         echo "[nv-agent] iter $it: read RECHAZADO: $REL" >&2
       fi ;;
     recordar)
@@ -938,12 +1059,29 @@ $(ls -1 -- "$ABS" 2>/dev/null | head -10 || true)"
       ;;
     search)
       Q="$(_b64d "$QUERY_B64")"; SREL="$(_b64d "${PATH_B64:-}" 2>/dev/null || true)"
-      SBASE="$ROOT"; [ -n "$SREL" ] && SBASE="$(_caged "$SREL" || echo "")"
+      SBASE="$ROOT"; [ -n "$SREL" ] && SBASE="$(_ruta_leible "$SREL" || echo "")"
       if [ -n "$SBASE" ] && [ -e "$SBASE" ]; then
         if command -v rg >/dev/null 2>&1; then
           OBS="$(rg -n --no-heading -m 20 -- "$Q" "$SBASE" 2>/dev/null | _trunc || true)"
         else
           OBS="$(grep -rn -m 20 -- "$Q" "$SBASE" 2>/dev/null | _trunc || true)"
+        fi
+        # CON UN CORPUS ACTIVO, 'search' TAMBIEN LO MIRA (2026-08-12). Buscar en el material es
+        # exactamente lo que el modo Study existe para hacer: dejarlo afuera obligaba al modelo a
+        # pelear contra la herramienta hasta quemar el turno, que es el mismo error que ya se
+        # cometio con 'read' (ERR-143). El corpus se agrega como SEGUNDA carpeta, sin reemplazar
+        # la de trabajo: un archivo que el usuario dejo en el turno sigue apareciendo primero.
+        if [ -n "${MENTIS_CORPUS_DIR:-}" ] && [ -d "$MENTIS_CORPUS_DIR" ] && [ -z "$SREL" ]; then
+          if command -v rg >/dev/null 2>&1; then
+            OBS_C="$(rg -n --no-heading -m 20 -- "$Q" "$MENTIS_CORPUS_DIR" 2>/dev/null | _trunc || true)"
+          else
+            OBS_C="$(grep -rn -m 20 -- "$Q" "$MENTIS_CORPUS_DIR" 2>/dev/null | _trunc || true)"
+          fi
+          if [ -n "${OBS_C// }" ]; then
+            OBS="${OBS:+$OBS
+}--- en tu material de estudio ---
+$OBS_C"
+          fi
         fi
         [ -z "$OBS" ] && OBS="(sin coincidencias para: $Q)"
         echo "[nv-agent] iter $it: search '$Q'" >&2
@@ -1212,10 +1350,23 @@ PY
         # rechazaba siempre, y la única alternativa era prenderle el modo sin frenos a TODO.
         OBS="ERROR: comando rechazado (el usuario no lo aprobó): $MATCH"
         echo "[nv-agent] iter $it: exec BLOQUEADO: $MATCH" >&2
+      elif [ -z "${CODE//[[:space:]]/}" ]; then
+        # 'exec' sin nada que ejecutar. Antes esto corria `bash -c ""`, que devuelve exit 0 sin
+        # salida: un EXITO FALSO, el peor resultado posible. El modelo lo leia como "corri el
+        # comando y no imprimio nada", volvia a intentar igual, y la traza mostraba doce
+        # 'exec (exit 0)' sin una sola linea de salida (2026-08-12). Pasa cuando erra el nombre
+        # del campo -- 'command' en vez de 'code' -- asi que el mensaje tiene que decir cual es.
+        OBS="ERROR: llamaste a 'exec' sin codigo. El campo se llama 'code': {\"tool\":\"exec\",\"code\":\"python3 -c 'print(2+2)'\"}. Si usaste otro nombre ('command', 'cmd', 'script'), el comando llego vacio y no se ejecuto nada -- no es que el comando no haya impreso."
+        echo "[nv-agent] iter $it: exec RECHAZADO (sin codigo: reviso que el campo se llame 'code')" >&2
       else
         if OUT="$(cd "$ROOT" && timeout "${NV_AGENT_EXEC_TIMEOUT:-120}" bash -c "$CODE" 2>&1)"; then RC=0; else RC=$?; fi
         OBS="$(printf 'exit=%s\n%s' "$RC" "$OUT" | _trunc)"
-        echo "[nv-agent] iter $it: exec (exit $RC)" >&2
+        # QUE se ejecuto, no solo como salio (2026-08-12). Con solo el exit, una tanda de doce
+        # 'exec (exit 0)' que no imprimian nada era indiagnosticable desde la traza: no habia
+        # forma de saber si el comando estaba mal armado o si de verdad no tenia salida. La
+        # traza es la fuente de verdad de este motor -- si no dice que corrio, no alcanza.
+        _EXEC_LOG="$(printf '%s' "$CODE" | tr '\n' ' ' | cut -c1-120)"
+        echo "[nv-agent] iter $it: exec (exit $RC, ${#OUT} bytes) :: $_EXEC_LOG" >&2
         # Escalera de verificacion (pedido del usuario, 2026-07-18: cerrar la brecha de calidad de
         # codigo -- ver nv-verify.sh, que YA escala autor cuando el sandbox rechaza el intento).
         # 'exec' es como Mentis verifica que un fix de codigo realmente funciona (correr el
@@ -1454,7 +1605,7 @@ else:
         GOUTNAME="gen-$(date +%s)-$$"
         if [ "$GKIND" = "doc" ]; then
           if [ -z "$GCONTENT" ]; then
-            OBS="ERROR: falta 'content' para gen kind=doc."
+            OBS="ERROR: falta 'content' para gen kind=doc. NO repitas la misma llamada sin ese campo: completalo, o si el pedido no lo necesita, seguí con otra herramienta o cerrá con 'done'."
           elif [[ ! "$GFORMAT" =~ ^(docx|pdf|pptx|xlsx)$ ]]; then
             OBS="ERROR: 'format' invalido o faltante para gen kind=doc. Usa docx|pdf|pptx|xlsx."
           elif printf '%s' "$GCONTENT" | grep -qiE '^\s*\[ *(imagen|image|foto|grafico|gráfico) *:'; then
@@ -1490,7 +1641,7 @@ else:
           fi
         elif [ "$GKIND" = "image" ]; then
           if [ -z "$GPROMPT" ]; then
-            OBS="ERROR: falta 'prompt' para gen kind=image."
+            OBS="ERROR: falta 'prompt' para gen kind=image. NO repitas la misma llamada sin ese campo: completalo, o si el pedido no lo necesita, seguí con otra herramienta o cerrá con 'done'."
           else
             GPROVIDER="$(_b64d "${PROVIDER_B64:-}" 2>/dev/null || true)"
             mkdir -p "$MENTIS_CREATIONS_DIR/Imagenes"
@@ -1516,7 +1667,7 @@ else:
           fi
         elif [ "$GKIND" = "video" ]; then
           if [ -z "$GPROMPT" ]; then
-            OBS="ERROR: falta 'prompt' para gen kind=video."
+            OBS="ERROR: falta 'prompt' para gen kind=video. NO repitas la misma llamada sin ese campo: completalo, o si el pedido no lo necesita, seguí con otra herramienta o cerrá con 'done'."
           elif [ "$(_connector_enabled 'api:runway')" != "1" ]; then
             OBS="ERROR: conector Runway desactivado (Directorio -> Conectores en la app de Mentis)."
             echo "[nv-agent] iter $it: gen video RECHAZADO (runway desactivado)" >&2
@@ -1627,7 +1778,11 @@ else:
       elif [ "$(_connector_enabled 'local:telefono')" != "1" ]; then
         OBS="ERROR: el conector del telefono esta apagado (Directorio -> Conectores en la app de Mentis)."
         echo "[nv-agent] iter $it: telefono RECHAZADO (conector desactivado)" >&2
+      elif _tope_alcanzado telefono; then
+        OBS="$(_tope_mensaje telefono)"
+        echo "[nv-agent] iter $it: telefono RECHAZADO (tope de ${TOPE_MAX[telefono]} por turno alcanzado)" >&2
       else
+        _tope_sumar telefono
         TACTION="$(_b64d "${ACTION_B64:-}" 2>/dev/null || true)"; [ -n "$TACTION" ] || TACTION="estado"
         TVALOR="$(_b64d "${VALUE_B64:-}" 2>/dev/null || true)"
         case "$TACTION" in
@@ -1657,11 +1812,11 @@ else:
       elif [ "$(_connector_enabled 'local:webcam')" != "1" ]; then
         OBS="ERROR: la camara esta desactivada (Directorio -> Conectores en la app de Mentis)."
         echo "[nv-agent] iter $it: webcam RECHAZADO (conector desactivado)" >&2
-      elif [ "$WEBCAM_USOS" -ge "$WEBCAM_MAX" ]; then
+      elif _tope_alcanzado webcam; then
         # La TERCERA llave, y la unica que no depende de que alguien reaccione a tiempo.
         # El mensaje le dice al modelo que no insista y que cierre con lo que tenga: sin esta
         # ultima parte, un modelo obstinado gasta el resto del presupuesto reintentando.
-        OBS="ERROR: ya usaste la camara $WEBCAM_USOS veces en este turno, que es el maximo. No la pidas de nuevo: cerra con 'done' explicando lo que viste hasta aca, o segui con otra herramienta."
+        OBS="$(_tope_mensaje webcam)"
         echo "[nv-agent] iter $it: webcam RECHAZADO (tope de $WEBCAM_MAX por turno alcanzado)" >&2
       else
         WACTION="$(_b64d "${ACTION_B64:-}" 2>/dev/null || true)"
@@ -1671,7 +1826,7 @@ else:
             # Se cuenta ANTES de sacar la foto, no despues: si se contara despues, un fallo a
             # mitad de camino dejaria el contador sin incrementar y el bucle podria seguir
             # eternamente a base de intentos fallidos.
-            WEBCAM_USOS=$((WEBCAM_USOS + 1))
+            _tope_sumar webcam
             # La marca con "-> ruta" es la que la app y la pagina del celular usan para mostrar el
             # recuadro con lo que la camara vio. Mismo formato que 'screen ver ->...'.
             # OJO: el formato de ESTA linea es un contrato con LIVE_PREVIEW_MARKER en app/main.js,
@@ -1679,7 +1834,7 @@ else:
             # abajo justamente para no romperlo: metido acá adentro, la app dejaba de mostrar la
             # foto en silencio (probado al escribirlo).
             echo "[nv-agent] iter $it: webcam $WACTION -> $(_win_path "$WEBCAM_PREVIEW")" >&2
-            echo "[nv-agent] (una foto, la camara se apaga al terminar -- uso $WEBCAM_USOS de $WEBCAM_MAX en este turno)" >&2
+            echo "[nv-agent] (una foto, la camara se apaga al terminar -- uso ${TOPE_USOS[webcam]} de $WEBCAM_MAX en este turno)" >&2
             if WOUT="$(_webcam_mirar "$WACTION")"; then
               OBS="$(printf 'la camara vio (%s):\n%s' "$WACTION" "$WOUT" | _trunc)"
             else
@@ -1694,7 +1849,11 @@ else:
       if [ "${ALLOW_SCREEN:-0}" != "1" ]; then
         OBS="ERROR: herramienta deshabilitada (correr nv-agent.sh con -s para habilitar computer-use)."
         echo "[nv-agent] iter $it: screen RECHAZADO (sin -s)" >&2
+      elif _tope_alcanzado screen; then
+        OBS="$(_tope_mensaje screen)"
+        echo "[nv-agent] iter $it: screen RECHAZADO (tope de ${TOPE_MAX[screen]} por turno alcanzado)" >&2
       else
+        _tope_sumar screen
         if SDESC="$(_computer_use_snapshot)"; then
           OBS="$(_trunc <<< "$SDESC")"
           echo "[nv-agent] iter $it: screen ver -> $LIVE_PREVIEW" >&2
@@ -1707,7 +1866,11 @@ else:
       if [ "${ALLOW_CONTROL:-0}" != "1" ]; then
         OBS="ERROR: herramienta deshabilitada (correr nv-agent.sh con -c para habilitar computer-use)."
         echo "[nv-agent] iter $it: control RECHAZADO (sin -c)" >&2
+      elif _tope_alcanzado control; then
+        OBS="$(_tope_mensaje control)"
+        echo "[nv-agent] iter $it: control RECHAZADO (tope de ${TOPE_MAX[control]} por turno alcanzado)" >&2
       else
+        _tope_sumar control
         CACTION="$(_b64d "${ACTION_B64:-}" 2>/dev/null || true)"
         CVALUE="$(_b64d "${VALUE_B64:-}" 2>/dev/null || true)"
         CX="$(_b64d "${X_B64:-}" 2>/dev/null || true)"; [[ "$CX" =~ ^-?[0-9]+$ ]] || CX=0
@@ -1787,7 +1950,11 @@ else:
       elif [ "$(_connector_enabled 'local:arduino-cli')" != "1" ]; then
         OBS="ERROR: conector de hardware desactivado (Directorio -> Conectores en la app de Mentis)."
         echo "[nv-agent] iter $it: hardware RECHAZADO (conector desactivado)" >&2
+      elif _tope_alcanzado arduino; then
+        OBS="$(_tope_mensaje arduino)"
+        echo "[nv-agent] iter $it: hardware RECHAZADO (tope de ${TOPE_MAX[arduino]} por turno alcanzado)" >&2
       else
+        _tope_sumar arduino
         AACTION="$(_b64d "${ACTION_B64:-}" 2>/dev/null || true)"
         ARELPATH="$(_b64d "${PATH_B64:-}" 2>/dev/null || true)"
         AVALUE="$(_b64d "${VALUE_B64:-}" 2>/dev/null || true)"
@@ -1927,7 +2094,7 @@ else:
         OBS="ERROR: rol de delegate invalido: '$DROLE'. Usa code|reason|deep|general|extract|multimodal|ultra."
         echo "[nv-agent] iter $it: delegate RECHAZADO (rol invalido: $DROLE)" >&2
       elif [ -z "$DPROMPT" ]; then
-        OBS="ERROR: falta 'prompt' para delegate."
+        OBS="ERROR: falta 'prompt' para delegate. NO repitas la misma llamada sin ese campo: completalo, o si el pedido no lo necesita, seguí con otra herramienta o cerrá con 'done'."
       else
         DRESP="$(printf '%s' "$DPROMPT" | bash "$NVDIR/ask-nvidia.sh" -r "$DROLE" 2>/dev/null || true)"
         [ -z "$DRESP" ] && DRESP="(el cerebro '$DROLE' no respondio)"
@@ -2026,7 +2193,7 @@ $PRES"
           OBS="ERROR: rol de subagent invalido: '$SAROLE'. Usa code|reason|deep|general|extract|multimodal|ultra."
           echo "[nv-agent] iter $it: subagent RECHAZADO (rol invalido: $SAROLE)" >&2
         elif [ -z "$SAPROMPT" ]; then
-          OBS="ERROR: falta 'prompt' para subagent."
+          OBS="ERROR: falta 'prompt' para subagent. NO repitas la misma llamada sin ese campo: completalo, o si el pedido no lo necesita, seguí con otra herramienta o cerrá con 'done'."
         else
           echo "[nv-agent] iter $it: subagent -> $SAROLE (presupuesto $SAITER iter, solo lectura${SAFLAGS:+, con web})" >&2
           SARESP="$(NVA_SUBAGENT_DEPTH=1 bash "$NVDIR/nv-agent.sh" -d "$ROOT" -m "$SAROLE" -i "$SAITER" "${SAFLAGS[@]}" "$SAPROMPT" 2>/dev/null || true)"
@@ -2073,8 +2240,36 @@ except Exception:
         create)
           TSUBJECT="$(_task_field_or_args "$(_b64d "${SUBJECT_B64:-}" 2>/dev/null || true)" subject)"
           TDESC="$(_task_field_or_args "$(_b64d "${DESCRIPTION_B64:-}" 2>/dev/null || true)" description)"
+          # SI FALTA EL TITULO PERO HAY DESCRIPCION, SE DERIVA EN VEZ DE RECHAZAR (2026-08-12).
+          # El mensaje de abajo ya explicaba con todas las letras como mandar 'subject', y aun asi
+          # el modelo reintentaba sin el hasta que el corta-bucles mataba el turno: el usuario se quedaba
+          # sin respuesta por un campo que se puede deducir de lo que YA mando. Es la leccion del
+          # ERR-143: cuando insiste despues de dos explicaciones, el que esta equivocado es el que
+          # exige el campo. El titulo son las primeras palabras de la descripcion, cortadas en el
+          # ultimo espacio para no partir una palabra al medio.
+          if [ -z "$TSUBJECT" ] && [ -n "${TDESC// }" ]; then
+            TSUBJECT="$(printf '%s' "$TDESC" | tr '\n' ' ' | cut -c1-60 | sed 's/ [^ ]*$//; s/ *$//')"
+            [ -z "${TSUBJECT// }" ] && TSUBJECT="$(printf '%s' "$TDESC" | cut -c1-60)"
+            echo "[nv-agent] iter $it: task create sin 'subject' -- derivado de la descripcion: '$TSUBJECT'" >&2
+          fi
           if [ -z "$TSUBJECT" ]; then
-            OBS="ERROR: falta 'subject' para task create."
+            # EL RECHAZO TIENE QUE ENSEÑAR, NO SOLO NEGAR (2026-08-12). El mensaje anterior era
+            # "ERROR: falta 'subject' para task create." y nada más. El modelo no sabía qué
+            # corregir, así que reintentaba lo mismo: cuatro vueltas seguidas hasta que el
+            # corta-bucles cortó el turno, y el usuario se quedó sin respuesta por un campo faltante.
+            # Es la misma lección que dejó el tope de la cámara: un rechazo que no dice cómo
+            # seguir manda al modelo a chocar contra la misma pared.
+            #
+            # El mensaje da las dos salidas: la forma exacta si de verdad hace falta la tarea, y
+            # el permiso explícito de NO crearla -- porque el caso real que disparó esto fue un
+            # "hola, esto es una prueba", donde la tarea no tenía por qué existir.
+            # SIN TITULO Y SIN DESCRIPCION no hay nada que derivar ni nada que anotar: la llamada
+            # esta vacia. Y la observacion NO empieza con "ERROR:" a proposito (2026-08-12): con
+            # el mensaje de error, el modelo reintentaba la misma llamada vacia tres veces hasta
+            # que el corta-bucles mataba el turno y el usuario se quedaba sin respuesta. Un error lo
+            # empuja a corregir la herramienta; lo que hace falta es que deje la herramienta y
+            # conteste. Por eso esto se lee como una instruccion y no como una falla.
+            OBS="No cree ninguna tarea (la llamada vino sin 'subject' ni 'description', asi que no habia nada que anotar) y NO hace falta que lo intentes de nuevo. Lo que el usuario pregunto se contesta hablando: responde AHORA con {\"tool\":\"done\"} y tu respuesta adentro. Si mas adelante hiciera falta anotar un trabajo largo de varios pasos, la forma es {\"tool\":\"task\",\"action\":\"create\",\"subject\":\"titulo corto\",\"description\":\"detalle\"}."
           else
             OBS="$(bash "$MENTIS_ROOT/mentis-tasks.sh" create "$ROOT" "$TSUBJECT" "$TDESC" 2>&1)"
           fi
@@ -2105,10 +2300,14 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 
 ROLE="reason"; MAXIT=20; ROOT="$PWD"; ALLOW_WRITE=0; ALLOW_BROWSE=0; ALLOW_MCP=0; ALLOW_GEN=0; ALLOW_SCREEN=0; ALLOW_DANGEROUS=0; ALLOW_CONTROL=0; ALLOW_EDITOR=0; ALLOW_ARDUINO=0; ALLOW_DATOS=0; ALLOW_CARBS=0; ALLOW_WEBCAM=0; ALLOW_TELEFONO=0; ALLOW_SKILLS=0; ALLOW_TELEFONO=0
 IMG_ATTACH=()
-while getopts ":d:m:i:wbtgscexaDCVPKI:" opt; do
+SIN_TOOLS="${NVA_SIN_TOOLS:-}"
+while getopts ":d:m:i:n:wbtgscexaDCVPKI:" opt; do
   case "$opt" in
     d) ROOT="$OPTARG" ;;
     m) ROLE="$OPTARG" ;;
+    # -n: herramientas que este turno NO puede usar, separadas por coma. Ver el bloque
+    # "HERRAMIENTAS QUE ESTE TURNO NO PUEDE USAR" mas abajo. Vacio = todo como siempre.
+    n) SIN_TOOLS="$OPTARG" ;;
     i) MAXIT="$OPTARG" ;;
     w) ALLOW_WRITE=1 ;;
     b) ALLOW_BROWSE=1 ;;
@@ -2129,7 +2328,7 @@ while getopts ":d:m:i:wbtgscexaDCVPKI:" opt; do
 done
 shift $((OPTIND-1))
 TASK="${*:-}"
-[ -z "${TASK// }" ] && { echo "Uso: nv-agent.sh [-d dir] [-m rol] [-i max_iter] \"<tarea>\"" >&2; exit 1; }
+[ -z "${TASK// }" ] && { echo "Uso: nv-agent.sh [-d dir] [-m rol] [-i max_iter] [-n tools,prohibidas] \"<tarea>\"" >&2; exit 1; }
 [ -d "$ROOT" ] || { echo "ERROR: dir raíz no existe: $ROOT" >&2; exit 1; }
 ROOT="$(cd "$ROOT" && pwd)"   # canónico
 
@@ -2391,6 +2590,59 @@ if [ "$ALLOW_GEN" = "1" ]; then
     Cuando 'gen' te contesta LISTO, el trabajo TERMINO: el archivo ya esta escrito y verificado, y el usuario lo ve en pantalla. NO intentes abrirlo ni verificarlo con 'read' -- esa ruta esta fuera de tu jaula y ademas es un binario, asi que solo vas a gastar pasos. Contale que lo generaste y termina con 'done'."
 fi
 
+# ===================== HERRAMIENTAS QUE ESTE TURNO NO PUEDE USAR (-n) =====================
+#
+# POR QUE EXISTE (2026-08-10, sistema de modos): las banderas -w -b -t -g... alcanzan para las
+# herramientas que nacieron opcionales, pero hay un grupo que SIEMPRE estuvo en el protocolo base
+# y no tiene bandera: 'delegate', 'parallel', 'subagent', 'lsp', 'git', 'exec'. El modo "Mentis a
+# secas" tiene que poder sacarlas, y agregarles una bandera a cada una habria sido inventar seis
+# banderas para una sola politica.
+#
+# ESTO NO SABE QUE ES UN MODO, A PROPOSITO. Recibe una lista de nombres y los saca. Quien decide
+# esa lista es mentis-chat.sh, que si conoce los modos. El motor ejecuta politica, no la define --
+# si no, cada llamador de nv-agent.sh (las skills, los sub-agentes, mentis-delegar.sh) tendria que
+# aprender de modos para poder llamarlo.
+#
+# SE SACAN EN DOS CAPAS Y LAS DOS HACEN FALTA:
+#   1. Del PROTOCOLO, para que el modelo ni siquiera sepa que existen. Sin esto se las pasa
+#      pidiendo y gastando iteraciones contra una puerta cerrada.
+#   2. Del despacho (mas abajo), para que si igual la pide, bash la rechace. La leccion de la
+#      camara: cualquier defensa escrita como instruccion al modelo es una sugerencia.
+#
+# El filtro saca la linea de la herramienta Y sus lineas de continuacion (las que van con 4
+# espacios o mas). 'subagent' ocupa cuatro lineas: sacar solo la primera dejaria tres lineas
+# huerfanas explicando como usar algo que no existe, que es peor que dejarla entera.
+if [ -n "${SIN_TOOLS// }" ]; then
+  PROTOCOL="$(printf '%s\n' "$PROTOCOL" | SIN="$SIN_TOOLS" awk '
+    BEGIN {
+      n = split(ENVIRON["SIN"], v, /[, ]+/)
+      for (i = 1; i <= n; i++) if (v[i] != "") prohibida[v[i]] = 1
+      saltando = 0
+    }
+    {
+      # Linea de continuacion: pertenece a la herramienta anterior.
+      if (saltando && $0 ~ /^    [^ ]/) next
+      saltando = 0
+      if (match($0, /^  \{\\?"tool\\?":\\?"[a-z]+/)) {
+        linea = $0
+        sub(/^  \{\\?"tool\\?":\\?"/, "", linea)
+        sub(/[^a-z].*$/, "", linea)
+        if (linea in prohibida) { saltando = 1; next }
+      }
+      print
+    }')"
+  echo "[nv-agent] herramientas apagadas este turno: $SIN_TOOLS" >&2
+fi
+
+# Salida de diagnostico: imprime el protocolo ya armado y filtrado, y sale sin llamar a ningun
+# modelo. Existe para que el test de modos pueda comprobar el filtro contra el protocolo REAL en
+# vez de contra una copia -- una copia se desactualiza y el test pasa a aprobar algo que ya no es
+# lo que corre (fue exactamente el problema de ERR-130). No consume nada ni toca archivos.
+if [ "${NVA_SOLO_PROTOCOLO:-0}" = "1" ]; then
+  printf '%s\n' "$PROTOCOL"
+  exit 0
+fi
+
 echo "[nv-agent] tarea: $TASK" >&2
 echo "[nv-agent] raíz: $ROOT | rol: $ROLE | presupuesto: $MAXIT iter" >&2
 
@@ -2420,6 +2672,8 @@ FINAL=""; STATUS="budget"
 # (no vuelve a bajar a 'fast' a mitad de una tarea que ya demostro necesitar mas criterio).
 CU_ESCALATED=0
 PREV_TOOL=""; SAME_TOOL_STREAK=0; DELEGATE_LIKE_COUNT=0; HAD_REAL_ACTION=0
+# Bucle de ACIERTOS: la misma lectura repetida no dispara ningun detector de errores.
+OK_SIG_KEY_PREV=""; OK_SIG_STREAK=0
 # CUANDO YA LO LOGRASTE, TERMINA (2026-08-08).
 #
 # EL AGUJERO: todas las guardas de este archivo miran en UNA sola direccion -- que el modelo no
@@ -2747,6 +3001,26 @@ ERROR: tu respuesta habla de un documento (informe/word/pdf/presentación) pero 
       echo "[nv-agent] iter $it: LOOP DETECTADO -- '$TOOL' repitió el mismo error $FAIL_SIG_MAX veces (no consecutivas). Corto el turno para no seguir gastando." >&2
     fi
   fi
+
+  # BUCLE DE ACIERTOS (2026-08-12). El detector de arriba solo mira ERRORES repetidos, asi que un
+  # acierto repetido identico no lo ve NADIE: en el modo Study el modelo leyo el MISMO archivo 23
+  # veces seguidas -- cada 'read' devolvia exito -- hasta agotar el presupuesto y terminar sin
+  # responder. Para el usuario se ve igual que un cuelgue, y es peor que un error: no hay ningun
+  # mensaje de falla en toda la traza.
+  #
+  # No corta el turno: le devuelve el contenido UNA vez mas con un empujon a contestar. Cortar
+  # castigaria al modelo por una accion que estuvo bien -- el problema no es que lea, es que no
+  # se da cuenta de que ya lo tiene.
+  if [ "$TOOL" = "read" ] && [ "$OK_SIG_KEY_PREV" = "read|$REL" ] && [[ "$OBS" != ERROR:* ]]; then
+    OK_SIG_STREAK=$((OK_SIG_STREAK+1))
+    if [ "$OK_SIG_STREAK" -ge 2 ]; then
+      OBS="AVISO: ya leiste '$REL' $((OK_SIG_STREAK+1)) veces en este mismo turno y su contenido no cambio -- lo tenes completo mas arriba, en las observaciones anteriores. Volver a leerlo no te va a dar nada nuevo y te queda poco presupuesto. Contesta AHORA con lo que ya leiste; si de verdad falta algo, es que no esta en ese archivo."
+      echo "[nv-agent] iter $it: read repetido $((OK_SIG_STREAK+1)) veces sobre '$REL' -- empujando a responder" >&2
+    fi
+  else
+    OK_SIG_STREAK=0
+  fi
+  [ "$TOOL" = "read" ] && OK_SIG_KEY_PREV="read|$REL" || OK_SIG_KEY_PREV=""
 
   # registrar el turno en el historial (acción compacta + observación truncada)
   ACTLINE="{\"tool\":\"$TOOL\"}"

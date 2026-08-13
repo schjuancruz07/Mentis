@@ -49,6 +49,17 @@ contextBridge.exposeInMainWorld('mentisAPI', {
   saveProfile: (fields) => ipcRenderer.invoke('mentis:save-profile', fields),
   // Paleta y nombre de la IA (ver settings-store.getApariencia).
   saveApariencia: (fields) => ipcRenderer.invoke('mentis:save-apariencia', fields),
+  // Modos: Mentis / Code / Designe / Cowork (ver modos.json).
+  // El tema decide que logo se ve; el icono de la ventana y el de la bandeja los pinta
+  // Windows, no el CSS, asi que hay que avisarle al proceso principal.
+  setLogo: (variante) => ipcRenderer.invoke('mentis:set-logo', variante),
+  modosLista: () => ipcRenderer.invoke('mentis:modos-lista'),
+  modoActual: () => ipcRenderer.invoke('mentis:modo-actual'),
+  setModo: (id) => ipcRenderer.invoke('mentis:set-modo', id),
+  // El aviso va por evento y no como respuesta del setModo a proposito: asi la ventana se entera
+  // aunque el cambio venga de otro lado (un atajo, la pagina del celular, un script), y no solo
+  // cuando lo apreto el propio boton.
+  onModoCambio: (cb) => ipcRenderer.on('mentis:modo-cambio', (_e, modo) => cb(modo)),
   // Modo administrador: sólo hace algo en la máquina que tiene la clave privada de firma.
   esAdministrador: () => ipcRenderer.invoke('mentis:es-administrador'),
   estadoPublicacion: () => ipcRenderer.invoke('mentis:estado-publicacion'),
@@ -61,6 +72,10 @@ contextBridge.exposeInMainWorld('mentisAPI', {
   onboardingStatus: () => ipcRenderer.invoke('mentis:onboarding-status'),
   markOnboardingDone: () => ipcRenderer.invoke('mentis:mark-onboarding-done'),
   openArtifact: (artifact) => ipcRenderer.invoke('mentis:open-artifact', artifact),
+  // Ver adentro de la app en vez de abrir una app de Windows (2026-08-12). 'verArtefacto' trae el
+  // contenido para dibujarlo acá; 'listarCreaciones' es la galería de todo lo que Mentis hizo.
+  verArtefacto: (artifact) => ipcRenderer.invoke('mentis:ver-artefacto', artifact),
+  listarCreaciones: () => ipcRenderer.invoke('mentis:listar-creaciones'),
   forceStop: () => ipcRenderer.invoke('mentis:force-stop'),
   transcribeAudio: (buffer) => ipcRenderer.invoke('mentis:transcribe-audio', buffer),
   tts: (texto) => ipcRenderer.invoke('mentis:tts', texto),

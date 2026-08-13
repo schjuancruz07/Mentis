@@ -123,7 +123,14 @@ function getPublicSettings(mentisEnvDir) {
 // Va aparte de `theme`, que es una clave vieja con otro significado (el estilo de la bitacora) y
 // que se deja intacta para no romper nada que la lea.
 const NOMBRE_POR_DEFECTO = 'Mentis';
-const TEMA_POR_DEFECTO = 'mentis-clasico';
+// OJO: este valor esta DUPLICADO a proposito de app/renderer/temas.js, porque este archivo es
+// CommonJS del proceso principal y temas.js es un modulo ES del renderer -- no se pueden importar
+// entre si sin mover uno de los dos. La copia se paga con un riesgo: que se separen. Ya paso --
+// cuando la identidad cambio a terracota (2026-08-10) este seguia en 'mentis-clasico', un tema que
+// ya no existia, y no fallaba nada: aplicarTema() cae en silencio al de por defecto, asi que el
+// color salia bien por accidente. Hay un test (tests/temas_casos.mjs) que compara los dos y falla
+// si se separan. Si cambias uno, cambia el otro.
+const TEMA_POR_DEFECTO = 'mentis-oscuro';
 
 function getApariencia(mentisEnvDir, preloaded) {
   const data = preloaded || loadSettings(mentisEnvDir);

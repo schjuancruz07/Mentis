@@ -65,8 +65,37 @@ for (const [id, t] of Object.entries(TEMAS)) {
 }
 
 if (!TEMAS[TEMA_POR_DEFECTO]) fallas.push('el tema por defecto no existe en la lista');
-if (Object.keys(TEMAS).length < 5) fallas.push('hay menos de 5 temas para elegir');
-if (!Object.values(TEMAS).some((t) => t.claro)) fallas.push('no hay ningun tema claro y mucha gente los prefiere');
+
+// Antes se exigian 5 paletas o mas ("que haya de donde elegir"). Desde 2026-08-10 la regla es la
+// contraria y por un motivo concreto: Mentis tiene una identidad de marca, y una identidad que el
+// usuario puede cambiar por un violeta no es una identidad. Lo unico que sigue siendo eleccion
+// suya es claro u oscuro -- que no es gusto, es la luz de la pieza.
+// Este test es la traba: si alguien agrega un tema nuevo, tiene que venir a leer esto primero.
+const claros = Object.values(TEMAS).filter((t) => t.claro);
+const oscuros = Object.values(TEMAS).filter((t) => !t.claro);
+if (claros.length !== 1)
+  fallas.push(`tiene que haber exactamente UN tema claro y hay ${claros.length} -- ver el comentario de arriba antes de agregar otro`);
+if (oscuros.length !== 1)
+  fallas.push(`tiene que haber exactamente UN tema oscuro y hay ${oscuros.length} -- ver el comentario de arriba antes de agregar otro`);
+
+// Los dos tienen que ser el MISMO color de marca, no dos identidades distintas. Se compara el tono
+// del acento: si alguien pinta el claro de azul, esto lo agarra.
+const tono = (hex) => {
+  const [r, g, b] = rgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  if (max === min) return 0;
+  const d = max - min;
+  let h;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return ((h * 60) + 360) % 360;
+};
+if (claros.length === 1 && oscuros.length === 1) {
+  const dif = Math.abs(tono(claros[0].vars['--acento']) - tono(oscuros[0].vars['--acento']));
+  if (Math.min(dif, 360 - dif) > 20)
+    fallas.push(`el acento del tema claro y el del oscuro son colores distintos (${Math.round(dif)}° de diferencia de tono): tienen que ser el mismo terracota, uno mas oscuro que el otro`);
+}
 
 // aplicarTema con un id inventado no puede dejar la pantalla sin colores: cae al de por defecto.
 const falso = { style: { setProperty(k, v) { (this._v = this._v || {})[k] = v; } }, dataset: {} };
@@ -77,6 +106,54 @@ if (falso.style._v && !falso.style._v['color-scheme']) fallas.push('aplicarTema 
 
 if (listaDeTemas().some((t) => !t.nombre || !t.muestra || t.muestra.length !== 3))
   fallas.push('listaDeTemas no devuelve nombre y muestra de color para el selector');
+
+// ===== Los valores de arranque de style.css tienen que ser los del tema por defecto =====
+// Antes de que corra una linea de JavaScript, la pantalla se pinta con los valores escritos en el
+// bloque :root de style.css. Recien despues temas.js los pisa con la paleta guardada. Si esos dos
+// juegos de colores no coinciden, cada arranque muestra medio segundo de una paleta que no existe
+// -- y peor: cuando se cambio el tema por defecto a terracota, :root quedo con el acento nuevo y
+// el fondo viejo, que era una mezcla de dos identidades distintas. Nadie lo iba a notar leyendo
+// el codigo, porque los dos archivos por separado se veian bien.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const aqui = dirname(fileURLToPath(import.meta.url));
+const css = readFileSync(join(aqui, '..', 'app', 'renderer', 'style.css'), 'utf8');
+const bloqueRaiz = (css.match(/:root\s*\{([\s\S]*?)\}/) || [])[1] || '';
+
+// Solo los colores planos: --acento-soft y compania son rgba() y comparar strings de esos daria
+// falsos negativos por un espacio de diferencia.
+const COLORES = ['--fondo', '--principal', '--secundario', '--texto', '--texto-dim', '--acento',
+                 '--peligro', '--border', '--bubble-usuario'];
+const porDefecto = TEMAS[TEMA_POR_DEFECTO].vars;
+for (const clave of COLORES) {
+  const m = bloqueRaiz.match(new RegExp(clave + '\\s*:\\s*(#[0-9a-fA-F]{3,8})\\s*;'));
+  if (!m) { fallas.push(`style.css :root no define ${clave} -- la primera pintada va a usar un color de ninguna parte`); continue; }
+  const enCss = m[1].toLowerCase();
+  const enTema = String(porDefecto[clave] || '').toLowerCase();
+  if (enCss !== enTema)
+    fallas.push(`${clave}: style.css arranca en ${enCss} pero el tema por defecto ('${TEMA_POR_DEFECTO}') es ${enTema} -- se ve un parpadeo de una paleta que no existe`);
+}
+
+// ===== El tema por defecto esta escrito en TRES archivos y los tres tienen que decir lo mismo =====
+// temas.js no se puede importar desde el proceso principal (es un modulo ES y aquello es CommonJS),
+// asi que el valor esta copiado en lib/settings-store.js y, para el primer instante de pintura, en
+// renderer.js. Cuando se separan no falla nada: aplicarTema() cae en silencio al de por defecto y
+// el color termina saliendo bien por accidente. Vivieron meses desfasados sin que nadie lo viera.
+const fuentesDelDefecto = [
+  ['app/lib/settings-store.js', /const TEMA_POR_DEFECTO = '([^']+)'/],
+  ['app/renderer/renderer.js', /aparienciaActual = \{ paleta: '([^']+)'/],
+];
+for (const [rel, re] of fuentesDelDefecto) {
+  const txt = readFileSync(join(aqui, '..', rel), 'utf8');
+  const m = txt.match(re);
+  if (!m) { fallas.push(`${rel}: no se encontro el tema por defecto (¿se renombro la variable?)`); continue; }
+  if (m[1] !== TEMA_POR_DEFECTO)
+    fallas.push(`${rel} dice '${m[1]}' pero temas.js dice '${TEMA_POR_DEFECTO}' -- se separaron y nadie se entera porque el fallback lo tapa`);
+  if (!TEMAS[m[1]])
+    fallas.push(`${rel} apunta a '${m[1]}', que no existe en la lista de temas`);
+}
 
 console.log();
 for (const f of fallas) console.log('FALLA: ' + f);

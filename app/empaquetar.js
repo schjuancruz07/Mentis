@@ -93,7 +93,7 @@ if (SOLO_CHEQUEO) {
 const args = [
   '.', 'Mentis',
   '--platform=win32', '--arch=x64',
-  '--icon=renderer/assets/mentis-cuerpo.ico',
+  '--icon=renderer/assets/mentis-app.ico',
   `--out=${path.relative(__dirname, SALIDA).replace(/\\/g, '/')}`,
   '--overwrite',
   '--app-version=0.1.0',

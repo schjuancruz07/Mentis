@@ -1,0 +1,264 @@
+{
+  "_que_es_esto": "Los cuatro modos de Mentis. Un modo NO es una app aparte: es el mismo Mentis con una parte de sus capacidades a la vista. Este archivo es la unica fuente de esa decision -- el motor, la app y la pagina del celular lo leen de aca.",
+  "_los_tres_anillos": "El reparto no es una lista suelta por modo, son tres anillos. ANILLO 0 (nucleo): lo que tienen los cuatro, siempre. ANILLO 1 (oficio): lo que define a cada modo. ANILLO 2 (invasivas): camara, pantalla, control, telefono, Arduino -- disponibles en Code, Designe y Cowork, APAGADAS en el modo Mentis a secas. Pensarlo asi evita tener que decidir 42 veces y hace que agregar una herramienta nueva tenga una sola pregunta: ¿de que anillo es?",
+  "_un_modo_solo_puede_QUITAR": "REGLA QUE NO SE ROMPE. El modo se aplica DESPUES de los permisos que ya existian (los conectores que el usuario prende y apaga en la app, y las banderas del proceso). Nunca los sobreescribe hacia arriba: si el conector de la camara esta apagado, ningun modo la enciende. Un modo es una segunda llave por dentro, no una llave maestra. Si algun dia alguien hace que un modo AGREGUE un permiso, rompe el modelo de seguridad entero sin que falle ningun test.",
+  "_por_que_el_modo_chat_queda_pelado": "Es el unico modo que no puede romper nada ni mirar nada tuyo, y por eso es el unico que le podes prestar a otra persona sin pensarlo dos veces. Si tuviera ejecutar y escribir en cualquier lado no seria un modo: seria Mentis con menos botones.",
+  "por_defecto": "mentis",
+  "recordar_ultimo": true,
+  "nucleo": {
+    "_comentario": "ANILLO 0. Conversar, buscar, leer, recordar, aprender, generar y programar. Escribir SI, pero solo dentro de workspace/. Ejecutar NO.",
+    "herramientas": [
+      "read",
+      "search",
+      "recordar",
+      "browse",
+      "task",
+      "skill",
+      "capacidad",
+      "done",
+      "write",
+      "edit",
+      "drive",
+      ],
+    "capacidades": [
+      "recall",
+      "where",
+      "recordar",
+      "aprender",
+      "boveda",
+      "auditar-memoria"
+    ],
+    "banderas": [
+      "-b",
+      "-K",
+      "-w"
+    ],
+    "_ojo_bandera_w": "-w enciende write, edit Y exec en nv-agent.sh: son la misma bandera. 'exec' NO esta en las herramientas del nucleo, asi que queda apagada por la lista de -n. Si algun dia se saca ese filtro, el modo Mentis pasa a poder ejecutar comandos sin que nadie lo decida.",
+    "_sobre_escribir": "Escribir esta permitido dentro de la raiz del turno (la carpeta de la conversacion), que es la jaula que nv-agent ya aplica a todos. Lo que separa al modo Mentis de los otros no es DONDE escribe sino que NO puede ejecutar.",
+    "_por_que_run_no_esta": "'run' corre en un sandbox aislado que NO ve la carpeta de trabajo, pero en la respuesta se lee igual que ejecutar un comando de verdad. En la primera corrida real del modo Mentis, el modelo lo uso para 'confirmar con ls' un archivo que acababa de crear y reporto como confirmacion la salida de otro directorio. Vive en Code y Cowork, donde ademas esta 'exec' al lado para el caso real.",
+    "_por_que_gen_no_esta": "'gen' (imagenes, 3D y documentos) es de Mentis Designe desde 2026-08-12. El modo Mentis conversa, lee, busca y escribe texto; crear un archivo visual es otro oficio. Ojo: la misma bandera -g cubre imagenes, 3D Y documentos, asi que el chat tampoco genera un Word."
+  },
+  "invasivas": {
+    "_comentario": "ANILLO 2. Cada una sigue necesitando su conector prendido en la app -- esto solo dice en que modos ni siquiera se ofrecen. Los topes de uso por turno viven en engine/nv-agent.sh (TOPE_MAX), que es quien los cuenta.",
+    "herramientas": [
+      "webcam",
+      "screen",
+      "control",
+      "telefono",
+      "arduino"
+    ],
+    "banderas": [
+      "-V",
+      "-s",
+      "-c",
+      "-P",
+      "-a"
+    ]
+  },
+  "modos": {
+    "mentis": {
+      "titulo": "Mentis",
+      "descripcion": "Conversar, buscar, leer, recordar y crear. No ejecuta, no programa y no mira nada tuyo.",
+      "letra": "google-sans",
+      "acento": "medio",
+      "herramientas": [],
+      "capacidades": [],
+      "banderas": [],
+      "invasivas": false,
+      "persona": "Este turno corre en el modo Mentis, el modo de conversacion. SI PODES, y son de verdad: leer archivos, ESCRIBIR Y EDITAR ARCHIVOS dentro de tu carpeta de trabajo, buscar y navegar la web, recordar charlas viejas, generar imagenes y documentos, y anotar tareas. Que no tengas 'exec' no significa que no puedas guardar un archivo: usa 'write' y decilo. NO PODES: ejecutar comandos (ni 'exec' ni 'run'), usar git, el analizador de codigo, el editor, sub-agentes, ni ninguna capacidad para ver o manejar la computadora del usuario (pantalla, camara, mouse, telefono, Arduino). Cuidado con una trampa concreta: si te piden 'confirmar con ls' o 'verificar corriendo algo', no tenes con que -- verificalo leyendo el archivo con 'read', que es real, y decilo asi.",
+      "paneles": []
+    },
+    "code": {
+      "titulo": "Mentis Code",
+      "descripcion": "Escribir y ejecutar codigo, git, editor, sub-agentes y conectores.",
+      "letra": "silkscreen",
+      "acento": "oscuro",
+      "herramientas": [
+        "exec",
+        "git",
+        "lsp",
+        "vscode",
+        "delegate",
+        "subagent",
+        "mcp",
+        "parallel",
+        "run"
+      ],
+      "capacidades": [
+        "plan",
+        "architecture",
+        "corregir",
+        "builder",
+        "programar",
+        "conectar"
+      ],
+      "banderas": [
+        "-w",
+        "-e",
+        "-t"
+      ],
+      "invasivas": true,
+      "motor_externo": null,
+      "persona": "Este turno corre en el modo Mentis Code. Tenes escritura y ejecucion reales, git, el analizador de codigo y sub-agentes. Navegar la web tambien -- el usuario lo pidio explicitamente para este modo.",
+      "paneles": [
+        "directory"
+      ],
+      "_motor_externo": "OpenCode 1.18.16 se midio el 2026-08-11 y NO entro: 4 de 7 corridas aprobadas contra 7 de 7 del motor de casa, con tiempos de 6 a 314 s en la misma tarea. Ver eval/duelo-code/VEREDICTO.md. El modo Code corre con engine/nv-agent.sh, que es el que gano. Para volver a medirlo: bash eval/duelo-code/duelo.sh -n 3"
+    },
+    "designe": {
+      "titulo": "Mentis Designe",
+      "descripcion": "Imagen, 3D, documentos y direccion de arte.",
+      "letra": "playfair",
+      "acento": "claro",
+      "herramientas": [
+        "gen"
+      ],
+      "capacidades": [
+        "design"
+      ],
+      "banderas": [
+        "-w",
+        "-g"
+      ],
+      "invasivas": false,
+      "motor_externo": null,
+      "persona": "Este turno corre en el modo Mentis Designe. Lo tuyo es lo visual: imagenes, 3D, documentos con imagen, sistemas de diseno. Podes escribir archivos en la carpeta del proyecto. NO ejecutas comandos ni tocas codigo: si el pedido es de programacion, deciselo y ofrecele el modo Code.",
+      "paneles": [
+        "directory",
+        "galeria"
+      ],
+      "_motor_externo": "Open Design se reviso el 2026-08-11 y NO entro: su runtime BYOK ES OpenCode (apps/daemon/src/runtimes/byok-opencode.ts), el mismo loop que perdio el examen de codigo 4 de 7 contra 7 de 7. Meterlo seria poner tres capas sobre un motor ya medido como menos confiable que el de casa. Ver eval/duelo-design/VEREDICTO.md. Mentis Designe corre con capabilities/design.sh, que ahora tiene bucle Generador-Evaluador con juez medible.",
+      "_sin_invasivas": "Designe no ve la pantalla ni prende la camara (decision del usuario, 2026-08-12): trabaja sobre archivos. Las invasivas quedan en Code y Cowork."
+    },
+    "cowork": {
+      "titulo": "Mentis Cowork",
+      "descripcion": "Muchas manos: delegar, trabajar en paralelo, datos y conectores.",
+      "letra": "plus-jakarta",
+      "acento": "medio",
+      "herramientas": [
+        "delegate",
+        "parallel",
+        "subagent",
+        "exec",
+        "mcp",
+        "datos",
+        "run",
+        "vscode"
+      ],
+      "capacidades": [
+        "multiply",
+        "plan"
+      ],
+      "banderas": [
+        "-w",
+        "-t",
+        "-D",
+        "-e"
+      ],
+      "invasivas": true,
+      "motor_externo": "openwork",
+      "persona": "Este turno corre en el modo Mentis Cowork. Estas para coordinar trabajo, no para hacerlo todo vos: cuando una tarea tenga partes independientes, repartilas en paralelo en vez de ir una por una. Tenes acceso a datos y a los conectores externos.",
+      "paneles": [
+        "directory"
+      ]
+    },
+    "study": {
+      "titulo": "Mentis Study",
+      "descripcion": "Estudiar con TUS fuentes: responde solo desde lo que le diste, y cita.",
+      "letra": "google-sans",
+      "acento": "medio",
+      "herramientas": [],
+      "herramientas_fuera": [
+        "browse",
+        "drive"
+      ],
+      "banderas_fuera": [
+        "-b"
+      ],
+      "_banderas_fuera": "El gemelo de herramientas_fuera para la interfaz. El boton de una capacidad se ve si y solo si el modo tiene su bandera, asi que apagar 'browse' sin apagar '-b' le dejaria al usuario el boton de navegar prendido justo en el modo que no navega: la app prometiendo algo que el motor rechaza.",
+      "_herramientas_fuera": "Study es el UNICO modo que necesita quitar algo del ANILLO 0. Un modo de corpus cerrado que puede salir a la web no es un corpus cerrado: alcanza con que el modelo decida 'me falta contexto' para que traiga de Internet una frase que el usuario nunca le dio, y la cita quedaria apuntando a una fuente que no es suya. 'drive' es la misma fuga por otra puerta. Ojo: esto solo puede APAGAR (se suma a la lista de -n despues de la resta, ver nv_modo_sin_tools); poner aca una herramienta que el modo no tenia no la enciende.",
+      "capacidades": [
+        "boveda",
+        "recall",
+        "estudiar",
+        "material"
+      ],
+      "banderas": [],
+      "invasivas": false,
+      "paneles": [
+        "galeria"
+      ],
+      "corpus": "knowledge/estudio",
+      "_corpus": "La carpeta cuyo indice semantico reemplaza a Kai Vault en este modo. Sin esto, el lookup obligatorio de cada turno le mete el codigo de Mentis adentro del prompt como si fuera material de estudio (mentis-chat.sh lo llama para todos los modos por igual). Lo administra capabilities/estudiar.sh.",
+      "persona": "Este turno corre en el modo Mentis Study: CORPUS CERRADO. Respondes SOLO con el material que el usuario te dio y CITAS el archivo de cada afirmacion. Si algo no esta ahi, la respuesta correcta es 'eso no esta en lo que me diste' -- aunque lo sepas de memoria; saberlo por otro lado es exactamente el problema, porque el no tiene como distinguir esa frase del resto. DONDE ESTA EL MATERIAL: ya lo tenes en el bloque 'TUS FUENTES DE ESTUDIO' de este prompt, buscado por parecido con lo que pregunto. Casi siempre alcanza con eso. Si necesitas un documento entero, abrilo con read usando la ruta tal como la cita el bloque ('materia/archivo.md', sin el numero de linea). Si el bloque vino vacio, no hay nada cargado de ese tema: decilo y contale que suma material con '/estudiar sumar <archivo> <materia>'. NUEVE FORMATOS: su material se puede convertir a audio, video, presentacion, informe, tabla, mapa mental, tarjetas, cuestionario o infografia. NO los podes generar vos (en este modo no hay 'exec'): los pide el usuario escribiendo '/material <formato> <tema>'. Ofrecele el que le sirva -- tarjetas o cuestionario para un examen, audio si esta viajando -- y decile la linea exacta. Uno solo, no la lista de nueve. Podes resumir, armar guias, tomarle repaso y explicar con otras palabras, siempre pegado a las fuentes."
+    },
+    "science": {
+      "titulo": "Mentis Science",
+      "descripcion": "Analisis de datos y metodo: calcula de verdad y dice sus limites.",
+      "letra": "michroma",
+      "acento": "medio",
+      "herramientas": [
+        "run",
+        "exec",
+        "datos"
+      ],
+      "capacidades": [
+        "plan",
+        "estructura"
+      ],
+      "banderas": [
+        "-w",
+        "-D"
+      ],
+      "invasivas": false,
+      "paneles": [
+        "directory",
+        "galeria"
+      ],
+      "persona": "Este turno corre en el modo Mentis Science. Dos reglas que no se negocian: (1) NO INVENTAS datos, citas ni resultados: si no tenes la fuente, lo decis. Una cifra inventada con cara de precisa es peor que no responder. (2) CALCULAS DE VERDAD: todo numero que no estaba en el mensaje del usuario sale de correr codigo, con {\"tool\":\"exec\",\"code\":\"python3 -c 'import statistics; print(...)'\"} -- el campo se llama 'code' y adentro conviene comilla simple. Un promedio o un desvio hechos de cabeza son una estimacion disfrazada de resultado. Cuando el comando ya te dio el numero, TERMINASTE: contesta con ese numero y cerra el turno, no lo rehagas con otra libreria. ESTRUCTURAS EN 3D: si hablas de una molecula o de un material concreto, dibujalo con {\"tool\":\"exec\",\"code\":\"bash \\\"$MENTIS_ROOT/capabilities/estructura.sh\\\" <que>\"} y se abre en el visor con su fuente. Ojo: 'un mol de calcio' NO tiene estructura molecular -- un mol es una cantidad y el calcio metalico es una red cristalina; el script elige bien, pero aclaraselo al usuario. Los datos del problema estan en SU mensaje: el bloque de Kai Vault es codigo de Mentis, no tu fuente de datos. Deci siempre los supuestos, el margen de error y que NO se puede concluir."
+    }
+  },
+  "_todas_las_herramientas": [
+    "done",
+    "drive",
+    "capacidad",
+    "read",
+    "recordar",
+    "search",
+    "run",
+    "write",
+    "edit",
+    "lsp",
+    "git",
+    "exec",
+    "browse",
+    "mcp",
+    "gen",
+    "skill",
+    "telefono",
+    "webcam",
+    "screen",
+    "control",
+    "vscode",
+    "arduino",
+    "datos",
+    "delegate",
+    "parallel",
+    "subagent",
+    "task"
+  ],
+  "banderas_que_el_modo_no_gobierna": [
+    "-x",
+    "-C"
+  ],
+  "_banderas_que_el_modo_no_gobierna": "-x (modo sin frenos) y -C () no son capacidades de trabajo: son decisiones personales del usuario que valen en cualquier modo. Si entraran al filtro, elegir un modo se las apagaria en silencio -- y el modo sin frenos apagandose solo es peor que no tenerlo, porque el usuario creeria que sigue puesto.",
+  "paneles": {
+    "_comentario": "Que botones de la app se ven en cada modo. Mismo criterio que las herramientas: el nucleo lo tienen todos y cada modo suma lo suyo. Los ids son los del boton en index.html sin el prefijo 'btn-open-'.",
+    "nucleo": [
+      "projects",
+      "schedule"
+    ]
+  },
+  "_paneles_por_que_directorio_no_esta_en_el_nucleo": "El Directorio es donde se prenden y apagan los conectores y las capacidades: es administracion, no conversacion. El modo Mentis a secas es el unico que se le puede prestar a otra persona sin pensarlo, y entregarselo con el panel que enciende la camara y el control del mouse seria justo lo contrario.",
+  "_los_botones_siguen_a_las_banderas": "El boton de una capacidad se ve si y solo si el modo tiene su bandera (-b web, -g imagenes/3D, -t conectores, -e editor, -s pantalla, -c control, -V camara, -P telefono, -a Arduino, -D datos). Una lista aparte de 'botones por modo' se desincronizaria del reparto real el primer dia."
+}

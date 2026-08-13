@@ -32,6 +32,11 @@ export MENTIS_SETTINGS_FILE="$MENTIS_ENV_DIR/mentis-settings.json"
 # tardio dejaria a _mc_build_task sin la funcion justo en el entorno donde se lo prueba.
 # shellcheck source=/dev/null
 source "$MENTIS_ENV_DIR/engine/nv-lib.sh"
+# Modos (2026-08-10). Va acá arriba por el mismo motivo que el de nv-lib.sh: los tests sourcean
+# este archivo y nunca llegan al cuerpo, así que un source tardío dejaría sin funciones justo al
+# entorno donde se prueba.
+# shellcheck source=/dev/null
+source "$MENTIS_ENV_DIR/engine/nv-modos-lib.sh"
 
 _mc_shutdown_browser_daemon() {
   [ -f "$BROWSER_STATE_FILE" ] || return 0
@@ -113,7 +118,14 @@ _mc_resolve_root() {
 
 _mc_append_history() {
   local role="$1" text="$2" artifacts="${3:-}" steps="${4:-}" model="${5:-}"
-  MC_ROLE="$role" MC_TEXT="$text" MC_ARTIFACTS="$artifacts" MC_STEPS="$steps" MC_MODEL="$model" python3 -c '
+  # EL MODO QUEDA GUARDADO EN CADA ENTRADA (2026-08-12, pedido del usuario: un historial por modo para
+  # no tener que buscar entre todos los chats). Se guarda por ENTRADA y no una vez por
+  # conversacion porque el modo se puede cambiar en el medio de una charla: asi la conversacion
+  # queda clasificada por el modo en el que arranco, y el dato del cambio no se pierde.
+  # Las conversaciones anteriores a hoy no tienen este campo -- por eso la app las agrupa aparte
+  # en vez de asumirles un modo que nadie eligio.
+  MC_ROLE="$role" MC_TEXT="$text" MC_ARTIFACTS="$artifacts" MC_STEPS="$steps" MC_MODEL="$model" \
+  MC_MODO_ENTRADA="${MC_MODO_TURNO:-$(nv_modo_actual 2>/dev/null || echo '')}" python3 -c '
 import json, os, sys, datetime
 sys.stdin.reconfigure(encoding="utf-8")
 sys.stdout.reconfigure(encoding="utf-8", newline="")
@@ -129,6 +141,9 @@ if steps:
 # turno -- no existia antes, entradas viejas del historial no van a tener este campo.
 if model:
     d["model"] = model
+modo = os.environ.get("MC_MODO_ENTRADA","").strip()
+if modo:
+    d["modo"] = modo
 print(json.dumps(d, ensure_ascii=False))
 ' >> "$HISTFILE"
 }
@@ -677,9 +692,16 @@ _mc_build_task() {
       hook_section="$hook_section$(printf '\n\nLO QUE YA HABLARON ANTES SOBRE ESTO (lo busqué solo en tus conversaciones anteriores porque tu mensaje da algo por sabido; son charlas reales con fecha, no suposiciones -- usalo para no hacerle repetir lo que ya te contó):\n%s' "$PASADO_TEXT")"
     fi
   fi
-  printf '%s\n\nCUANDO ES AHORA (leido del reloj de su computadora, no inventado -- si te pregunta la hora o la fecha, esto es la respuesta; no le digas que no podes saberlo, y usalo tambien para ubicar en el tiempo cualquier cosa que hables con el):\n%s\n\nPERFIL DE USUARIO:\n%s\n\nDONDE ESTA USUARIO AHORA (medido de verdad en su computadora, no inventado -- si te pregunta donde esta, esto es la respuesta; no le digas que no podes saberlo):\n%s\n\nMEMORIA BASE SOBRE USUARIO:\n%s\n\nMEMORIA SOBRE VOS MISMA (Mentis, quién sos, qué sos):\n%s\n\nSKILLS DISPONIBLES (habilidades de Mentis. el usuario las invoca escribiendo /nombre; vos podés USAR SOLA la que él haya habilitado -- con {\"tool\":\"skill\"} -- y sugerirle las demás cuando su mensaje calce con la descripción, aunque no haya usado el prefijo):\n%s\n\nKAI VAULT (índice semántico de todo el ecosistema Mentis + tu bóveda de notas -- estos son los archivos más relevantes a lo que el usuario acaba de escribir; si necesitás el detalle, andá DIRECTO a leer el archivo:línea indicado en vez de explorar a ciegas):\n%s\n\nMEMORIA PERSISTENTE (notas guardadas entre sesiones con /recordar; son HECHOS que ya sabés del usuario, no un pedido a cumplir ahora -- pero son observaciones de un momento dado, no estado en vivo: si una memoria menciona un archivo, ruta o comando concreto y estás por recomendarlo o actuar en base a él, VERIFICÁ que siga existiendo antes de confiar ciegamente):\n%s%s\n\nHISTORIAL RECIENTE DE LA CONVERSACION:\n%s\n\nMENSAJE NUEVO DE USUARIO:\n%s' \
-    "$MC_PERSONA" "$(nv_ahora_texto), hora local de Argentina" "$profile_text" "$location_text" "$user_memory_text" "$self_memory_text" "${SKILLS_TEXT:-(ninguna registrada)}" "${kai_vault_text:-(sin resultados)}" "$memory_text" "$hook_section" "$history_text" "$new_message"
+  printf '%s\n\nCUANDO ES AHORA (leido del reloj de su computadora, no inventado -- si te pregunta la hora o la fecha, esto es la respuesta; no le digas que no podes saberlo, y usalo tambien para ubicar en el tiempo cualquier cosa que hables con el):\n%s\n\nPERFIL DE USUARIO:\n%s\n\nDONDE ESTA USUARIO AHORA (medido de verdad en su computadora, no inventado -- si te pregunta donde esta, esto es la respuesta; no le digas que no podes saberlo):\n%s\n\nMEMORIA BASE SOBRE USUARIO:\n%s\n\nMEMORIA SOBRE VOS MISMA (Mentis, quién sos, qué sos):\n%s\n\nSKILLS DISPONIBLES (habilidades de Mentis. el usuario las invoca escribiendo /nombre; vos podés USAR SOLA la que él haya habilitado -- con {\"tool\":\"skill\"} -- y sugerirle las demás cuando su mensaje calce con la descripción, aunque no haya usado el prefijo):\n%s\n\n%s\n%s\n\nMEMORIA PERSISTENTE (notas guardadas entre sesiones con /recordar; son HECHOS que ya sabés del usuario, no un pedido a cumplir ahora -- pero son observaciones de un momento dado, no estado en vivo: si una memoria menciona un archivo, ruta o comando concreto y estás por recomendarlo o actuar en base a él, VERIFICÁ que siga existiendo antes de confiar ciegamente):\n%s%s\n\nHISTORIAL RECIENTE DE LA CONVERSACION:\n%s\n\nMENSAJE NUEVO DE USUARIO:\n%s' \
+    "$MC_PERSONA" "$(nv_ahora_texto), hora local de Argentina" "$profile_text" "$location_text" "$user_memory_text" "$self_memory_text" "${SKILLS_TEXT:-(ninguna registrada)}" "${MC_KAI_ROTULO:-$MC_KAI_ROTULO_DEFECTO}" "${kai_vault_text:-(sin resultados)}" "$memory_text" "$hook_section" "$history_text" "$new_message"
 }
+
+# El rótulo con el que viaja el bloque de retrieval. Es variable y no texto fijo porque en el modo
+# Study lo que se busca NO es el ecosistema de Mentis sino el material de estudio del usuario, y
+# rotularlo mal es peor que no mandarlo: el modelo citaría "según tu bóveda" un archivo que en
+# realidad es código de Mentis. El rótulo tiene que decir la verdad sobre de dónde salió el texto.
+MC_KAI_ROTULO_DEFECTO='KAI VAULT (índice semántico de todo el ecosistema Mentis + tu bóveda de notas -- estos son los archivos más relevantes a lo que el usuario acaba de escribir; si necesitás el detalle, andá DIRECTO a leer el archivo:línea indicado en vez de explorar a ciegas):'
+MC_KAI_ROTULO_ESTUDIO='TUS FUENTES DE ESTUDIO (los fragmentos más relevantes del material que el usuario te dio, y la ÚNICA base con la que podés responder en este modo -- citá el archivo:línea de cada afirmación. Esto NO es el código de Mentis ni tu bóveda: es su material. Si acá no está la respuesta, la respuesta es que no está en lo que te dio):'
 
 # Kai Vault como núcleo del ecosistema (pedido del usuario, 2026-07-13, "versión completa"): antes
 # era una skill opcional detrás del prefijo /boveda -- ahora es un paso OBLIGATORIO antes de
@@ -814,6 +836,30 @@ if [ "$MODO_REMOTO" = "1" ]; then
   # lo intenta, se come el rechazo y quema iteraciones. Es exactamente el ERR-098 de esta misma
   # mañana (un mensaje que no describe la realidad manda al modelo a chocar contra una pared).
   MC_PERSONA="${MC_PERSONA/Tenés permiso para leer, escribir y ejecutar de verdad dentro de tu directorio raíz./Este mensaje entra desde el teléfono, por la página de la red de casa, así que en este turno SOLO podés leer, buscar, recordar y conversar: NO tenés herramientas para escribir archivos, ejecutar comandos, mirar la pantalla ni prender la cámara. Si lo que te piden necesita alguna de esas, decilo en una frase y ofrecé hacerlo cuando el usuario esté en la computadora.}"
+fi
+
+# ===================== EL MODO SE LE CUENTA AL MODELO =====================
+#
+# No alcanza con apagarle las herramientas: hay que DECIRLE cuáles no tiene. Es la misma lección
+# que dejó el modo remoto tres líneas más arriba (ERR-098): un prompt que promete permisos que las
+# herramientas no dan manda al modelo a chocar contra una pared, gastar iteraciones y terminar el
+# turno sin respuesta.
+#
+# Y hay una parte que SOLO puede vivir en el texto, porque no es una herramienta: la puerta. Que
+# cuando el usuario pida algo de otro modo, Mentis se lo diga en una frase y le ofrezca cambiar -- en vez
+# de fallar en silencio o, peor, de inventar que lo hizo. Esa es la diferencia entre un reparto de
+# capacidades que se siente orden y uno que se siente castigo.
+MC_MODO_INICIAL="$(nv_modo_actual)"
+MC_MODO_TEXTO="$(nv_modo_persona "$MC_MODO_INICIAL")"
+if [ -n "${MC_MODO_TEXTO// }" ] && [ "$MODO_REMOTO" != "1" ]; then
+  MC_PERSONA="$MC_PERSONA
+
+MODO ACTUAL: $(nv_modo_titulo "$MC_MODO_INICIAL"). $MC_MODO_TEXTO
+
+LA PUERTA: si lo que te piden necesita una capacidad que este modo no tiene, no lo intentes por
+otro camino ni lo des por hecho. Decilo en UNA frase, nombrá el modo que sí lo hace, y ofrecé
+cambiar ('¿te paso a Mentis Code?'). Si el usuario dice que sí, el cambio lo hace él desde la app o
+diciéndotelo: vos no cambiás de modo solo."
 fi
 
 TOOLSDIR="$MENTIS_ENV_DIR/engine"
@@ -1002,6 +1048,18 @@ while true; do
   # secuencial, una atras de la otra, sumando su latencia en CADA turno. Kai Vault arranca
   # en background; mientras corre, clasificamos el rol en foreground; recien al final se
   # espera el resultado del lookup para armar el TASK (que si lo necesita).
+  # Que se busca depende del MODO, y por eso el modo se lee ACA y no mas abajo (donde ya se leia
+  # para las banderas): el lookup arranca antes que todo lo demas. Si un modo declara corpus
+  # propio, ese corpus REEMPLAZA al ecosistema -- ver nv_modo_corpus y _kai_search_raw.
+  MC_MODO_TURNO="$(nv_modo_actual)"
+  MC_CORPUS="$(nv_modo_corpus "$MC_MODO_TURNO" 2>/dev/null || true)"
+  if [ -n "${MC_CORPUS// }" ]; then
+    export MENTIS_CORPUS_DIR="$MC_CORPUS"
+    MC_KAI_ROTULO="$MC_KAI_ROTULO_ESTUDIO"
+  else
+    unset MENTIS_CORPUS_DIR
+    MC_KAI_ROTULO="$MC_KAI_ROTULO_DEFECTO"
+  fi
   KAI_VAULT_TMP="$(mktemp)"
   ( _mc_kai_vault_lookup "$MSG" > "$KAI_VAULT_TMP" ) &
   MC_KAI_PID=$!
@@ -1125,6 +1183,32 @@ while true; do
   [ "$MODO_REMOTO" != "1" ] && NVA_FLAGS="$NVA_FLAGS -K"
   [ "$ALLOW_DATOS" = "1" ] && NVA_FLAGS="$NVA_FLAGS -D"
   [ "$ALLOW_CARBS" = "1" ] && NVA_FLAGS="$NVA_FLAGS -C"
+
+  # ===================== EL MODO SE APLICA ACA, Y SOLO PUEDE QUITAR =====================
+  #
+  # Arriba se decidio, conector por conector, QUE PUEDE hacer Mentis en esta maquina. Recien
+  # ahora entra el modo elegido (Mentis / Code / Designe / Cowork) y saca de esa lista lo que no
+  # le corresponde. El orden es la garantia: como el filtro es una interseccion, un modo no puede
+  # encender nada que los conectores hayan dejado apagado. Si algun dia esto se escribiera al
+  # reves -- armar las banderas DESDE el modo -- elegir "Code" prenderia la camara aunque el usuario la
+  # tenga apagada, y no fallaria ningun test.
+  #
+  # decisiones personales que valen en cualquier modo. Un "modo sin frenos" que se apaga solo al
+  # cambiar de modo es peor que no tenerlo, porque el usuario seguiria creyendo que esta puesto.
+  MC_MODO="$(nv_modo_actual)"
+  MC_MODO_TITULO="$(nv_modo_titulo "$MC_MODO")"
+  MC_MODO_OK=" $(nv_modo_banderas "$MC_MODO") $(_mc_banderas_libres) "
+  MC_FLAGS_FILTRADAS=""
+  for _f in $NVA_FLAGS; do
+    case "$MC_MODO_OK" in *" $_f "*) MC_FLAGS_FILTRADAS="$MC_FLAGS_FILTRADAS $_f" ;; esac
+  done
+  NVA_FLAGS="$MC_FLAGS_FILTRADAS"
+
+  # Y las herramientas que no tienen bandera propia (exec, git, lsp, delegate...) se apagan por
+  # nombre. nv-agent.sh las saca del protocolo Y las rechaza si igual las pide: la leccion de la
+  # camara es que una prohibicion que vive solo en el texto del prompt es una sugerencia.
+  MC_SIN_TOOLS="$(nv_modo_sin_tools "$MC_MODO")"
+
   NVA_IMG_FLAGS=()
   for _p in "${ATTACH_IMG_PATHS[@]:-}"; do
     [ -n "$_p" ] && NVA_IMG_FLAGS+=("-I" "$_p")
@@ -1139,7 +1223,7 @@ while true; do
     ANSWER="$(printf '%s' "$MSG" | bash "$TOOLSDIR/ask-nvidia.sh" fast 2>"$MC_ERR_FIFO")"
     [ -z "$ANSWER" ] && ANSWER="Hola! (tuve un problema con el cerebro rápido -- pero acá estoy)"
   else
-    ANSWER="$(bash "$TOOLSDIR/nv-agent.sh" $NVA_FLAGS "${NVA_IMG_FLAGS[@]}" -d "$ROOT" -m "$TURN_ROLE" -i "$BUDGET" "$TASK" 2>"$MC_ERR_FIFO")"
+    ANSWER="$(bash "$TOOLSDIR/nv-agent.sh" $NVA_FLAGS -n "$MC_SIN_TOOLS" "${NVA_IMG_FLAGS[@]}" -d "$ROOT" -m "$TURN_ROLE" -i "$BUDGET" "$TASK" 2>"$MC_ERR_FIFO")"
   fi
   wait "$MC_TEE_PID"
   rm -f "$MC_ERR_FIFO"

@@ -74,12 +74,15 @@ test('la barra de título propia existe, es negra y tiene sus tres botones VISIB
   }
 });
 
-test('los subtítulos viven dentro de la columna del cuerpo y no tapan los botones', { timeout: 90000 }, async () => {
+test('los subtítulos viven dentro de la zona central y no tapan los botones', { timeout: 90000 }, async () => {
   const r = await preguntarleALaInterfaz(`(() => {
     const sub = document.getElementById('subtitulos-voz');
     if (!sub) return { hay: false };
     const cs = getComputedStyle(sub);
-    const columna = document.getElementById('columna-cuerpo');
+    // La columna del cuerpo digital desapareció el 2026-08-11; los subtítulos pasaron a colgar
+    // de la zona central. Lo que este test cuida NO cambió: que no sean una capa flotante
+    // anclada a la ventana y que no se superpongan con el compositor.
+    const columna = document.getElementById('zona-central');
     const composer = document.getElementById('composer');
     // Se lo hace visible con texto para medirlo como se ve de verdad, no vacío.
     sub.classList.remove('hidden');
@@ -90,13 +93,13 @@ test('los subtítulos viven dentro de la columna del cuerpo y no tapan los boton
     const rc = composer ? composer.getBoundingClientRect() : null;
     const seSuperponeConBotones = rc ? !(rs.bottom <= rc.top || rs.top >= rc.bottom) : null;
     return { hay: true, posicion: cs.position,
-             dentroDeColumna: !!(columna && columna.contains(sub)),
+             dentroDeZonaCentral: !!(columna && columna.contains(sub)),
              seSuperponeConBotones, alturaSub: rs.height, topSub: rs.top, topComposer: rc ? rc.top : null };
   })()`);
 
   assert.strictEqual(r.hay, true, 'no existen los subtítulos');
-  assert.strictEqual(r.dentroDeColumna, true,
-    'los subtítulos no están dentro de la columna del cuerpo: siguen siendo una capa suelta y se van a ver en toda la app');
+  assert.strictEqual(r.dentroDeZonaCentral, true,
+    'los subtítulos no están dentro de la zona central: son una capa suelta y se van a ver en toda la app');
   assert.notStrictEqual(r.posicion, 'fixed',
     'siguen con position:fixed, o sea anclados a la VENTANA y no a su sección');
   assert.strictEqual(r.seSuperponeConBotones, false,

@@ -50,6 +50,7 @@ const store = require('./lib/conversation-store');
 const folderStore = require('./lib/folder-store');
 const projectStore = require('./lib/project-store');
 const settingsStore = require('./lib/settings-store');
+const modosStore = require('./lib/modos-store');
 const statsStore = require('./lib/stats-store');
 const backupStore = require('./lib/backup-store');
 const usageLedger = require('./lib/usage-ledger');
@@ -218,7 +219,7 @@ function rootForConversation(id) {
 function notifyIfUnfocused(title, body) {
   if (!Notification.isSupported()) return;
   if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isFocused()) return;
-  const n = new Notification({ title, body: body.slice(0, 300), icon: path.join(__dirname, 'renderer', 'assets', 'mentis-cuerpo-256.png') });
+  const n = new Notification({ title, body: body.slice(0, 300), icon: path.join(__dirname, 'renderer', 'assets', 'mentis-app-256.png') });
   n.on('click', () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -709,6 +710,54 @@ ipcMain.handle('mentis:remove-runway-key', () => {
 ipcMain.handle('mentis:save-voz', (_event, fields) => settingsStore.saveVoz(MENTIS_ENV_DIR, fields));
 ipcMain.handle('mentis:save-profile', (_event, fields) => settingsStore.saveProfile(MENTIS_ENV_DIR, fields));
 ipcMain.handle('mentis:save-apariencia', (_event, fields) => settingsStore.saveApariencia(MENTIS_ENV_DIR, fields));
+
+// --- MODOS (2026-08-10) -----------------------------------------------------------------------
+// Los cuatro modos de Mentis. La app solo lee la lista y guarda cual esta elegido; que puede hacer
+// cada uno lo decide modos.json y lo aplica mentis-chat.sh en el turno.
+//
+// EL CAMBIO SE TIENE QUE NOTAR, y por eso 'set-modo' avisa a la ventana. el usuario lo pidio asi con
+// todas las letras: "estaria mal si fuese solo por atras". Un modo que cambia en silencio es
+// indistinguible de un modo que no cambio -- y como lo que cambia son los PERMISOS, no saber en
+// cual estas es justo lo que no puede pasar.
+ipcMain.handle('mentis:modos-lista', () => ({
+  modos: modosStore.listaDeModos(MENTIS_ENV_DIR),
+  actual: modosStore.modoActual(MENTIS_ENV_DIR),
+}));
+// EL TEMA TAMBIEN CAMBIA EL LOGO (pedido del usuario, 2026-08-10). No son dos marcas: es el mismo
+// isotipo dado vuelta, igual que los temas. La baldosa terracota va con el tema claro y la de
+// carbon con el oscuro -- un icono terracota sobre una barra de tareas oscura se ve como un parche.
+//
+// ESTO NO PUEDE SER CSS: el icono de la ventana y el de la bandeja los pinta Windows, no la
+// pagina. Por eso el renderer avisa por IPC y el cambio se hace aca.
+//
+// El de la BANDEJA se toma de un PNG de 16 y no del.ico: Windows se confunde con un.ico
+// multi-resolucion cuando lo usa para la bandeja y elige el tamano equivocado (fix del 2026-07-15).
+ipcMain.handle('mentis:set-logo', (_event, variante) => {
+  const suf = variante === 'oscuro' ? '-oscuro' : '';
+  const dir = path.join(__dirname, 'renderer', 'assets');
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setIcon(nativeImage.createFromPath(path.join(dir, `mentis-app${suf}.ico`)));
+    }
+    if (tray && !tray.isDestroyed()) {
+      tray.setImage(nativeImage.createFromPath(path.join(dir, `mentis-app${suf}-16.png`)));
+    }
+    return { ok: true, variante: suf ? 'oscuro' : 'claro' };
+  } catch (e) {
+    // Que no se pueda cambiar el icono NO puede tumbar nada: es cosmetico. Se avisa y se sigue.
+    return { ok: false, error: String(e.message || e) };
+  }
+});
+
+ipcMain.handle('mentis:modo-actual', () => modosStore.datosDelModo(MENTIS_ENV_DIR, modosStore.modoActual(MENTIS_ENV_DIR)));
+ipcMain.handle('mentis:set-modo', (event, id) => {
+  const r = modosStore.guardarModo(MENTIS_ENV_DIR, id);
+  if (r.ok) {
+    const w = BrowserWindow.fromWebContents(event.sender);
+    if (w && !w.isDestroyed()) w.webContents.send('mentis:modo-cambio', r.modo);
+  }
+  return r;
+});
 
 // --- MODO ADMINISTRADOR (2026-08-07) ----------------------------------------------------------
 // Publicar una actualizacion mete codigo en la computadora de otras personas. Por eso el trabajo
@@ -1257,8 +1306,20 @@ const WEATHER_CODE_ES = {
   95: 'con tormenta', 96: 'con tormenta y granizo', 99: 'con tormenta fuerte y granizo'
 };
 
+// VILLA LUGANO, FIJO (pedido del usuario, 2026-08-11). Antes se averiguaba la ubicación preguntándole
+// a un servicio por la IP, que es una llamada más y encima imprecisa: por IP podés aparecer en
+// otro barrio o en otra provincia según por dónde salga la conexión.
+//
+// Fijarlo tiene un efecto de privacidad que no es menor: **desaparece la llamada que pregunta
+// dónde estás.** Queda sólo la del clima, con coordenadas que ya sabemos. Menos tráfico y ningún
+// servicio ajeno averiguando la ubicación.
+//
+// Si algún día hay que hacerlo configurable, esto pasa a mentis-settings.json -- pero mientras sea
+// una sola persona en un solo barrio, una constante es más honesta que un ajuste que nadie toca.
+const UBICACION_FIJA = { lat: -34.675, lon: -58.475, city: 'Villa Lugano' };
+
 async function fetchLocationWeather() {
-  const loc = await measureLocation();
+  const loc = UBICACION_FIJA;
   const weather = await httpsGetJson(
     `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code`
   );
@@ -1539,6 +1600,107 @@ ipcMain.handle('mentis:open-artifact', async (_event, artifact) => {
   return { ok: true };
 });
 
+// ===== VER LO QUE MENTIS CREA, ADENTRO DE LA APP (2026-08-12) =====
+// el usuario: "quiero que las cosas que Mentis cree se puedan ver en la misma app". Hasta hoy el único
+// camino era el chip "Abrir X", que llama a shell.openPath y te saca a una app de Windows: mirar
+// un render 3D implicaba salir de Mentis y volver.
+//
+// Devuelve el archivo como data: URL en vez de una ruta file://. Es a propósito -- el renderer
+// no tiene (ni debe tener) permiso para leer del disco, y una data: URL no necesita aflojar eso.
+// El precio es que el archivo viaja por IPC, así que hay tope de tamaño.
+//
+// LA VALIDACIÓN DE RUTA ES LA MISMA QUE open-artifact, y no una copia parecida: si alguna vez se
+// endurece una, la otra no puede quedar atrás. Por eso se extrajo a _resolverArtefacto.
+const VISOR_TOPE_BYTES = 80 * 1024 * 1024;
+const VISOR_TIPOS = {
+  '.png': 'imagen', '.jpg': 'imagen', '.jpeg': 'imagen', '.webp': 'imagen', '.gif': 'imagen',
+  '.bmp': 'imagen', '.svg': 'imagen',
+  '.glb': 'modelo3d', '.gltf': 'modelo3d',
+  '.pdf': 'pdf',
+  '.html': 'html', '.htm': 'html',
+  '.txt': 'texto', '.md': 'texto', '.csv': 'texto', '.json': 'texto',
+};
+const VISOR_MIME = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+  '.gif': 'image/gif', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+  '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json',
+  '.pdf': 'application/pdf', '.html': 'text/html', '.htm': 'text/html',
+};
+
+function _resolverArtefacto(artifact) {
+  if (typeof artifact !== 'string' || !artifact.trim()) return { error: 'artefacto invalido' };
+  if (/^https?:\/\//i.test(artifact)) return { externo: true };
+  let abs;
+  if (path.isAbsolute(artifact)) {
+    if (!_isWithin(MENTIS_CREATIONS_DIR, artifact)) {
+      return { error: 'ruta fuera de la carpeta de creaciones de Mentis' };
+    }
+    abs = path.resolve(artifact);
+  } else {
+    abs = path.resolve(APP_WORKSPACE_ROOT, artifact);
+    if (!_isWithin(APP_WORKSPACE_ROOT, abs)) return { error: 'ruta fuera del workspace' };
+  }
+  if (!fsSync.existsSync(abs)) return { error: 'el archivo ya no existe' };
+  return { abs };
+}
+
+ipcMain.handle('mentis:ver-artefacto', async (_event, artifact) => {
+  const r = _resolverArtefacto(artifact);
+  if (r.error) return { ok: false, error: r.error };
+  if (r.externo) return { ok: false, error: 'es un link, no un archivo' };
+
+  const ext = path.extname(r.abs).toLowerCase();
+  const nombre = path.basename(r.abs);
+  // Las estructuras químicas de Mentis Science son.mol3d.json: coordenadas reales, no una malla.
+  // Se detectan por el nombre COMPLETO y no por la extensión, porque path.extname de
+  // "agua.mol3d.json" devuelve ".json" -- y un.json cualquiera es texto, no una molécula.
+  const tipo = /\.mol3d\.json$/i.test(nombre) ? 'molecula' : VISOR_TIPOS[ext];
+  // Un.docx o un.xlsx no se pueden dibujar acá y decir "no se pudo abrir" sería mentir: se
+  // avisa que ese formato se abre afuera, que es la verdad y además es accionable.
+  if (!tipo) return { ok: true, tipo: 'externo', nombre, ext };
+
+  const st = await fsSync.promises.stat(r.abs);
+  if (st.size > VISOR_TOPE_BYTES) {
+    return { ok: true, tipo: 'externo', nombre, ext, motivo: 'pesa demasiado para verlo acá' };
+  }
+  const buf = await fsSync.promises.readFile(r.abs);
+  if (tipo === 'texto') {
+    return { ok: true, tipo, nombre, ext, texto: buf.toString('utf8').slice(0, 400000) };
+  }
+  if (tipo === 'molecula') {
+    try {
+      return { ok: true, tipo, nombre, ext, estructura: JSON.parse(buf.toString('utf8')) };
+    } catch {
+      return { ok: false, error: 'el archivo de estructura está dañado' };
+    }
+  }
+  const mime = VISOR_MIME[ext] || 'application/octet-stream';
+  return { ok: true, tipo, nombre, ext, dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
+});
+
+// La lista de todo lo que Mentis creó, más nuevo primero. Es la galería: sin esto, ver algo de
+// hace tres turnos obliga a buscar el mensaje donde apareció el chip.
+ipcMain.handle('mentis:listar-creaciones', async () => {
+  try {
+    if (!fsSync.existsSync(MENTIS_CREATIONS_DIR)) return { ok: true, archivos: [] };
+    const nombres = await fsSync.promises.readdir(MENTIS_CREATIONS_DIR);
+    const archivos = [];
+    for (const n of nombres) {
+      const abs = path.join(MENTIS_CREATIONS_DIR, n);
+      let st;
+      try { st = await fsSync.promises.stat(abs); } catch { continue; }
+      if (!st.isFile()) continue;
+      const ext = path.extname(n).toLowerCase();
+      archivos.push({ nombre: n, ruta: abs, ext, tipo: VISOR_TIPOS[ext] || 'externo',
+                      bytes: st.size, cuando: st.mtimeMs });
+    }
+    archivos.sort((a, b) => b.cuando - a.cuando);
+    return { ok: true, archivos: archivos.slice(0, 200) };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -1555,7 +1717,7 @@ function createWindow() {
     // él y queda embarrado. El.ico trae cada tamaño reducido por separado. Además tiene fondo
     // transparente: el PNG anterior era una captura con su fondo negro, y ese cuadrado oscuro
     // alrededor era justamente lo que se veía mal.
-    icon: path.join(__dirname, 'renderer', 'assets', 'mentis-cuerpo.ico'),
+    icon: path.join(__dirname, 'renderer', 'assets', 'mentis-app.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -1569,7 +1731,7 @@ function createWindow() {
   // hace que se vea el ícono correcto mientras tanto.
   try {
     mainWindow.setIcon(nativeImage.createFromPath(
-      path.join(__dirname, 'renderer', 'assets', 'mentis-cuerpo.ico')));
+      path.join(__dirname, 'renderer', 'assets', 'mentis-app.ico')));
   } catch { /* si falla, queda el de `icon:`; no vale romper el arranque por un ícono */ }
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -1642,7 +1804,7 @@ function createTray() {
   // se redujo por separado desde el render grande, que es lo que hace que el núcleo se siga
   // distinguiendo. Reescalar en caliente desde uno más grande era lo que lo convertía en una
   // mancha (y el fondo negro del PNG viejo agregaba el recuadro que se veía mal).
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'assets', 'mentis-cuerpo-16.png'));
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'renderer', 'assets', 'mentis-app-16.png'));
   tray = new Tray(icon);
   tray.setToolTip('Mentis');
   tray.setContextMenu(Menu.buildFromTemplate([

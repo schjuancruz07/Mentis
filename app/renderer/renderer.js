@@ -250,6 +250,11 @@ function buildArtifactRow(artifacts) {
     btn.type = 'button';
     btn.textContent = artifactLabel(artifact);
     btn.addEventListener('click', async () => {
+      // Ver adentro de la app cuando se puede (2026-08-12, pedido del usuario para Designe). El visor
+      // decide por tipo y, cuando no puede dibujarlo (un.docx), lo dice y ofrece abrirlo afuera.
+      // Los links siguen yendo al navegador: no son archivos de Mentis.
+      const esLink = /^https?:\/\//i.test(artifact);
+      if (!esLink && window.MentisVisor) { window.MentisVisor.abrir(artifact); return; }
       btn.disabled = true;
       const original = btn.textContent;
       const result = await window.mentisAPI.openArtifact(artifact);
@@ -404,7 +409,6 @@ async function renderMessages(entries) {
   // indicador de "pensando" SIN pasar por hideThinkingIndicator(). Mientras el indicador era una
   // imagen no pasaba nada; ahora es un cuerpo digital, y sin este desmontaje quedaba una escena
   // 3D viva dibujando contra un canvas que ya no está en la página.
-  if (window.MentisCuerpo) window.MentisCuerpo.desmontar('pensando');
   // Fix 2026-07-15: el root de workspace se resuelve UNA sola vez ACA, antes de armar
   // ningun mensaje -- no por mensaje (ver buildMessageAttachmentThumbsSync), asi el chat
   // entero se pinta en una sola pasada sincronica sin ir corriendose de a poco.
@@ -899,8 +903,24 @@ function frenarKaraoke() {
   if (temporizadorKaraoke) { clearInterval(temporizadorKaraoke); temporizadorKaraoke = null; }
 }
 
+// EL ESTADO SIGUE SIENDO EL MISMO; CAMBIÓ QUIÉN LO DIBUJA (2026-08-11).
+//
+// Esta función manejaba el cuerpo digital 3D. El cuerpo se retiró, pero los cinco estados y los
+// 16 lugares que los avisan siguen siendo correctos: lo único que cambió es que ahora se pintan
+// en la línea de estado, arriba del compositor, en vez de en un anillo girando.
+//
+// Se conserva el nombre A PROPÓSITO. Renombrarla habría significado tocar 16 llamadas repartidas
+// por todo el archivo para no cambiar ningún comportamiento -- 16 oportunidades de equivocarse a
+// cambio de nada. El comentario explica la herencia mejor que un nombre nuevo.
+const ESTADO_DEL_CUERPO = {
+  STANDBY: 'listo',
+  PROCESSING: 'pensando',
+  SPEAKING: 'hablando',
+  LISTENING: 'escuchando',
+  ALERT: 'problema',
+};
 function cuerpoSetEstado(estado) {
-  if (window.MentisCuerpo) window.MentisCuerpo.setEstado(estado);
+  estadoPonerEstado(ESTADO_DEL_CUERPO[estado] || 'listo');
 }
 
 // ===== El núcleo late con tu voz de verdad (Fase 4, 2026-07-27) =====
@@ -1083,7 +1103,6 @@ function arrancarMedidorDeVoz(stream) {
       if (rms > nivelMaxGrabacion) nivelMaxGrabacion = rms;
       // Una voz normal a un palmo del micrófono da un RMS de 0,05 a 0,2. Dividir por 0,25 lleva
       // ese rango útil a 0-1 sin que haya que gritar para llegar al tope.
-      if (window.MentisCuerpo) window.MentisCuerpo.setNivelVoz(rms / 0.25);
 
       // --- piso de ruido: el mínimo que entra cuando el usuario NO está hablando ---
       // Baja al instante (así aprende el silencio real apenas aparece) y sube muy de a poco (para
@@ -1148,7 +1167,6 @@ function frenarMedidorDeVoz() {
   }
   // El nivel vence solo a los 300 ms, pero bajarlo acá hace que el núcleo se desinfle en el
   // mismo instante en que soltás el micrófono, sin ese cuarto de segundo de retardo.
-  if (window.MentisCuerpo) window.MentisCuerpo.setNivelVoz(0);
 }
 
 function setBusy(busy) {
@@ -1165,12 +1183,28 @@ function setBusy(busy) {
   document.getElementById('btn-stop-turn').classList.toggle('hidden', !busy);
 }
 
+// UN HISTORIAL POR MODO (pedido del usuario, 2026-08-12: "para no tener que ir buscando entre todos
+// los chats"). El filtro se aplica ACÁ, sobre la lista completa, y no en el proceso principal: la
+// lista de conversaciones también la usan la búsqueda y los proyectos, que tienen que seguir
+// viendo todo. Lo que cambia es qué se muestra en la barra lateral del modo en el que estás.
+//
+// Las conversaciones anteriores a hoy no tienen modo guardado. NO se les inventa uno: se muestran
+// sólo en el modo por defecto, agrupadas aparte, así no ensucian Study o Science con pruebas
+// viejas que no tienen nada que ver.
+let MODO_ACTUAL_UI = null;
+function filtrarPorModo(list) {
+  if (!MODO_ACTUAL_UI) return list;
+  const esDefecto = MODO_ACTUAL_UI === 'mentis';
+  return list.filter((c) => (c.modo ? c.modo === MODO_ACTUAL_UI : esDefecto));
+}
+
 async function refreshConversationList() {
-  const [list, folders, projects] = await Promise.all([
+  const [listaCompleta, folders, projects] = await Promise.all([
     window.mentisAPI.listConversations(),
     window.mentisAPI.listFolders(),
     window.mentisAPI.listProjects()
   ]);
+  const list = filtrarPorModo(listaCompleta);
   foldersData = folders;
   const root = document.getElementById('conversation-list');
   root.innerHTML = '';
@@ -1503,31 +1537,27 @@ function showThinkingIndicator() {
 
   const wrap = document.createElement('div');
   wrap.id = 'thinking-indicator';
-  // El logo estático se retira también de acá (pedido del usuario, 2026-07-27: "el cuerpo digital
-  // iba a ser el nuevo logo"). Mentis pensando ahora es el mismo núcleo, chico y en PROCESSING:
-  // gira más rápido y dispara más sinapsis que en reposo, así que el indicador dice algo real
-  // en vez de ser un logo con una animación de brillo encima.
-  const lienzo = document.createElement('canvas');
-  lienzo.id = 'thinking-cuerpo';
-  lienzo.setAttribute('aria-label', 'Mentis está pensando');
-  const timer = document.createElement('span');
-  timer.id = 'thinking-timer';
-  timer.textContent = '0.0s';
-  wrap.appendChild(lienzo);
-  wrap.appendChild(timer);
+  // ACÁ HABÍA UN SEGUNDO CUERPO DIGITAL 3D, chiquito, que se montaba y se desmontaba EN CADA
+  // TURNO (2026-07-27 a 2026-08-11). Se fue con el resto del cuerpo. El contador que estaba a su
+  // lado no se perdió: se mudó a la línea de estado, arriba del compositor, donde se ve siempre
+  // en vez de sólo mientras dura el turno.
+  // Queda un punto suspensivo mínimo dentro de la conversación para que se vea DÓNDE va a
+  // aparecer la respuesta, que es lo único que el indicador aportaba en este lugar.
+  // Se arma con createElement y no con innerHTML aunque el contenido sea fijo: en un archivo de
+  // 4.000 líneas, la próxima persona que toque esta línea puede meterle una variable adentro sin
+  // pensarlo. No dejar el patrón es más barato que acordarse de no usarlo mal.
+  const puntos = document.createElement('span');
+  puntos.className = 'puntos';
+  for (let i = 0; i < 3; i++) puntos.appendChild(document.createElement('i'));
+  wrap.appendChild(puntos);
   container.appendChild(wrap);
-  // Detalle bajo: a este tamaño no se distingue un anillo de 120 segmentos de uno de 48, y esto
-  // corre justamente mientras el motor está ocupado. Se monta después de estar en el DOM para
-  // que el canvas ya tenga su tamaño real.
-  if (window.MentisCuerpo) {
-    window.MentisCuerpo.montar('pensando', lienzo, { detalle: 'bajo', estado: 'PROCESSING', deriva: false });
-  }
   container.scrollTop = container.scrollHeight;
 
   thinkingStart = Date.now();
+  estadoPonerEstado('pensando');
   thinkingInterval = setInterval(() => {
     const elapsed = ((Date.now() - thinkingStart) / 1000).toFixed(1);
-    timer.textContent = elapsed + 's';
+    estadoPonerTiempo(elapsed + ' s');
   }, 100);
 }
 
@@ -1536,9 +1566,10 @@ function hideThinkingIndicator() {
     clearInterval(thinkingInterval);
     thinkingInterval = null;
   }
-  // Desmontar ANTES de sacar el nodo: si se borra el canvas primero, queda la escena 3D viva
-  // dibujando contra un elemento que ya no está en la página.
-  if (window.MentisCuerpo) window.MentisCuerpo.desmontar('pensando');
+  // El estado vuelve a reposo, pero el TIEMPO se queda: cuánto tardó el último turno es
+  // justamente el dato que uno quiere leer DESPUÉS, no durante. Borrarlo al terminar sería
+  // esconder la respuesta en el momento en que la pregunta tiene sentido.
+  estadoPonerEstado('listo');
   const el = document.getElementById('thinking-indicator');
   if (el) el.remove();
   // Normalmente renderMessages() ya limpió #live-steps al reconstruir #messages desde el
@@ -1582,10 +1613,6 @@ window.mentisAPI.onLog((line) => {
   // SINAPSIS SOBRE ACTIVIDAD REAL: cada paso del motor (write, exec, búsqueda, navegación...)
   // enciende una conexión en el cuerpo. Este flujo de líneas YA existía para el panel de
   // progreso -- engancharse acá no le agrega ni una llamada al motor, que era la condición.
-  if (window.MentisCuerpo && /^\[nv-agent\] iter \d+:/.test(line)) {
-    const c = window.MentisCuerpo.get('voz') || window.MentisCuerpo.get('chat');
-    if (c && typeof c.dispararSinapsis === 'function') c.dispararSinapsis();
-  }
 });
 window.mentisAPI.onLivePreview((imgPath) => {
   renderScreenPreview(imgPath);
@@ -1632,7 +1659,17 @@ window.mentisAPI.onHistoryUpdated((entries) => {
   limpiarBurbujaEnVivo();
   renderMessagesWithBranches(entries);
   updateHandoffBanner(activeConversationId, entries ? entries.length : 0);
-  if (voiceModeActive && entries && entries.length > 0) {
+  // MENTIS SÓLO HABLA SI VOS ACTIVASTE EL MICRÓFONO (pedido del usuario, 2026-08-11).
+  //
+  // Hasta hoy hablaba SIEMPRE, y no era un descuido: `voiceModeActive` está forzado a true desde
+  // el 2026-07-31, cuando se sacó el botón de modo voz porque "estaba activado todo el tiempo".
+  // O sea que la condición de abajo era verdadera en cada turno. Si escribías, te contestaba en
+  // voz alta igual.
+  //
+  // La regla nueva es simple y es la que uno espera: le hablás, te habla; le escribís, te
+  // escribe. Lo decide `ultimoTurnoFueHablado`, que se prende al mandar por micrófono y se apaga
+  // al mandar escribiendo -- no un ajuste que haya que acordarse de tocar.
+  if (voiceModeActive && ultimoTurnoFueHablado && entries && entries.length > 0) {
     const last = entries[entries.length - 1];
     if (last.role !== 'usuario' && last.text) {
       const parsed = parseQuestionBlock(last.text);
@@ -2118,6 +2155,11 @@ function closeProjects() {
   projectsOverlay.classList.add('hidden');
 }
 
+// La galería la dibuja visor.js (módulo aparte). Si por lo que sea no cargara, el botón no hace
+// nada en vez de tirar un error que corte el resto de los listeners de este archivo.
+document.getElementById('btn-open-galeria').addEventListener('click', () => {
+  if (window.MentisVisor) window.MentisVisor.galeria();
+});
 document.getElementById('btn-open-projects').addEventListener('click', openProjects);
 document.getElementById('btn-close-projects').addEventListener('click', closeProjects);
 
@@ -2680,7 +2722,11 @@ iniciarModoAdministrador();
 // --- Apariencia: paleta y nombre (2026-08-06) -------------------------------------------------
 // El color se aplica al instante al elegirlo, sin botón de guardar y sin recargar: probar un tema
 // tiene que costar un clic, si no nadie los prueba y da igual haberlos hecho.
-let aparienciaActual = { paleta: 'mentis-clasico', nombre: 'Mentis' };
+// La paleta de arranque es la tercera copia del mismo dato (las otras dos estan en temas.js y en
+// lib/settings-store.js). Se sobreescribe apenas llega la apariencia guardada, asi que solo se ve
+// durante ese instante -- por eso quedo en 'mentis-clasico' meses despues de que ese tema dejara de
+// ser el default, sin que nadie lo notara. El test de temas compara las tres.
+let aparienciaActual = { paleta: 'mentis-oscuro', nombre: 'Mentis' };
 
 function aplicarNombreEnPantalla(nombre) {
   const n = (nombre || 'Mentis').trim() || 'Mentis';
@@ -2712,7 +2758,10 @@ function renderTemas(paletaElegida) {
     b.appendChild(muestra);
     b.appendChild(cap);
     b.addEventListener('click', async () => {
-      T.aplicarTema(t.id);
+      const aplicado = T.aplicarTema(t.id);
+      // El tema tambien cambia el logo (barra de tareas y bandeja). No es CSS: lo pinta Windows,
+      // asi que hay que avisarle al proceso principal.
+      if (window.mentisAPI && window.mentisAPI.setLogo) window.mentisAPI.setLogo(aplicado.logo || (aplicado.claro ? 'claro' : 'oscuro'));
       aparienciaActual.paleta = t.id;
       renderTemas(t.id);
       try { await window.mentisAPI.saveApariencia({ paleta: t.id }); } catch (e) { /* el color ya se ve; si falla el guardado se pierde al reiniciar, no ahora */ }
@@ -2743,7 +2792,30 @@ function closeSettings() {
   settingsOverlay.classList.add('hidden');
 }
 
-document.getElementById('btn-open-settings').addEventListener('click', openSettings);
+// El consumo se pinta cada vez que se abre Configuracion, no una sola vez al arrancar: si se
+// calculara al inicio, el numero quedaria congelado en lo que valia cuando abriste la app y
+// diria una cifra vieja justo cuando vas a mirarlo.
+async function pintarConsumoEnAjustes() {
+  const cont = document.getElementById('settings-consumo');
+  if (!cont || !window.mentisAPI || !window.mentisAPI.getUsageCosts) return;
+  cont.innerHTML = '';
+  let costs = null;
+  try { costs = await window.mentisAPI.getUsageCosts(); } catch { /* sin IPC: no se rompe nada */ }
+  if (!costs || !costs.providers || !costs.providers.length) {
+    const vacio = document.createElement('div');
+    vacio.className = 'usage-stats-empty';
+    // Se dice POR QUE esta vacio. "Sin datos" a secas deja a cualquiera pensando si se rompio algo.
+    vacio.textContent = 'Todavia no hay consumo registrado. Aparece en cuanto uses una API con clave configurada (imagenes, video, voz).';
+    cont.appendChild(vacio);
+    return;
+  }
+  renderUsageCosts(cont, costs);
+}
+
+document.getElementById('btn-open-settings').addEventListener('click', () => {
+  openSettings();
+  pintarConsumoEnAjustes();
+});
 document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
 
 // El nombre se guarda al salir del campo y no en cada tecla: guardar por tecla escribiria el
@@ -2765,7 +2837,10 @@ async function aplicarAparienciaGuardada() {
   try {
     const s = await window.mentisAPI.getSettings();
     aparienciaActual = s.apariencia || aparienciaActual;
-    if (window.MentisTemas) window.MentisTemas.aplicarTema(aparienciaActual.paleta);
+    if (window.MentisTemas) {
+      const aplicado = window.MentisTemas.aplicarTema(aparienciaActual.paleta);
+      if (window.mentisAPI && window.mentisAPI.setLogo) window.mentisAPI.setLogo(aplicado.logo || (aplicado.claro ? 'claro' : 'oscuro'));
+    }
     aplicarNombreEnPantalla(aparienciaActual.nombre);
   } catch (e) { /* se queda con la paleta del CSS: fea pero usable */ }
 }
@@ -2812,9 +2887,8 @@ document.getElementById('btn-export-backup').addEventListener('click', async () 
   }
 });
 
-document.getElementById('btn-toggle-logs').addEventListener('click', () => {
-  document.getElementById('logs-panel').classList.toggle('collapsed');
-});
+// El botón de Logs se retiró con su barra (2026-08-12): appendLog() sigue escribiendo en el
+// <pre> oculto, así que nada se pierde -- sólo dejó de ocupar lugar en pantalla.
 // Panel de previsualización, sin tabs (pedido del usuario, 2026-07-13: sacar el panel "Tareas" --
 // la narración en vivo del chat ya cumple esa función, así que "Previsualización" queda como
 // la única sección, un simple abrir/cerrar).
@@ -2848,9 +2922,357 @@ document.getElementById('btn-close-status').addEventListener('click', () => {
   wordmark.addEventListener('pointerleave', cancel);
 })();
 
+// --- Pantalla de bienvenida: reloj y clima (2026-08-11) ---------------------------------------
+// Los dos cuadros de ambiente que reemplazan al cuerpo digital como primera pantalla.
+//
+// EL RELOJ NO TOCA LA RED y se actualiza cada segundo. El CLIMA sí, pero cada 15 minutos y no
+// cada segundo: el tiempo en Villa Lugano no cambia entre un parpadeo y otro, y una consulta por
+// segundo sería castigar a un servicio gratuito para mostrar el mismo número.
+//
+// SÓLO CORREN CON LA BIENVENIDA A LA VISTA (decisión del usuario: "sólo en la bienvenida y después se
+// va"). Con una conversación abierta se apagan los dos temporizadores -- no se dejan girando
+// actualizando algo que nadie está mirando.
+(function bienvenidaAmbiente() {
+  const caja = document.getElementById('bienvenida');
+  if (!caja) return;
+  const hora = document.getElementById('reloj-hora');
+  const fecha = document.getElementById('reloj-fecha');
+  const temp = document.getElementById('clima-temp');
+  const lugar = document.getElementById('clima-lugar');
+  let tReloj = null, tClima = null;
+
+  const FECHA_FMT = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  function pintarReloj() {
+    const d = new Date();
+    // Sin segundos: un reloj de pared no los tiene y acá tampoco hacen falta. Con segundos el
+    // cuadro se convierte en algo que te mira parpadear.
+    if (hora) hora.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    if (fecha) fecha.textContent = FECHA_FMT.format(d);
+  }
+
+  async function pintarClima() {
+    if (!window.mentisAPI || !window.mentisAPI.getLocationWeather) return;
+    try {
+      const c = await window.mentisAPI.getLocationWeather();
+      if (!c) return;
+      // Si no vino la temperatura se dice, no se inventa ni se deja el guion suelto: un cuadro que
+      // muestra "—" para siempre parece roto y no explica nada.
+      if (temp) temp.textContent = (typeof c.tempC === 'number') ? Math.round(c.tempC) + '°' : 'sin dato';
+      if (lugar) lugar.textContent = c.description ? `${c.city}, ${c.description}` : (c.city || 'Villa Lugano');
+    } catch { /* sin red: se queda con lo último que mostró */ }
+  }
+
+  function arrancar() {
+    if (tReloj) return;
+    pintarReloj(); pintarClima();
+    tReloj = setInterval(pintarReloj, 1000);
+    tClima = setInterval(pintarClima, 15 * 60 * 1000);
+  }
+  function frenar() {
+    if (tReloj) { clearInterval(tReloj); tReloj = null; }
+    if (tClima) { clearInterval(tClima); tClima = null; }
+  }
+
+  // Se enciende y se apaga siguiendo a la propia bienvenida, en vez de que cada lugar que abre o
+  // cierra una conversación se acuerde de avisar. Un observador no se olvida.
+  new MutationObserver(() => (caja.classList.contains('hidden') ? frenar() : arrancar()))
+.observe(caja, { attributes: true, attributeFilter: ['class'] });
+  if (!caja.classList.contains('hidden')) arrancar();
+})();
+
+// --- El "+" de capacidades (2026-08-12) --------------------------------------------------------
+// Diez interruptores que se tocan una vez por semana no pueden ocupar la mitad del compositor.
+// Se guardan detrás del "+", que es donde uno busca "agregar algo".
+(function menuCapacidades() {
+  const boton = document.getElementById('btn-mas');
+  const menu = document.getElementById('action-cluster');
+  if (!boton || !menu) return;
+
+  function cerrar() { menu.classList.add('hidden'); boton.setAttribute('aria-expanded', 'false'); }
+  function abrir()  { menu.classList.remove('hidden'); boton.setAttribute('aria-expanded', 'true'); }
+
+  boton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (menu.classList.contains('hidden')) abrir(); else cerrar();
+  });
+  // Cerrar al tocar afuera, pero NO al tocar un interruptor de adentro: prender la cámara y que
+  // el panel se cierre en la cara obliga a reabrirlo para prender la siguiente.
+  document.addEventListener('click', (e) => {
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target)) cerrar();
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
+})();
+
+// --- LÍNEA DE ESTADO: qué está haciendo Mentis y hace cuánto (2026-08-11) ----------------------
+// Reemplaza al cuerpo digital. Tres piezas: un puntito de color, una palabra, y el contador que
+// ya existía escondido dentro del indicador de "pensando".
+//
+// POR QUÉ EL PUNTITO ADEMÁS DEL TEXTO: contestan preguntas distintas. El texto dice "qué está
+// haciendo y hace cuánto", pero hay que leerlo. El color dice "¿está pasando algo?" de reojo,
+// mientras hacés otra cosa. Esa segunda era la única que el cuerpo digital hacía bien, y es la
+// única que valía la pena conservar.
+//
+// Los cinco estados son los mismos que tenía el cuerpo (reposo, pensando, hablando, escuchando,
+// problema), pero sus colores ahora salen del TEMA en vez de una rampa fija, así que acompañan a
+// claro y a oscuro sin una segunda tabla que mantener.
+const ESTADOS = {
+  listo:      { texto: 'listo',       clase: 'reposo' },
+  pensando:   { texto: 'pensando',    clase: 'pensando' },
+  hablando:   { texto: 'hablando',    clase: 'hablando' },
+  escuchando: { texto: 'escuchando',  clase: 'escuchando' },
+  problema:   { texto: 'hubo un problema', clase: 'problema' },
+};
+
+function estadoPonerEstado(nombre) {
+  const e = ESTADOS[nombre] || ESTADOS.listo;
+  const punto = document.getElementById('estado-punto');
+  const texto = document.getElementById('estado-texto');
+  if (punto) punto.className = e.clase;
+  if (texto) texto.textContent = e.texto;
+}
+
+function estadoPonerTiempo(txt) {
+  const el = document.getElementById('estado-tiempo');
+  if (el) el.textContent = txt || '';
+}
+
+(function lineaDeEstado() {
+  const linea = document.getElementById('linea-estado');
+  const mic = document.getElementById('btn-mic');
+  // EL MICRÓFONO SE MUDA, NO SE DUPLICA. Mover el nodo conserva sus escuchas y toda su lógica de
+  // grabar/transcribir/enviar: hay una sola implementación y cualquier arreglo futuro vale para
+  // el único botón que existe. Duplicarlo habría sido dos micrófonos en pantalla y dos caminos
+  // para el mismo trabajo.
+  if (linea && mic) linea.appendChild(mic);
+  estadoPonerEstado('listo');
+})();
+
+// --- Mostrar/ocultar la barra lateral (2026-08-10) --------------------------------------------
+// La preferencia se guarda: si alguien trabaja siempre sin la lista de chats, no tiene por qué
+// volver a esconderla en cada arranque.
+(function barraLateral() {
+  const btn = document.getElementById('btn-sidebar');
+  const app = document.getElementById('app');
+  if (!btn || !app) return;
+  const CLAVE = 'mentis:sidebar-oculta';
+
+  function aplicar(oculta) {
+    app.classList.toggle('sin-sidebar', oculta);
+    btn.setAttribute('aria-pressed', String(!oculta));
+    btn.title = oculta ? 'Mostrar la lista de chats' : 'Ocultar la lista de chats';
+  }
+  aplicar(localStorage.getItem(CLAVE) === '1');
+
+  btn.addEventListener('click', () => {
+    const oculta = !app.classList.contains('sin-sidebar');
+    aplicar(oculta);
+    localStorage.setItem(CLAVE, oculta ? '1' : '0');
+  });
+})();
+
+// --- Previsualizador a pantalla completa (2026-08-10) ------------------------------------------
+(function previewPantallaCompleta() {
+  const btn = document.getElementById('btn-status-full');
+  const panel = document.getElementById('status-panel');
+  if (!btn || !panel) return;
+  const agrandar = btn.querySelector('.icono-agrandar');
+  const achicar = btn.querySelector('.icono-achicar');
+
+  function aplicar(full) {
+    panel.classList.toggle('pantalla-completa', full);
+    // Abrirlo en grande y dejarlo colapsado a la vez sería una pantalla completa vacía.
+    if (full) panel.classList.remove('collapsed');
+    btn.setAttribute('aria-pressed', String(full));
+    btn.title = full ? 'Volver al tamaño normal' : 'Pantalla completa';
+    agrandar.classList.toggle('hidden', full);
+    achicar.classList.toggle('hidden', !full);
+  }
+
+  btn.addEventListener('click', () => aplicar(!panel.classList.contains('pantalla-completa')));
+  // Escape sale, como en cualquier pantalla completa. Sin esto la única salida es encontrar el
+  // botón, que en una vista que ocupa todo no siempre es obvio.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && panel.classList.contains('pantalla-completa')) aplicar(false);
+  });
+})();
+
+// --- MODOS: Mentis / Code / Designe / Cowork (2026-08-10) --------------------------------------
+// El logotipo ES el selector: se toca el nombre y se elige. Va acá, a la vista, y no escondido en
+// ajustes, porque el modo decide QUÉ PUEDE HACER Mentis -- no es una preferencia de estilo.
+//
+// EL CAMBIO SE TIENE QUE NOTAR. el usuario lo pidió con todas las letras: "estaría mal si fuese sólo
+// por atrás". Cambian tres cosas a la vez y ninguna es sutil: el nombre del logotipo, su LETRA
+// (Silkscreen pixelada, Playfair cursiva, Plus Jakarta geométrica) y una línea en la conversación
+// marcando el corte. Un modo que cambia en silencio es indistinguible de uno que no cambió.
+(function modos() {
+  const wordmark = document.getElementById('header-wordmark');
+  const fichas = document.getElementById('modo-fichas');
+  if (!wordmark || !fichas || !window.mentisAPI || !window.mentisAPI.modosLista) return;
+
+  let modoActual = null;
+
+  function pintarLogotipo(modo) {
+    document.documentElement.dataset.modo = modo.id;
+    // "Mentis Designe" es el único con dos letras en el mismo logotipo: MENTIS en Syne y
+    // "Designe" en Playfair cursiva, como en la guía de identidad. Por eso se arma con un <span>
+    // y con textContent en cada pedazo: el título sale de un JSON que algún día podría editar
+    // otra persona, y no hay motivo para dejar que eso inyecte HTML en la interfaz.
+    wordmark.textContent = '';
+    if (modo.id === 'designe') {
+      wordmark.appendChild(document.createTextNode('MENTIS'));
+      const c = document.createElement('span');
+      c.className = 'cursiva';
+      c.textContent = 'Designe';
+      wordmark.appendChild(c);
+    } else {
+      wordmark.textContent = (modo.titulo || 'Mentis').toUpperCase();
+    }
+    wordmark.title = `Modo ${modo.titulo}`;
+  }
+
+  // LOS BOTONES DE LA APP TAMBIÉN SIGUEN AL MODO. Lo notó el usuario: el modo Cowork decía "tareas" en
+  // su descripción y el botón de tareas programadas se veía igual en Code. La descripción
+  // prometía una cosa y la interfaz mostraba otra. Los ids salen de modos.json, no de un `if`.
+  const PANELES = { projects: 'btn-open-projects', schedule: 'btn-open-schedule', directory: 'btn-open-directory',
+                    galeria: 'btn-open-galeria' };
+  // LOS BOTONES DE CAPACIDAD SIGUEN A LAS BANDERAS DEL MODO (pedido del usuario, 2026-08-12).
+  // Los de código y los invasivos (Arduino, cámara, teléfono, ver la pantalla) sólo en Code y
+  // Cowork; el de imágenes y 3D sólo en Designe.
+  //
+  // El mapa es botón -> bandera, y no "botón -> lista de modos", a propósito: si fuera una lista
+  // de modos habría que acordarse de actualizarla cada vez que se crea uno -- y con Study y
+  // Science recién agregados, esa lista ya habría nacido incompleta. Atado a la bandera, un modo
+  // nuevo hereda el reparto correcto sin tocar esta línea.
+  // Los ids son los REALES del HTML, no los que uno adivinaría por la bandera: 'flag-computer-use'
+  // gobierna pantalla Y control (-s y -c van juntos porque son el mismo permiso partido en dos),
+  // y la cámara y el teléfono usan nombre en vez de letra.
+  // 'flag-x' (modo sin frenos) NO está en este mapa a propósito: es una decisión personal del usuario
+  // que vale en cualquier modo, igual que en el filtro de banderas del motor.
+  const BOTON_BANDERA = {
+    'flag-b': '-b',
+    'flag-g': '-g',
+    'flag-t': '-t',
+    'flag-computer-use': '-s',
+    'flag-webcam': '-V',
+    'flag-telefono': '-P',
+    'flag-datos': '-D',
+    'flag-a': '-a',
+  };
+  function pintarCapacidades(modo) {
+    const tiene = new Set(modo.banderas || []);
+    for (const [id, bandera] of Object.entries(BOTON_BANDERA)) {
+      const input = document.getElementById(id);
+      const fila = input && input.closest('.flag-toggle');
+      if (fila) fila.classList.toggle('hidden', !tiene.has(bandera));
+    }
+  }
+
+  function pintarPaneles(modo) {
+    const visibles = new Set(modo.paneles || Object.keys(PANELES));
+    for (const [clave, id] of Object.entries(PANELES)) {
+      const b = document.getElementById(id);
+      if (b) b.classList.toggle('hidden', !visibles.has(clave));
+    }
+  }
+
+  // SÓLO SE VE EL MODO ACTUAL (idea del usuario, 2026-08-12). Con cuatro fichas ya ocupaban media
+  // fila; con Study y Science serían seis y no entrarían. Ahora se ve en cuál estás y al tocarlo
+  // se despliegan los demás -- el mismo gesto que el "+", así la app tiene un solo patrón para
+  // "hay más cosas acá adentro" en vez de dos.
+  async function pintarFichas() {
+    const { modos, actual } = await window.mentisAPI.modosLista();
+    fichas.textContent = '';
+    const corto = (m) => m.titulo.replace(/^Mentis\s*/, '') || m.titulo;
+    const elegido = modos.find((m) => m.id === actual) || modos[0];
+
+    const actualBtn = document.createElement('button');
+    actualBtn.type = 'button';
+    actualBtn.className = 'modo-ficha elegido';
+    actualBtn.setAttribute('aria-haspopup', 'listbox');
+    actualBtn.setAttribute('aria-expanded', 'false');
+    actualBtn.title = elegido.descripcion;
+    actualBtn.textContent = corto(elegido);
+    fichas.appendChild(actualBtn);
+
+    const lista = document.createElement('div');
+    lista.className = 'modo-lista hidden';
+    lista.setAttribute('role', 'listbox');
+    for (const m of modos) {
+      if (m.id === actual) continue;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'modo-lista-item';
+      b.setAttribute('role', 'option');
+      const t = document.createElement('span'); t.className = 'modo-lista-titulo'; t.textContent = corto(m);
+      const d = document.createElement('span'); d.className = 'modo-lista-desc';   d.textContent = m.descripcion;
+      b.append(t, d);
+      b.addEventListener('click', async () => {
+        lista.classList.add('hidden');
+        const r = await window.mentisAPI.setModo(m.id);
+        if (!r || !r.ok) avisarEnLaConversacion(`No pude cambiar de modo: ${(r && r.error) || 'error desconocido'}`);
+      });
+      lista.appendChild(b);
+    }
+    fichas.appendChild(lista);
+
+    actualBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const abierto = !lista.classList.toggle('hidden');
+      actualBtn.setAttribute('aria-expanded', String(abierto));
+    });
+    document.addEventListener('click', (e) => {
+      if (!lista.classList.contains('hidden') && !fichas.contains(e.target)) {
+        lista.classList.add('hidden');
+        actualBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // La marca del cambio en la conversación. Es una línea del sistema, no un mensaje de Mentis:
+  // no lo dijo él, pasó.
+  function avisarEnLaConversacion(texto) {
+    const cont = document.getElementById('messages');
+    if (!cont) return;
+    const linea = document.createElement('div');
+    linea.className = 'modo-corte';
+    linea.textContent = texto;
+    cont.appendChild(linea);
+    cont.scrollTop = cont.scrollHeight;
+  }
+
+  function aplicar(modo, avisar) {
+    const anterior = modoActual;
+    modoActual = modo;
+    // El historial de la barra lateral sigue al modo: al cambiar, se repinta con las charlas de
+    // ESE modo. Va acá y no en el manejador del botón porque el modo también cambia por otras
+    // vías (al arrancar, desde el celular), y todas pasan por esta función.
+    MODO_ACTUAL_UI = modo && modo.id ? modo.id : null;
+    refreshConversationList().catch(() => {});
+    pintarLogotipo(modo);
+    pintarPaneles(modo);
+    pintarCapacidades(modo);
+    pintarFichas();
+    if (avisar && anterior && anterior.id !== modo.id) {
+      avisarEnLaConversacion(`— pasás a ${modo.titulo} —`);
+    }
+  }
+
+  // El aviso viene del proceso principal y no de la respuesta del setModo: así la ventana se
+  // entera aunque el cambio venga de otro lado (un atajo, la página del celular, un script).
+  if (window.mentisAPI.onModoCambio) window.mentisAPI.onModoCambio((modo) => aplicar(modo, true));
+
+  window.mentisAPI.modoActual().then((m) => aplicar(m, false)).catch(() => {});
+})();
+
 // Enviar (pedido del usuario, 2026-07-15: el boton de enviar se elimina del todo, ahora se manda
 // SOLO con Enter -- ver el listener de keydown mas abajo, que llama a esta misma funcion).
-function submitCurrentMessage() {
+// `porVoz` decide si Mentis va a CONTESTAR hablando. Se pasa desde el camino del dictado y queda
+// en false en todos los demás, que es lo que hace que escribir no dispare la voz.
+// La bandera se fija ACÁ, en el único punto por el que pasan los dos caminos, y no en cada lugar
+// que manda un mensaje: así no hay forma de agregar una vía nueva y olvidarse de apagarla.
+function submitCurrentMessage(porVoz = false) {
+  ultimoTurnoFueHablado = !!porVoz;
   const input = document.getElementById('message-input');
   sendCurrentMessage(input.value);
   input.value = '';
@@ -3187,6 +3609,9 @@ emergencyStopBtn.addEventListener('click', async () => {
 let mediaRecorder = null;
 let audioChunks = [];
 let voiceModeActive = false;
+// ¿El último mensaje lo mandaste hablando? De eso depende si Mentis contesta en voz alta.
+// Arranca en false: recién abierta la app, si escribís, Mentis no habla.
+let ultimoTurnoFueHablado = false;
 
 // --- dictado largo por TRAMOS (2026-07-30) ---
 // El stream del micrófono vive durante todo el mensaje; lo que se abre y cierra es el grabador.
@@ -3231,45 +3656,36 @@ function cerrarTramoYSeguir() {
 // Un solo cuerpo que cambia de tamaño, no dos instancias: el encuadre se recalcula solo con el
 // ResizeObserver, así que pasar de pantalla completa a un rincón de 132 px no requiere nada más.
 const zonaCentral = document.getElementById('zona-central');
-const cuerpoCanvas = document.getElementById('cuerpo-principal');
-const vozEstado = document.getElementById('voz-estado');
+// El canvas del cuerpo y su cartel se retiraron con el cuerpo digital (2026-08-11). El estado
+// que mostraba ese cartel ahora vive en la línea de estado, arriba del compositor.
 
-function montarCuerpoPrincipal() {
-  if (!cuerpoCanvas || !window.MentisCuerpo) return;
-  if (window.MentisCuerpo.get('principal')) return;
-  window.MentisCuerpo.montar('principal', cuerpoCanvas, { detalle: 'alto', estado: 'STANDBY' });
-}
-
-/** Sin conversación el cuerpo ocupa todo el cuadro; con una abierta, se queda con la columna
- *  izquierda y los mensajes toman la derecha (pedido del usuario, 2026-07-27). */
+/** Con conversación abierta se esconde la bienvenida y los mensajes toman todo el cuadro.
+ *
+ *  ANTES ESTA FUNCIÓN ACOMODABA EL CUERPO DIGITAL (2026-07-27). El cuerpo se retiró el
+ *  2026-08-11 y la función se quedó, porque el reparto que hacía sigue haciendo falta: es la
+ *  misma clase la que ahora decide si se ve la pantalla de bienvenida o la conversación. Se
+ *  conserva el nombre para no tocar los seis lugares que la llaman.
+ *
+ *  Es lo que hace que el compositor "se vaya para abajo" con el primer mensaje: en la bienvenida
+ *  está centrado con el saludo; con mensajes, la zona central crece y lo empuja al fondo. */
 function acomodarCuerpo(hayMensajes) {
   if (!zonaCentral) return;
-  // Una sola clase en el contenedor decide el reparto: las dos columnas son hermanas flex, así
-  // que basta con cambiar cuánto ocupa una para que la otra se acomode sola.
   zonaCentral.classList.toggle('con-mensajes', !!hayMensajes);
-}
-
-// El módulo del cuerpo es diferido: cuando este script corre, todavía no existe. El evento lo
-// avisa. Se intenta igual por si el módulo llegó primero (el orden no está garantizado).
-window.addEventListener('mentis-cuerpo-listo', montarCuerpoPrincipal);
-montarCuerpoPrincipal();
-
-if (cuerpoCanvas) {
-  // El núcleo ES el botón. En vez de duplicar la lógica de grabar/transcribir/mandar, se reenvía
-  // el click al botón de micrófono que ya hace todo eso: una sola implementación, y cualquier
-  // arreglo futuro vale para los dos lados.
-  cuerpoCanvas.addEventListener('click', () => micBtn.click());
-  cuerpoCanvas.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); micBtn.click(); }
-  });
+  const bienvenida = document.getElementById('bienvenida');
+  if (bienvenida) bienvenida.classList.toggle('hidden', !!hayMensajes);
+  const app = document.getElementById('app');
+  // La clase va también en #app porque el compositor es hermano de la zona central, no hijo: no
+  // puede reaccionar a una clase que vive más adentro que él.
+  if (app) app.classList.toggle('en-conversacion', !!hayMensajes);
 }
 
 // El cartel espeja el estado del panel de voz en vez de llevar su propio texto. Los mensajes
 // ("Escuchando...", "Transcribiendo...", "Escuché:...") ya se escriben en seis lugares del
 // flujo; duplicarlos sería garantizar que algún día queden desincronizados.
-if (voiceStatus && vozEstado && typeof MutationObserver !== 'undefined') {
+// El cartel bajo el núcleo desapareció con el cuerpo digital, pero la marca de "estás grabando"
+// sobre la zona central sigue haciendo falta, así que se conserva esa mitad del observador.
+if (voiceStatus && typeof MutationObserver !== 'undefined') {
   new MutationObserver(() => {
-    vozEstado.textContent = (voiceStatus.textContent || '').toLowerCase();
     if (zonaCentral) zonaCentral.classList.toggle('escuchando', micBtn.classList.contains('recording'));
   }).observe(voiceStatus, { childList: true, characterData: true, subtree: true });
 }
@@ -3290,8 +3706,21 @@ let tecladoDeEmergencia = false;
 // sigue necesitando reacomodar la pantalla.
 function aplicarModoVoz() {
   voiceModeActive = true;
-  messageInputEl.classList.toggle('hidden', voiceModeActive && !tecladoDeEmergencia);
-  voicePanel.classList.toggle('hidden', !voiceModeActive);
+  // EL CUADRO DE ESCRIBIR SE VE SIEMPRE (arreglado 2026-08-12).
+  //
+  // Esta línea escondía el textarea porque `voiceModeActive` está forzado a true desde el
+  // 2026-07-31: o sea que lo escondía SIEMPRE, salvo con el teclado de emergencia. Tenía sentido
+  // mientras el cuerpo digital era la forma principal de hablarle -- la pantalla era el núcleo y
+  // el texto estorbaba.
+  //
+  // Con el cuerpo retirado quedó al revés y roto: el usuario abría Mentis y no tenía dónde escribir.
+  // Ahora escribir es el camino principal y hablar es opcional (se activa con el micrófono, que
+  // además es lo único que hace que Mentis conteste hablando). El teclado nunca se esconde.
+  messageInputEl.classList.remove('hidden');
+  // El panel de voz sí se retira: su micrófono se mudó a la línea de estado y su cartel decía lo
+  // mismo que ahora dice esa línea. Dejarlo era repetir el estado en dos lugares, que es la forma
+  // segura de que algún día digan cosas distintas.
+  voicePanel.classList.add('hidden');
   if (!voiceModeActive) {
     _mc_stopRecordingIfActive();
     limpiarSubtitulos(0);
@@ -3427,7 +3856,7 @@ micBtn.addEventListener('click', async () => {
         voiceStatus.textContent = 'Escuché: "' + result.text.slice(0, 60) + '"';
         mostrarSubtitulo('usuario', result.text);
         messageInputEl.value = result.text;
-        submitCurrentMessage();
+        submitCurrentMessage(true);   // vino por micrófono: la respuesta se dice en voz alta
         setTimeout(() => {
           if (voiceModeActive) voiceStatus.textContent = 'Tocá para hablar';
         }, 2500);
@@ -4056,63 +4485,21 @@ async function speakSplashGreeting(text, onDone) {
 }
 
 function runStartupSplash() {
-  const overlay = document.getElementById('splash-overlay');
-  if (!overlay) { maybeShowOnboarding(); return; }
+  // EL SALUDO SIN PANTALLA DE ARRANQUE (2026-08-12).
+  //
+  // Antes esto levantaba un overlay que tapaba la app por lo menos 4 segundos, con el cuerpo
+  // digital adentro. Retirado el cuerpo, ese overlay pasó a ser un rectángulo negro: el usuario abría
+  // Mentis y veía 4 segundos de nada.
+  //
+  // Ahora la interfaz está a la vista desde el primer instante y el saludo suena ENCIMA. Se
+  // pierde el efecto de presentación y se gana poder usar la app en el segundo cero -- que es el
+  // intercambio correcto para algo que se abre todos los días.
+  //
+  // Lo que NO cambió: el saludo no espera al clima para arrancar. Si mentis-location.sh tarda,
+  // se saluda con la hora, que siempre está, y el clima se suma sólo si llegó a tiempo. Sin eso,
+  // Mentis se quedaba mudo justo en el momento en que se presenta.
+  maybeShowOnboarding();
 
-  // Fix 2026-07-15 (modo bandeja): esta funcion ahora puede correr mas de una vez en la misma
-  // pagina (ver mentis:replay-greeting mas abajo) -- si quedaron las clases de la vez anterior
-  // (fade-out/hidden), hay que sacarlas antes de arrancar de nuevo o el splash ni se ve.
-  overlay.classList.remove('fade-out', 'hidden');
-  // El logo dejo de ser una imagen con animaciones de CSS: ahora es el cuerpo digital, y
-  // "hablar" es un ESTADO suyo, no una clase. Si el modulo todavia no cargo (es diferido),
-  // esto no rompe nada -- el splash igual funciona, solo sin cuerpo.
-  cuerpoSetEstado('STANDBY');
-
-  // PISO DE DURACIÓN (pedido del usuario, 2026-07-27: "apenas lo logré ver").
-  // El splash ya esperaba el saludo completo -- medido, 5,58 s para un audio de 3,58 s -- pero
-  // el saludo mismo puede salir corto: si el clima no llega a tiempo, el texto pasa de "Buenos
-  // días, señor. Son las 10:45 y el clima hoy en Buenos Aires es de 18 grados, despejado" a
-  // "Buenos días, señor. Son las 10:45", que es la mitad de largo. Y si la voz falla del todo,
-  // el splash se cerraba casi al instante.
-  // Con este piso, el arranque dura SIEMPRE lo suficiente para ver el cuerpo, hable o no hable:
-  // lo que termina el splash es el último de los dos -- la voz o el piso.
-  const PISO_SPLASH_MS = 4000;
-  const arrancoEn = Date.now();
-
-  let finished = false;
-  // `forzado` = lo cortó el usuario con un click. El piso NO se le aplica: si toca la pantalla es
-  // porque quiere entrar ya, y hacerlo esperar sería exactamente lo contrario de lo que pidió.
-  const finishSplash = (forzado) => {
-    if (finished) return;
-    const falta = PISO_SPLASH_MS - (Date.now() - arrancoEn);
-    if (!forzado && falta > 0) { setTimeout(finishSplash, falta); return; }
-    finished = true;
-    cuerpoSetEstado('STANDBY');
-    overlay.classList.add('fade-out');
-    let revealed = false;
-    const reveal = () => {
-      if (revealed) return;
-      revealed = true;
-      overlay.classList.add('hidden');
-      overlay.removeEventListener('transitionend', reveal);
-      maybeShowOnboarding();
-    };
-    overlay.addEventListener('transitionend', reveal);
-    setTimeout(reveal, 900); // red de seguridad si transitionend no llega a disparar
-  };
-
-  // Salida rapida: un click en el splash lo saltea entero, para no dejar al usuario atrapado
-  // escuchando el saludo completo si tiene apuro.
-  overlay.addEventListener('click', () => {
-    window.speechSynthesis.cancel();
-    detenerAudioSplash();
-    finishSplash(true);
-  }, { once: true });
-
-  // El saludo NO espera al clima para empezar a sonar (2026-07-27). Antes, si mentis-location.sh
-  // tardaba, el splash se quedaba mudo ese tiempo y después decía una frase corta; el arranque
-  // parecía roto justo en el momento en que Mentis se presenta. Ahora habla enseguida con lo que
-  // tiene -- la hora, que siempre está -- y el clima se suma sólo si llegó a tiempo.
   const CLIMA_MAX_MS = 1500;
   const climaConPaciencia = Promise.race([
     window.mentisAPI.getLocationWeather().catch(() => null),
@@ -4120,7 +4507,8 @@ function runStartupSplash() {
   ]);
   climaConPaciencia.then((weather) => {
     cuerpoSetEstado('SPEAKING');
-    speakSplashGreeting(pickSplashGreeting(weather), finishSplash);
+    // El segundo argumento era el que cerraba el splash; ahora sólo devuelve el estado a reposo.
+    speakSplashGreeting(pickSplashGreeting(weather), () => cuerpoSetEstado('STANDBY'));
   });
 }
 

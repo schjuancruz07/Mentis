@@ -62,20 +62,22 @@ else
   _ok "nadie resucita #admin-panel cuando esta oculto"
 fi
 
-echo "== la unica excepcion, y que siga siendo la unica =="
-# #voz-estado se DESVANECE en vez de desaparecer: reserva su lugar debajo del nucleo para que el
-# cuerpo digital no salte. Necesita recuperar el display a mano.
-if grep -qE '#voz-estado\.hidden\s*\{[^}]*display:\s*block\s*!important' "$CSS"; then
-  _ok "#voz-estado conserva su display (se desvanece, no desaparece)"
+echo "== ya no hay ninguna excepcion, y que siga sin haberla =="
+# Habia UNA: #voz-estado se desvanecia en vez de desaparecer, para reservar su lugar debajo del
+# nucleo y que el cuerpo digital no saltara al cambiar de estado. El cuerpo se retiro el
+# 2026-08-11 y con el se fue el motivo, asi que la excepcion tambien: ahora la regla global vale
+# para todos sin peros, que es lo que siempre se quiso.
+if grep -qE '#voz-estado' "$CSS"; then
+  _mal "quedo CSS del cartel del cuerpo" "#voz-estado ya no existe en el HTML: si su regla sigue, es codigo muerto"
 else
-  _mal "#voz-estado conserva su display" "con la regla global se saldria del layout y el cuerpo saltaria"
+  _ok "no quedo CSS del cartel del cuerpo (se fue con el cuerpo digital)"
 fi
-# Si aparece una excepción nueva, que sea una decisión y no un accidente: este contador la caza.
+# Si aparece una excepcion nueva, que sea una decision y no un accidente: este contador la caza.
 n_excep="$(grep -cE '\.hidden\s*\{[^}]*display:\s*(block|flex|grid|inline)' "$CSS" || true)"
-if [ "$n_excep" -le 1 ]; then
-  _ok "hay a lo sumo UNA excepcion a la regla global (hay $n_excep)"
+if [ "$n_excep" -eq 0 ]; then
+  _ok "no hay ninguna excepcion a la regla global"
 else
-  _mal "hay a lo sumo UNA excepcion" "aparecieron $n_excep; cada una es un elemento que puede no ocultarse"
+  _mal "no hay excepciones a la regla global" "aparecieron $n_excep; cada una es un elemento que puede no ocultarse"
 fi
 
 echo "== el panel esta fuera de la barra lateral =="

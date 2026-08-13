@@ -61,7 +61,14 @@ function listConversations(convDir) {
     const firstJuan = entries.find((e) => e.role === 'usuario');
     const title = firstJuan ? firstJuan.text.slice(0, 60) : '(conversación vacía)';
     const stat = fs.statSync(filePath);
-    return { id, title, updatedAt: stat.mtime.toISOString(), entryCount: entries.length };
+    // EL MODO DE LA CONVERSACIÓN (2026-08-12): el de la primera entrada que lo tenga, o sea aquel
+    // en el que arrancó. Las conversaciones anteriores a esta fecha no traen el campo y quedan
+    // con modo null: la app las junta en "Antes de los modos" en vez de meterlas en uno cualquiera.
+    // Inventarles un modo sería peor que no tenerlo -- aparecerían mezcladas en un modo donde
+    // nunca estuvieron.
+    const conModo = entries.find((e) => e.modo);
+    return { id, title, updatedAt: stat.mtime.toISOString(), entryCount: entries.length,
+             modo: conModo ? conModo.modo : null };
   });
   items.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   return items;

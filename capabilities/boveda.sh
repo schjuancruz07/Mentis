@@ -36,9 +36,24 @@ _kai_search_one() {
 # Busca en AMBOS índices (ecosistema + bóveda de notas) y devuelve los resultados crudos
 # combinados -- sin llamar al modelo. Si un índice no existe todavía, nv-search.sh falla
 # silenciosamente para ESE índice (no rompe el otro).
+#
+# MENTIS_CORPUS_DIR (2026-08-12, modo Study): si viene seteada, se busca SOLO ahí y no se toca
+# ni el ecosistema ni la bóveda. No es una preferencia sino la definición del modo Study: un
+# corpus cerrado que igual recibe el código de Mentis en cada turno no es un corpus cerrado, y
+# la cita apuntaría a un archivo que el usuario nunca puso como material de estudio. Es un reemplazo
+# y NO una fuente más: por eso corta antes en vez de agregarse a las otras dos.
 _kai_search_raw() {
   local query="$1" topk="${2:-4}"
   local eco vault combined=""
+  if [ -n "${MENTIS_CORPUS_DIR:-}" ]; then
+    if [ ! -d "$MENTIS_CORPUS_DIR" ]; then
+      KAI_ULTIMO_ERROR="el corpus de estudio no existe todavia ($MENTIS_CORPUS_DIR): sumale material con '/estudiar sumar <archivo>'"
+      printf ''
+      return 0
+    fi
+    _kai_search_one "$MENTIS_CORPUS_DIR" "$query" "$topk"
+    return 0
+  fi
   eco="$(_kai_search_one "$ECOSYSTEM_DIR" "$query" "$topk")"
   [ -n "${eco// }" ] && combined="$eco"
   if [ -d "$VAULT_DIR" ]; then

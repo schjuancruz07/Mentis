@@ -1,40 +1,60 @@
-/* Paleta "cuerpo digital" (pedido del usuario, 2026-07-26): naranja, negro y gris Gainsboro.
-   Reemplaza a la anterior "bitácora de campo" (verde pino + cuero + oro).
-   Los valores NO son elegidos a ojo: son los mismos del cuerpo digital 3D que ahora es la cara
-   de Mentis (ver cuerpo-digital.js). El naranja es su núcleo, el negro es su fondo y el rojo es
-   su estado de alerta. Así la interfaz y el logo son un solo sistema visual y no dos cosas que
-   conviven de casualidad. */
+/* Paleta "Mentis terracota" (pedido del usuario, 2026-08-10): terracota, blanco y negro.
+   Reemplaza a la "cuerpo digital" (naranja + negro + Gainsboro), que a su vez habia reemplazado a
+   "bitácora de campo" (verde pino + cuero + oro).
+   Los valores NO son elegidos a ojo: son los mismos del cuerpo digital 3D que es la cara de Mentis
+   (ver cuerpo-digital.js). El terracota es su núcleo, el negro cálido es su fondo y el rojo
+   saturado es su estado de alerta. Así la interfaz y el logo son un solo sistema visual y no dos
+   cosas que conviven de casualidad.
+
+   ESTOS VALORES SON LOS DE ARRANQUE, NO LOS DEFINITIVOS: apenas carga temas.js, aplicarTema() pisa
+   todo esto con la paleta que el usuario tenga guardada. Existen igual porque son lo que se ve en
+   la primera pintada, antes de que corra una linea de JavaScript. Cuando quedaron desfasados (el
+   acento ya era terracota pero el fondo seguia en el negro azulado viejo) el arranque mostraba una
+   combinacion que no era ningun tema -- medio segundo de una paleta que no existe. Si se cambia el
+   tema por defecto en temas.js, estos valores tienen que acompañarlo. */
 :root {
-  --fondo: #050507;
-  --principal: #141418;
-  --secundario: #1c1c22;
-  --texto: #dcdcdc;
-  --texto-dim: #8b8b93;
-  --acento: #ff6600;
-  --acento-soft: rgba(255, 102, 0, 0.16);
-  --peligro: #ff1100;
-  --peligro-soft: rgba(255, 17, 0, 0.16);
-  --border: #2e2e36;
-  --bubble-usuario: #1f1f26;
+  --fondo: #141413;
+  --principal: #1f1e1d;
+  --secundario: #2a2927;
+  --texto: #faf9f5;
+  --texto-dim: #b1ada1;
+  --acento: #d97757;
+  --acento-soft: rgba(217, 119, 87, 0.16);
+  /* El acento en piezas, para poder armar rgba() con transparencias que --acento (hex) no
+     permite: destellos, resplandores y el mapa de calor. Cada tema define el suyo en temas.js;
+     este es el de fabrica, el que se ve antes de que cargue el tema guardado. */
+  --acento-rgb: 217, 119, 87;
+  --peligro: #ff453a;
+  --peligro-soft: rgba(255, 69, 58, 0.16);
+  --border: #33322f;
+  --bubble-usuario: #232220;
   /* Sombra negra plena: con un fondo casi negro, cualquier tinte de color se ve como una mancha
      en vez de como profundidad. */
   --shadow-tonal: 0 8px 28px rgba(0, 0, 0, 0.65);
   --radius: 2px;
-  /* TIPOGRAFIA COURIER EN TODA LA APP (pedido del usuario, 2026-08-07).
-     Las tres variables apuntan a la misma familia a proposito: el pedido fue "un nuevo tipo de
-     letra para toda la app", no "una fuente distinta por zona". Se dejan las tres en vez de
-     colapsarlas en una sola porque todo el CSS ya las usa por separado (--font-serif en las
-     burbujas de Mentis, --font-mono en el preview, --font-sans en el resto), y manteniendo los
-     tres nombres se puede volver atras -- o darle a una zona su propia letra otra vez -- tocando
-     una linea y nada mas.
-     Courier New viene con Windows y macOS; el 'Courier' suelto y el 'monospace' final cubren
-     Linux y el celular, donde puede no estar instalada.
-     AVISO HONESTO, por si esto se lee dentro de seis meses: Courier es monoespaciada y de trazo
-     fino. Ocupa mas ancho por caracter y en pantalla se lee peor que una sans moderna. Se eligio
-     igual, sabiendolo, porque es la estetica que el usuario quiere. */
-  --font-sans: "Courier New", Courier, monospace;
-  --font-serif: "Courier New", Courier, monospace;
-  --font-mono: "Courier New", Courier, monospace;
+  /* TIPOGRAFIA GOOGLE SANS FLEX EN TODA LA APP (pedido del usuario, 2026-08-10).
+     Reemplaza a Courier New, que estuvo tres dias. El pedido ahora es explicito: "la nueva letra
+     es Google Sans Flex para toda la app". Las tres variables apuntan a la misma familia a
+     proposito -- el CSS ya las usa por separado (--font-serif en las burbujas de Mentis,
+     --font-mono en el preview, --font-sans en el resto) y mantener los tres nombres deja volver
+     atras, o darle a una zona su propia letra, tocando una linea.
+
+     ES UNA FUENTE VARIABLE: un solo archivo cubre de 100 a 900 de peso. Por eso no hay que bajar
+     un woff2 por cada grosor y por eso 'font-weight: 600' funciona aunque no exista un archivo
+     "600" -- lo interpola la fuente.
+
+     LOS RESPALDOS NO SON DECORATIVOS: si el woff2 local no carga (archivo movido, empaquetado mal
+     armado), la app cae a la sans del sistema y se ve rara pero legible. Sin la cadena de
+     respaldo caeria a Times New Roman, que es serif, y toda la interfaz se veria rota.
+
+     --font-marca ES OTRA COSA Y NO SE TOCA DESDE ACA: es la letra del LOGOTIPO del header, la
+     unica parte de la app que cambia de fuente segun el modo (Playfair para Designe, Silkscreen
+     para Code, Plus Jakarta para Cowork). El valor de abajo es el del modo Mentis a secas; los
+     demas modos la pisan. Ver app/bajar-fuentes.js para las familias empaquetadas. */
+  --font-sans: "Google Sans Flex", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-serif: "Google Sans Flex", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Google Sans Flex", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-marca: "Google Sans Flex", "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 
@@ -110,24 +130,170 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    color principal, no un gris neutro -- así el verde sigue siendo legible
    incluso desenfocado. */
 #sidebar { width: 240px; background: var(--principal); border-right: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; }
-#btn-new-chat { background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius); padding: 10px; cursor: pointer; font-weight: 600; }
+/* EL ACENTO ES DETALLE (pedido del usuario, 2026-08-12). Este botón era un bloque naranja macizo y
+   era lo más pesado de toda la pantalla: lo primero que veías al abrir Mentis no era la
+   conversación, era un rectángulo naranja. Ahora el acento vive en el texto y el borde. Sigue
+   siendo el botón más importante de la columna -- por posición y por ser el único con acento --
+   sin gritar. */
+#btn-new-chat {
+  background: transparent; color: var(--acento); border: 1px solid var(--acento);
+  border-radius: var(--radius); padding: 10px; cursor: pointer; font-weight: 600;
+  transition: background 0.15s ease;
+}
+#btn-new-chat:hover { background: var(--acento-soft); }
 #btn-new-chat:disabled { opacity: 0.4; cursor: not-allowed; }
 #btn-new-chat:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
 #conversation-list { padding: 0; margin-top: 12px; overflow-y: auto; flex: 1; }
 #main { flex: 1; display: flex; flex-direction: column; position: relative; }
 #messages { flex: 1; overflow-y: auto; padding: 20px; }
 
+/* ===== COLUMNA DE LECTURA (2026-08-12, pedido del usuario: "el cuadro de texto es demasiado grande
+   a lo largo y me gustaría que siempre se mantenga en el centro dejando un margen") =====
+   Una sola medida gobierna el ancho de los mensajes Y del cuadro de texto, y los dos se centran
+   sobre el MISMO eje. Antes el composer ocupaba el ancho completo de la ventana mientras las
+   burbujas llegaban al 70%: en una pantalla ancha eso deja el cuadro de texto desalineado de
+   todo lo que hay arriba, que es lo que se siente como "demasiado largo".
+   72ch es la medida de lectura cómoda de siempre; el tope en px evita que en un monitor muy
+   ancho la línea se vuelva infinita.
+   Se aplica a los hijos REALES del composer (#composer-main y #attach-preview-row) en vez de
+   envolver todo en un div nuevo: el renderer busca esos ids por getElementById y meterle un
+   wrapper en el medio es tocar el DOM sin necesidad. El borde superior del composer sigue
+   cruzando toda la ventana -- es el borde de una zona, no de la columna -- pero su contenido
+   se centra sobre el mismo eje que los mensajes. */
+:root { --ancho-lectura: min(820px, 72ch); }
+#messages > *,
+#composer-main,
+#attach-preview-row { max-width: var(--ancho-lectura); margin-left: auto; margin-right: auto; }
+/* La línea de estado arranca donde arranca la columna: si "listo" empieza 130px a la izquierda
+   del cuadro de texto, el ojo lee dos columnas distintas donde hay una sola. No lleva max-width
+   ni margin auto porque sus hijos son tres spans en línea -- estirarlos rompe la fila; lo que se
+   corre es el borde izquierdo, con el mismo cálculo que produce el centrado de arriba. */
+#linea-estado { padding-left: max(0px, calc((100% - var(--ancho-lectura)) / 2)); }
+
 #main-header { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; }
+/* El logotipo del header es el UNICO lugar de la app que cambia de letra segun el modo, y por eso
+   usa --font-marca en vez de --font-sans. El resto de la interfaz es Google Sans Flex siempre.
+   El tamaño y el interletrado tambien los pisa cada modo (Silkscreen es pixelada y necesita mas
+   aire; Playfair es cursiva y necesita menos), asi que estan como variables. */
 #header-wordmark {
-  font-family: var(--font-serif); font-size: 13px; font-weight: 700; letter-spacing: 0.18em;
+  font-family: var(--font-marca);
+  font-size: var(--marca-tamano, 13px);
+  font-weight: var(--marca-peso, 700);
+  letter-spacing: var(--marca-espaciado, 0.18em);
   color: var(--acento); user-select: none; cursor: default;
+  transition: font-size 0.2s ease, letter-spacing 0.2s ease;
+}
+
+/* ===== MOSTRAR/OCULTAR LA BARRA LATERAL (2026-08-10) =====
+   Se oculta con width:0 + overflow:hidden y NO con display:none, a propósito: display:none saca
+   el elemento del árbol de layout y, cuando vuelve, el scroll de la lista de chats vuelve arriba
+   de todo. Con el ancho en cero el panel sigue existiendo y conserva dónde estabas leyendo. */
+#btn-sidebar {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 26px; margin-right: 4px;
+  background: transparent; border: 0; border-radius: var(--radius);
+  color: var(--texto-dim); cursor: pointer; flex: none;
+}
+#btn-sidebar:hover { background: var(--secundario); color: var(--texto); }
+/* La columna del ícono se vacía cuando el panel está oculto: el botón muestra el estado, no sólo
+   la acción. Un botón que se ve igual en los dos estados obliga a mirar la pantalla para saber
+   qué va a pasar. */
+#app.sin-sidebar #btn-sidebar.relleno { display: none; }
+#app.sin-sidebar #sidebar {
+  width: 0; min-width: 0; padding-left: 0; padding-right: 0;
+  border-right: 0; overflow: hidden;
+}
+#sidebar { transition: width 0.16s ease, padding 0.16s ease; }
+
+/* ===== PREVISUALIZADOR A PANTALLA COMPLETA (2026-08-10) =====
+   Cubre la zona de trabajo, no la ventana entera: la barra de título propia y la barra lateral
+   siguen accesibles. Un "pantalla completa" que tapa los controles de la ventana deja al usuario
+   sin forma obvia de salir salvo adivinar la tecla. */
+/* ANCLADO A LA DERECHA, no cubriendo todo (corregido 2026-08-11). La primera versión usaba
+   `inset: 0`, que estira el panel contra los cuatro bordes -- y como el borde izquierdo del área
+   de trabajo está pegado a la barra lateral, el panel "se iba para la izquierda" al agrandarse.
+   El previsualizador vive a la derecha; agrandarlo tiene que hacerlo CRECER hacia la izquierda,
+   no MUDARSE. Con `left: auto` el borde derecho queda fijo y sólo se mueve el izquierdo, que es
+   lo que el ojo espera de un botón de agrandar. */
+#status-panel.pantalla-completa {
+  position: absolute; top: 0; right: 0; bottom: 0; left: auto;
+  width: min(78%, 900px);
+  z-index: 30;
+  margin: 0; border-radius: 0; max-height: none;
+  display: flex; flex-direction: column;
+  background: var(--principal);
+  border-left: 1px solid var(--border);
+}
+#status-panel.pantalla-completa #preview-content {
+  flex: 1; overflow: auto; font-size: 13px; line-height: 1.6;
+}
+#btn-status-full {
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 0; padding: 4px; border-radius: var(--radius);
+  color: var(--texto-dim); cursor: pointer;
+}
+#btn-status-full:hover { background: var(--secundario); color: var(--texto); }
+
+/* ===== LA LETRA DEL LOGOTIPO CAMBIA CON EL MODO (2026-08-10) =====
+   Es el único lugar de la app que cambia de tipografía. Todo lo demás es Google Sans Flex,
+   siempre. El `data-modo` lo pone el renderer sobre <html>, igual que `data-tema`.
+
+   POR QUE LA LETRA Y NO EL COLOR: la primera versión de esto cambiaba también el tono del acento
+   por modo (claro / medio / oscuro dentro de la familia terracota). Se midió y no sirve: el
+   terracota claro (#e28e77) sobre el tema claro da 2.29 de contraste, por debajo del mínimo de
+   3.0 -- o sea que en el tema claro dos de los cuatro modos habrían quedado con el logotipo
+   lavado. La letra distingue mucho más (una pixelada contra una serif cursiva no se confunden ni
+   de reojo) y no toca el contraste de nada.
+
+   Los tamaños no son capricho: Silkscreen es pixelada y necesita aire o se empasta; Playfair es
+   cursiva y necesita menos. Sin esto los cuatro logotipos ocupan anchos muy distintos y el
+   header se mueve al cambiar de modo. */
+:root[data-modo="code"] {
+  --font-marca: "Silkscreen", "Courier New", monospace;
+  --marca-tamano: 12px; --marca-espaciado: 0.10em; --marca-peso: 700;
+}
+:root[data-modo="designe"] {
+  --font-marca: "Syne", "Google Sans Flex", sans-serif;
+  --marca-tamano: 14px; --marca-espaciado: 0.12em; --marca-peso: 800;
+}
+:root[data-modo="designe"] #header-wordmark.cursiva {
+  font-family: "Playfair Display", Georgia, serif;
+  font-style: italic; font-weight: 800; font-size: 17px; letter-spacing: 0;
+  text-transform: none; margin-left: 3px;
+}
+:root[data-modo="cowork"] {
+  --font-marca: "Plus Jakarta Sans", "Google Sans Flex", sans-serif;
+  --marca-tamano: 14px; --marca-espaciado: 0.01em; --marca-peso: 800;
+}
+/* Science: Michroma (2026-08-12, referencia visual del usuario). Es geometrica, ancha y de un solo
+   peso -- por eso va en 400 y no en 700 como las demas: no tiene otro peso, y pedirle negrita la
+   deja sintetizada y sucia. El interletrado es el mas grande de los seis a proposito: la letra de
+   la referencia se define por el AIRE entre caracteres, no por su dibujo. Y el tamaño baja a 11px
+   porque Michroma dibuja muy ancho: a 14px "Mentis Science" se comia el header. */
+:root[data-modo="science"] {
+  --font-marca: "Michroma", "Google Sans Flex", sans-serif;
+  --marca-tamano: 11px; --marca-espaciado: 0.30em; --marca-peso: 400;
+}
+
+
+/* La marca del cambio de modo dentro de la conversación. Es una línea del sistema, no un mensaje
+   de Mentis: no lo dijo él, pasó. Por eso va centrada, chica y sin burbuja -- si pareciera algo
+   que dijo Mentis, quedaría en el historial como si fuera parte de la charla. */
+.modo-corte {
+  text-align: center; font-size: 11px; color: var(--texto-dim);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin: 18px auto; padding: 0 12px; max-width: 80%;
 }
 /* Easter egg sutil (pedido del usuario, mejora visual 2026-07-14): clic sostenido en el wordmark
    dispara una chispa breve. Clase toggleada por JS, ver renderer.js. */
 #header-wordmark.spark { animation: mentis-wordmark-spark 0.5s ease-out; }
 @keyframes mentis-wordmark-spark {
   0% { text-shadow: none; }
-  40% { text-shadow: 0 0 6px var(--acento), 0 0 16px rgba(255, 102, 0, 0.8); }
+  /* El segundo resplandor usaba el naranja #ff6600 escrito a mano. Con el tema terracota eso
+     dejaba una chispa naranja sobre un logotipo terracota -- dos colores distintos en el mismo
+     efecto. Ahora los dos salen del acento del tema, asi que la chispa acompaña a cualquier
+     paleta que se elija. */
+  40% { text-shadow: 0 0 6px var(--acento), 0 0 16px var(--acento-soft); }
   100% { text-shadow: none; }
 }
 /* Badge de proyecto (pedido del usuario, 2026-07-13): cuando la conversación activa pertenece a un
@@ -247,6 +413,32 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   background: var(--secundario); border: 1px solid var(--border);
   border-radius: var(--radius); z-index: 5; overflow: hidden; }
 #status-panel.collapsed { display: none; }
+
+/* ===== EL PANEL YA NO TAPA LOS MENSAJES (2026-08-12) =====
+   el usuario: "la barra de previsualización es demasiado grande, incluso tanto que tapa los mensajes".
+   Tapaba porque es `position: absolute` sobre la zona de trabajo: flota, así que el chat nunca
+   se enteró de que había algo encima. En vez de achicarlo (que sólo tapa menos), la zona de
+   trabajo se corre: el panel pasa a ocupar un lugar propio y la conversación se angosta mientras
+   está abierto.
+   Va con `:has()` y no con una clase puesta desde el JS a propósito: el panel se abre y se
+   cierra desde CUATRO lugares distintos del renderer, y una clase espejo habría que mantenerla
+   sincronizada en los cuatro (y en el próximo). `:has()` lee el estado real del DOM, así que no
+   puede desincronizarse. Electron 43 = Chromium moderno, lo soporta de sobra.
+   El ancho está en una variable porque lo usan tres reglas: cambiarlo en un solo lado. */
+:root { --ancho-panel-estado: 384px; }
+#main:has(#status-panel:not(.collapsed)) #zona-central,
+#main:has(#status-panel:not(.collapsed)) #composer,
+#main:has(#status-panel:not(.collapsed)) #linea-estado {
+  padding-right: var(--ancho-panel-estado);
+  transition: padding-right 0.16s ease;
+}
+#zona-central, #composer, #linea-estado { transition: padding-right 0.16s ease; }
+/* A pantalla completa el panel SÍ tiene que cubrir: es lo que el usuario pidió el 2026-08-10 y ahí el
+   chat no se lee de todos modos. Sin esta excepción, el contenido se correría 384px y además
+   quedaría tapado por un panel del 78%. */
+#main:has(#status-panel.pantalla-completa) #zona-central,
+#main:has(#status-panel.pantalla-completa) #composer,
+#main:has(#status-panel.pantalla-completa) #linea-estado { padding-right: 0; }
 /* Sin tabs (pedido del usuario, 2026-07-13, sacó el panel "Tareas"): una sola sección,
    "Previsualización", con su etiqueta fija y el botón de cerrar. */
 #status-tabs {
@@ -481,10 +673,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .question-submit:focus-visible,.question-option:has(input:focus-visible) { outline: 2px solid var(--acento); outline-offset: 1px; }
 .question-submit:disabled,.question-option:has(input:disabled),.question-custom-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-#logs-panel { border-top: 1px solid var(--border); background: #080a08; }
-#logs-panel.collapsed #logs-content { display: none; }
 #logs-content { font-family: var(--font-mono); max-height: 140px; overflow-y: auto; margin: 0; padding: 8px 14px; font-size: 12px; color: var(--texto-dim); }
-#btn-toggle-logs { background: none; border: none; color: var(--texto-dim); cursor: pointer; padding: 8px 14px; }
 /* Composer: la fila principal (textarea + cluster de acciones) queda ancla en la esquina
    inferior derecha -- el textarea achicado a la izquierda, todos los controles (flags MCP,
    adjuntar, enviar) agrandados y agrupados a la derecha, alineados abajo. */
@@ -564,10 +753,13 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #voice-panel.hidden { display: none; }
 #btn-mic {
-  width: 48px; height: 48px; border-radius: 50%; flex: 0 0 auto;
-  background: var(--principal); color: var(--texto); border: 2px solid var(--acento);
+  width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
+  background: transparent; color: var(--texto-dim); border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
+#btn-mic svg { width: 18px; height: 18px; }
+#btn-mic:hover { color: var(--acento); border-color: var(--acento); }
 #btn-mic.recording { background: var(--peligro); border-color: var(--peligro); color: var(--fondo); animation: mentis-mic-pulse 1.4s ease-in-out infinite; }
 #btn-mic:disabled { opacity: 0.6; cursor: wait; }
 #btn-mic:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
@@ -587,10 +779,40 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    9 elementos -- la 2da fila tiene 4 en vez de 5 (un hueco al final), pero NO un icono huerfano
    solo en una 3ra fila, que era el problema real que se evitó acá. Se deja en 5 columnas
    (no se achica a 3x3) para no angostar el cluster y no correr el textarea de lugar. */
+/* ANCLADO AL "+" Y EN FORMATO LISTA (corregido 2026-08-12).
+   La primera versión lo pegaba a `left: 12px` del área principal, o sea al borde izquierdo de la
+   pantalla, mientras el "+" vive abajo a la derecha: el menú aparecía lejísimo de lo que tocaste.
+   Ahora se ancla al botón (right/bottom) y sube desde ahí.
+   Y deja de ser una grilla de cuadraditos: es una lista de texto con el ícono al costado, como el
+   menú que mostró el usuario. Un ícono suelto obliga a adivinar qué hace; el texto lo dice. */
 #action-cluster {
-  display: grid; grid-template-columns: repeat(5, 48px); grid-auto-rows: 48px; gap: 8px;
-  justify-items: center; align-items: center; flex: 0 0 auto;
+  position: absolute; bottom: 58px; right: 0; z-index: 35;
+  display: flex; flex-direction: column; gap: 1px;
+  min-width: 232px; max-height: 60vh; overflow-y: auto;
+  background: var(--principal); border: 1px solid var(--border);
+  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-tonal);
 }
+/* Cada capacidad pasa de cuadrado de 48px a fila de lista. Se pisan las reglas de.flag-toggle en
+   vez de reescribir los diez controles: son los mismos nodos, con los mismos ids y listeners. */
+#action-cluster.flag-toggle {
+  width: auto; height: auto; justify-content: flex-start; gap: 10px;
+  padding: 8px 10px; border: 0; border-radius: 8px;
+  font-family: var(--font-sans); font-size: 13px; color: var(--texto);
+}
+#action-cluster.flag-toggle:hover { background: var(--secundario); }
+#action-cluster.flag-toggle svg { width: 18px; height: 18px; flex: none; color: var(--texto-dim); }
+#action-cluster.flag-toggle.etiqueta { flex: 1; text-align: left; }
+/* Prendido: el acento va en un puntito a la derecha, no pintando la fila entera. Con cinco
+   encendidas, cinco filas naranjas serían el menú entero de color -- justo lo que el usuario pidió
+   sacar. El punto se ve igual de rápido y no compite con el texto. */
+#action-cluster.flag-toggle:has(input:checked) { background: transparent; color: var(--texto); }
+#action-cluster.flag-toggle:has(input:checked) svg { color: var(--acento); }
+#action-cluster.flag-toggle:has(input:checked)::after {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--acento); flex: none; margin-left: 4px;
+}
+#action-cluster.flag-toggle-danger:has(input:checked) svg { color: var(--peligro); }
+#action-cluster.flag-toggle-danger:has(input:checked)::after { background: var(--peligro); }
 .flag-toggle, #btn-attach {
   display: inline-flex; align-items: center; justify-content: center;
   width: 48px; height: 48px; border-radius: var(--radius);
@@ -600,14 +822,20 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Tamaño de ícono más cómodo (pedido del usuario, 2026-07-13, calibrado contra su referencia
    visual) -- las celdas crecieron a 48px, el ícono acompaña en vez de quedar chico y perdido. */
 .flag-toggle svg, #btn-attach svg { width: 22px; height: 22px; }
+/* EL ACENTO ES DETALLE, NO RELLENO (pedido del usuario, 2026-08-12: "el naranja debería ser de
+   detalles y se ve más de lo que debería"). Un interruptor prendido se marca con el borde y el
+   color del ícono sobre un fondo apenas teñido. Pintar el cuadrado entero hacía que, con varios
+   encendidos, el acento dejara de acentuar nada -- era el color dominante de la pantalla. */
 .flag-toggle:has(input:checked) {
-  color: var(--fondo); background: var(--acento); border-color: var(--acento);
+  color: var(--acento); background: var(--acento-soft); border-color: var(--acento);
 }
 .flag-toggle:has(input:focus-visible) { outline: 2px solid var(--acento); outline-offset: 2px; }
 /* "Modo sin frenos": mismo control que los demas toggles, pero en rojo (no dorado) para que
    se note a simple vista que es un interruptor distinto -- desactiva una proteccion, no
    habilita una capacidad mas. */
 .flag-toggle-danger:hover { border-color: var(--peligro); color: var(--peligro); }
+/* El de "sin frenos" SÍ se queda pintado entero, y es la excepción a propósito: es el único que
+   desactiva una protección en vez de habilitar una capacidad, y tiene que gritar. */
 .flag-toggle-danger:has(input:checked) {
   color: var(--fondo); background: var(--peligro); border-color: var(--peligro);
 }
@@ -622,8 +850,8 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   justify-content: center; color: var(--texto-dim);
 }
 @keyframes mentis-breathe {
-  0%, 100% { filter: drop-shadow(0 0 14px rgba(255, 102, 0, 0.45)) drop-shadow(0 0 34px rgba(255, 102, 0, 0.25)); }
-  50% { filter: drop-shadow(0 0 20px rgba(255, 102, 0, 0.75)) drop-shadow(0 0 46px rgba(255, 102, 0, 0.45)); }
+  0%, 100% { filter: drop-shadow(0 0 14px rgba(var(--acento-rgb), 0.45)) drop-shadow(0 0 34px rgba(var(--acento-rgb), 0.25)); }
+  50% { filter: drop-shadow(0 0 20px rgba(var(--acento-rgb), 0.75)) drop-shadow(0 0 46px rgba(var(--acento-rgb), 0.45)); }
 }
 @keyframes mentis-bubble-in {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
@@ -652,8 +880,8 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .usage-stat-label { font-size: 10px; color: var(--texto-dim); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
 .usage-heatmap { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; width: 100%; }
 .usage-heatmap-cell { aspect-ratio: 1; border-radius: 2px; background: var(--secundario); border: 1px solid var(--border); }
-.usage-heatmap-cell.level-1 { background: rgba(255, 102, 0, 0.28); border-color: transparent; }
-.usage-heatmap-cell.level-2 { background: rgba(255, 102, 0, 0.55); border-color: transparent; }
+.usage-heatmap-cell.level-1 { background: rgba(var(--acento-rgb), 0.28); border-color: transparent; }
+.usage-heatmap-cell.level-2 { background: rgba(var(--acento-rgb), 0.55); border-color: transparent; }
 .usage-heatmap-cell.level-3 { background: var(--acento); border-color: transparent; }
 .usage-stats-empty { font-size: 12px; color: var(--texto-dim); text-align: center; font-family: var(--font-sans); }
 .usage-stats-costs {
@@ -753,24 +981,17 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 /* Brasa/ascua en vez de spinner genérico (pedido del usuario, mejora visual 2026-07-14): un
    parpadeo tenue de brillo, coherente con la estética de fogata, en vez de rotación mecánica. */
-/* El indicador de "pensando" pasó de una imagen a un canvas con el cuerpo digital (2026-07-27).
-   Un poco más grande que el logo que reemplaza -- a 26px el núcleo era una mancha -- y sin la
-   animación de brasa: el latido ahora lo pone el propio cuerpo, en estado PROCESSING. */
-#thinking-cuerpo {
-  width: 38px; height: 38px;
-  display: block; flex: 0 0 auto;
-}
 #thinking-indicator img {
   width: 26px; height: 26px;
   animation: mentis-ember 1.4s ease-in-out infinite;
 }
 #thinking-indicator #thinking-timer {
   font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 8px rgba(255, 102, 0, 0.55);
+  text-shadow: 0 0 8px rgba(var(--acento-rgb), 0.55);
 }
 @keyframes mentis-ember {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 102, 0, 0.35)); }
-  50% { filter: drop-shadow(0 0 11px rgba(255, 102, 0, 0.85)); }
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(var(--acento-rgb), 0.35)); }
+  50% { filter: drop-shadow(0 0 11px rgba(var(--acento-rgb), 0.85)); }
 }
 
 #modal-overlay {
@@ -1117,17 +1338,6 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .cm-row-form-actions.cm-save:hover { filter: brightness(1.1); }
 .cm-row-form-actions.cm-remove:hover { color: var(--peligro); border-color: var(--peligro); }
 
-/* Splash de arranque (pedido del usuario, 2026-07-15): tapa TODA la interfaz con un fondo liso
-   (nada de la app visible atras) mientras el logo "habla" el saludo con hora/clima -- z-index
-   por encima de cualquier otra cosa (modales incluidos, hasta ~210) porque tiene que ser
-   literalmente lo primero que se ve. Se desvanece con opacity (fade-out) recien cuando termina
-   de hablar, y solo AHI se revela la interfaz real (ver runStartupSplash en renderer.js). */
-#splash-overlay {
-  position: fixed; inset: 0; background: var(--fondo); z-index: 500;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.6s ease-out;
-}
-#splash-overlay.fade-out { opacity: 0; }
 #splash-overlay.hidden { display: none; }
 /* El cuerpo digital ocupa el lugar del logo. Grande en el splash porque es la presentación de
    Mentis; el pulso y el "hablar" ya no son animaciones de CSS sino estados del propio cuerpo 3D
@@ -1162,14 +1372,6 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Lo que dice Mentis, en el naranja del cuerpo: es la voz que estás escuchando. */
 #subtitulo-mentis { color: var(--acento); font-weight: 500; }
 
-/* El saludo va a ventana completa (pedido del usuario, 2026-07-27: "dale pantalla completa").
-   Se puede porque el encuadre ya no depende del tamaño: la cámara se aleja según la forma del
-   canvas, así que el cuerpo entra entero tanto acá como en un rincón de 38 px. */
-#splash-cuerpo {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
 
 /* ===== ZONA CENTRAL: el cuerpo digital vive en el cuadro de los mensajes (2026-07-27) =====
    Reemplaza al overlay a pantalla completa de la Fase 5. el usuario lo pidió explícito: el cuerpo va
@@ -1181,57 +1383,15 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    que el texto pasaba por encima del núcleo. */
 #zona-central { flex: 1; display: flex; min-height: 0; }
 
-#columna-cuerpo {
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  min-width: 0;
-  /* Sin esto, al aparecer los subtítulos el contenido de la columna excede su alto y se DESBORDA
-     hacia abajo, encima del cuadro de botones -- que es exactamente el problema que vinimos a
-     resolver, sólo que desde adentro. Con overflow:hidden y min-height:0 la columna contiene lo
-     suyo y el núcleo cede el espacio que hagan falta los subtítulos. */
-  overflow: hidden;
-  min-height: 0;
-  /* Sin conversación abierta el cuerpo se queda con todo el cuadro. */
-  flex: 1 1 100%;
-  transition: flex-basis 0.45s ease;
-}
 #zona-central #messages { flex: 1 1 0; min-width: 0; }
 /* Sin conversación no hay nada que mostrar: la columna de mensajes ni ocupa lugar. */
 #zona-central:not(.con-mensajes) #messages { display: none; }
-/* Con conversación: el cuerpo cede el ancho y se queda con la franja izquierda. */
-#zona-central.con-mensajes #columna-cuerpo { flex: 0 0 40%; }
 
-#cuerpo-principal {
-  display: block;
-  cursor: pointer;
-  /* Que el núcleo pueda achicarse cuando los subtítulos piden lugar (antes no cedía nada y
-     empujaba todo hacia afuera de la columna). */
-  min-height: 0; flex-shrink: 1;
-  /* Cuadrado y limitado por el lado más chico de su columna: así entra entero tanto cuando ocupa
-     todo como cuando está en el 40%, sin deformarse. */
-  width: min(100%, 62vh); height: auto; aspect-ratio: 1;
-  max-height: 100%;
-  border-radius: 50%;   /* el foco de teclado sigue la forma del núcleo, no una caja cuadrada */
-  transition: width 0.45s ease;
-}
-#cuerpo-principal:focus-visible { outline: 2px solid var(--acento); outline-offset: 8px; }
 
-/* El cartel de estado, debajo del cuerpo. Vive DENTRO de la columna, así queda centrado bajo el
-   núcleo tanto a pantalla completa como en la franja del 40%. */
-#voz-estado {
-  margin-top: 14px; text-align: center; pointer-events: none;
-  font-family: var(--font-sans);
-  font-size: 15px; letter-spacing: 0.04em;
-  color: var(--texto-dim);
-  text-transform: lowercase;
-  transition: color 0.3s ease, opacity 0.3s ease;
-}
 /* LA EXCEPCION a la regla global `.hidden { display:none !important }`. Este cartel no desaparece:
    se DESVANECE, con la transición de opacidad de acá arriba, y sigue ocupando su lugar debajo del
    núcleo. Si lo sacáramos del layout, el cuerpo digital saltaría cada vez que cambia el estado de
    la voz. Por eso se le devuelve el display a mano. */
-#voz-estado.hidden { display: block !important; opacity: 0; }
-#zona-central.escuchando #voz-estado { color: var(--texto); }
 
 /* El recuadro donde se apoyaba el micrófono se retira (pedido del usuario, 2026-07-27: "no sirve de
    nada por la transcripción en tiempo real"). Hablar se hace tocando el núcleo, y lo que Mentis
@@ -1253,11 +1413,11 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 @keyframes mentis-talk {
   0%, 100% {
     transform: scale(1);
-    filter: drop-shadow(0 0 16px rgba(255, 102, 0, 0.55)) drop-shadow(0 0 36px rgba(255, 102, 0, 0.35));
+    filter: drop-shadow(0 0 16px rgba(var(--acento-rgb), 0.55)) drop-shadow(0 0 36px rgba(var(--acento-rgb), 0.35));
   }
   50% {
     transform: scale(1.07);
-    filter: drop-shadow(0 0 28px rgba(255, 102, 0, 0.9)) drop-shadow(0 0 52px rgba(255, 102, 0, 0.6));
+    filter: drop-shadow(0 0 28px rgba(var(--acento-rgb), 0.9)) drop-shadow(0 0 52px rgba(var(--acento-rgb), 0.6));
   }
 }
 
@@ -1290,3 +1450,217 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
     animation: none;
   }
 }
+
+
+/* ===================== PANTALLA DE BIENVENIDA (2026-08-11) =====================
+   Reemplaza al cuerpo digital como primera pantalla. Saludo, y abajo dos cuadros de ambiente:
+   la hora y el clima. Se va entera con el primer mensaje -- de ahí que el compositor "se vaya
+   para abajo": en la bienvenida está centrado con el saludo, y con mensajes la conversación
+   crece y lo empuja al fondo.
+
+   SÓLO EN LA BIENVENIDA (decisión del usuario): con una conversación abierta, la hora la tenés en la
+   barra de tareas y el espacio lo necesita el lienzo. */
+#zona-central { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#bienvenida {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 34px;
+  padding: 24px; min-height: 0;
+}
+#bienvenida-saludo {
+  margin: 0; text-align: center;
+  font-family: var(--font-sans);
+  /* 300 y no 400: es el texto más grande de la app, y a ese tamaño el peso normal se ve pesado.
+     El tamaño ya da la jerarquía; el grosor sólo agregaría ruido. */
+  font-weight: 300; font-size: clamp(26px, 3.4vw, 42px);
+  letter-spacing: -0.01em; color: var(--texto);
+}
+#bienvenida-cuadros { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.cuadro-ambiente {
+  background: var(--principal); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 22px; min-width: 132px; text-align: center;
+}
+.cuadro-valor {
+  font-size: 26px; font-weight: 500; color: var(--texto);
+  /* Sin esto el reloj BAILA: los dígitos de ancho distinto hacen que la línea se mueva a cada
+     segundo, y un reloj que se sacude es peor que no tenerlo. */
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+}
+.cuadro-etiqueta { font-size: 11px; color: var(--texto-dim); margin-top: 4px; letter-spacing: 0.04em; }
+
+/* ===================== LÍNEA DE ESTADO (2026-08-11) =====================
+   Qué está haciendo Mentis, hace cuánto, y el micrófono. Reemplaza al cuerpo digital.
+   Los colores salen del TEMA, no de una rampa propia: así acompañan a claro y a oscuro sin una
+   segunda tabla que mantener. */
+#linea-estado {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 16px 0;
+  font-family: var(--font-sans); font-size: 12px; color: var(--texto-dim);
+  user-select: none;
+}
+#estado-punto {
+  width: 8px; height: 8px; border-radius: 50%; flex: none;
+  background: var(--texto-dim);
+  transition: background 0.25s ease;
+}
+#estado-punto.pensando   { background: var(--acento); animation: mentis-latido 1.2s ease-in-out infinite; }
+#estado-punto.hablando   { background: var(--acento); }
+#estado-punto.escuchando { background: var(--texto); animation: mentis-latido 1.6s ease-in-out infinite; }
+#estado-punto.problema   { background: var(--peligro); }
+@keyframes mentis-latido { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+#estado-tiempo { font-variant-numeric: tabular-nums; margin-left: 2px; }
+/* El micrófono se MUDÓ acá desde el compositor (es el mismo nodo, no una copia), así que su
+   tamaño se define en su regla original y esto sólo lo empuja al final de la línea. */
+#linea-estado #btn-mic { margin-left: auto; }
+
+/* Los tres puntitos que quedan en la conversación mientras Mentis piensa. Es lo único que el
+   indicador aportaba en ese lugar: mostrar DÓNDE va a aparecer la respuesta. El "qué" y el
+   "hace cuánto" los dice la línea de estado. */
+#thinking-indicator.puntos { display: inline-flex; gap: 5px; align-items: center; }
+#thinking-indicator.puntos i {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--texto-dim);
+  animation: mentis-latido 1.2s ease-in-out infinite;
+}
+#thinking-indicator.puntos i:nth-child(2) { animation-delay: 0.2s; }
+#thinking-indicator.puntos i:nth-child(3) { animation-delay: 0.4s; }
+
+
+/* ===================== FICHAS DE MODO EN EL COMPOSITOR (2026-08-11) =====================
+   El selector se mudó acá desde el logotipo. Con seis modos, el lugar para elegir es donde estás
+   por escribir. Se muestra el apellido ("Code", "Designe") y no "Mentis Code": el "Mentis" ya
+   está en el logotipo y repetirlo cuatro veces en una fila de fichas es ruido. */
+#modo-fichas { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.modo-ficha {
+  background: transparent; border: 1px solid transparent;
+  border-radius: 999px; padding: 4px 12px;
+  font-family: var(--font-sans); font-size: 12px; font-weight: 500;
+  color: var(--texto-dim); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.modo-ficha:hover { background: var(--secundario); color: var(--texto); }
+.modo-ficha.elegido {
+  background: var(--acento-soft); border-color: var(--acento);
+  color: var(--acento); font-weight: 600;
+}
+.modo-ficha:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+
+
+/* ===================== EL "+" Y SU DESPLEGABLE (2026-08-12) ===================== */
+#btn-mas {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  color: var(--texto-dim); border: 1px solid var(--border);
+  background: transparent; cursor: pointer; padding: 0; flex: none;
+}
+#btn-mas:hover { color: var(--texto); border-color: var(--texto-dim); }
+#btn-mas[aria-expanded="true"] { color: var(--acento); border-color: var(--acento); }
+#action-cluster {
+  position: absolute; bottom: 62px; left: 12px; z-index: 35;
+  display: grid; grid-template-columns: repeat(5, auto); gap: 6px;
+  background: var(--principal); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px; box-shadow: var(--shadow-tonal);
+}
+
+/* Ancla del desplegable del "+": sin esto, su `right: 0` se mide contra #main.
+ */
+#composer { position: relative; }
+
+
+/* El desplegable de modos. Mismo patrón que el "+": se ve lo que está puesto, y al tocarlo
+   aparece el resto. Sube desde la ficha porque vive al fondo de la ventana. */
+#modo-fichas { position: relative; }
+.modo-lista {
+  position: absolute; bottom: 38px; right: 0; z-index: 36;
+  display: flex; flex-direction: column; gap: 1px; min-width: 260px;
+  background: var(--principal); border: 1px solid var(--border);
+  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-tonal);
+}
+.modo-lista-item {
+  display: block; width: 100%; text-align: left;
+  background: transparent; border: 0; border-radius: 8px;
+  padding: 8px 10px; cursor: pointer; font-family: var(--font-sans);
+}
+.modo-lista-item:hover { background: var(--secundario); }
+.modo-lista-titulo { display: block; font-size: 13px; font-weight: 600; color: var(--texto); }
+.modo-lista-desc { display: block; font-size: 11px; color: var(--texto-dim); margin-top: 2px; line-height: 1.4; }
+
+/* ===== VISOR DE LO QUE MENTIS CREA (2026-08-12) =====
+   Cubre la zona de trabajo entera porque mirar un render o una infografía es la tarea de ese
+   momento, no algo que se hace de reojo mientras se lee el chat. Se cierra con Esc o con la ✕.
+   z-index 40: por encima del previsualizador (30) y de todo lo demás, porque mientras está
+   abierto es lo único con lo que se interactúa. */
+#visor {
+  position: absolute; inset: 0; z-index: 40;
+  display: flex; flex-direction: column;
+  background: var(--fondo);
+}
+#visor.hidden { display: none; }
+#visor-barra {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border); flex: none;
+}
+#visor-nombre {
+  font-family: var(--font-sans); font-size: 13px; color: var(--texto);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#visor-acciones { display: flex; align-items: center; gap: 8px; flex: none; }
+#visor-acciones button {
+  background: transparent; border: 1px solid var(--border); color: var(--texto-dim);
+  border-radius: var(--radius); padding: 5px 12px; font-size: 12px;
+  font-family: var(--font-sans); cursor: pointer;
+}
+#visor-acciones button:hover { background: var(--secundario); color: var(--texto); }
+#visor-cerrar { border-color: transparent !important; font-size: 14px !important; }
+/* El cuerpo centra lo que sea que haya adentro: una imagen chica no tiene por qué quedar pegada
+   arriba a la izquierda de un área de 1000px. */
+#visor-cuerpo {
+  flex: 1; min-height: 0; overflow: auto;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.visor-imagen { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius); }
+/* El 3D y los marcos SÍ ocupan todo: un modelo que se puede girar necesita superficie, y un PDF
+   dentro de un recuadro chico obliga a hacer scroll adentro de un scroll. */
+.visor-3d { width: 100%; height: 100%; min-height: 420px; border-radius: var(--radius); overflow: hidden; }
+.visor-marco { width: 100%; height: 100%; min-height: 420px; border: 0; background: #fff; border-radius: var(--radius); }
+.visor-texto {
+  width: 100%; height: 100%; margin: 0; padding: 16px; overflow: auto;
+  font-family: var(--font-mono); font-size: 13px; color: var(--texto);
+  background: var(--secundario); border-radius: var(--radius); white-space: pre-wrap;
+}
+.visor-mensaje { text-align: center; font-family: var(--font-sans); color: var(--texto-dim); }
+.visor-mensaje p { color: var(--texto); font-size: 15px; margin: 0 0 6px; }
+.visor-mensaje span { font-size: 13px; }
+/* Galería: grilla que se acomoda sola. auto-fill y no auto-fit para que con dos archivos las
+   tarjetas mantengan su tamaño en vez de estirarse a media pantalla cada una. */
+.visor-galeria {
+  align-self: flex-start; width: 100%;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+}
+.visor-tarjeta {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px; cursor: pointer; font-family: var(--font-sans);
+}
+.visor-tarjeta:hover { border-color: var(--acento); }
+.visor-tarjeta img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; background: var(--fondo); }
+.visor-tarjeta-ext {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 110px; border-radius: 6px; background: var(--fondo);
+  color: var(--acento); font-size: 15px; letter-spacing: 0.08em;
+}
+.visor-tarjeta-nombre {
+  font-size: 11px; color: var(--texto-dim); width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+}
+/* La ficha del dato en las estructuras químicas (Science). Va sobre el modelo y no debajo: si
+   estuviera fuera del área 3D habría que sacar la vista del modelo para leer de dónde salió. */
+.visor-3d { position: relative; }
+.visor-ficha {
+  position: absolute; left: 12px; bottom: 12px; max-width: 60%;
+  display: flex; flex-direction: column; gap: 2px;
+  background: color-mix(in srgb, var(--fondo) 82%, transparent);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 12px; font-family: var(--font-sans); pointer-events: none;
+}
+.visor-ficha strong { color: var(--texto); font-size: 13px; font-weight: 600; }
+.visor-ficha span { color: var(--acento); font-size: 12px; }
+.visor-ficha em { color: var(--texto-dim); font-size: 11px; font-style: normal; line-height: 1.4; }

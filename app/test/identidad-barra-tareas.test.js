@@ -56,7 +56,17 @@ test('el ícono que se empaqueta existe de verdad', () => {
   assert.ok(fs.statSync(ruta).size > 10000, 'el.ico es sospechosamente chico: ' + ruta);
 });
 
-test('la ventana pide su propio ícono', () => {
-  assert.match(MAIN, /icon:\s*path\.join\([^)]*mentis-cuerpo\.ico'\)/,
-    'la ventana no declara ícono propio: en Windows quedaría con el de Electron');
+test('la ventana pide su propio ícono, y ese ícono existe', () => {
+  // Antes esto exigia el NOMBRE del archivo ('mentis-cuerpo.ico') escrito a mano. El dia que la
+  // identidad cambio a la M terracota (2026-08-10) el test se puso rojo por un renombre que no
+  // rompia nada, y -- lo que es peor -- nunca habia comprobado que ese archivo existiera: habria
+  // pasado igual con la ruta apuntando a la nada.
+  // Ahora se comprueba lo que de verdad importa: que la ventana declare UN ico y que ese ico este.
+  const m = /icon:\s*path\.join\(([^)]*\.ico')\)/.exec(MAIN);
+  assert.ok(m, 'la ventana no declara ícono propio: en Windows quedaría con el de Electron');
+
+  const archivo = (m[1].match(/'([^']+\.ico)'/) || [])[1];
+  assert.ok(archivo, 'no se pudo leer el nombre del.ico que declara la ventana');
+  const ruta = path.join(__dirname, '..', 'renderer', 'assets', archivo);
+  assert.ok(fs.existsSync(ruta), `la ventana declara ${archivo} pero ese archivo no existe: ` + ruta);
 });

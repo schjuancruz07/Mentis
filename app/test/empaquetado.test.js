@@ -58,7 +58,14 @@ test('el.exe empaquetado lleva el icono de Mentis embebido', { skip: !hayPaquete
   // de KB con muchisimos tamaños). Chequeo directo y suficiente: que el.ico fuente exista y que
   // el exe sea un PE valido.
   assert.strictEqual(buf.slice(0, 2).toString('ascii'), 'MZ', 'el.exe no es un binario de Windows valido');
-  const icoFuente = path.join(__dirname, '..', 'renderer', 'assets', 'mentis-cuerpo.ico');
-  assert.ok(fs.existsSync(icoFuente), 'falta el.ico fuente que usa el empaquetado');
+  // El nombre del.ico NO se escribe a mano acá: se lee del comando de empaquetado. Cuando la
+  // identidad cambió a la M terracota, este test seguía mirando el archivo viejo -- que todavía
+  // existía -- así que habría dado verde mientras el empaquetado usaba otro. Un test que aprueba
+  // un archivo que ya nadie usa es peor que no tenerlo.
+  const empaquetador = fs.readFileSync(path.join(__dirname, '..', 'empaquetar.js'), 'utf-8');
+  const m = /--icon=(\S+?)['"\s,]/.exec(empaquetador);
+  assert.ok(m, 'empaquetar.js no pasa --icon: el.exe saldría con el ícono de Electron');
+  const icoFuente = path.join(__dirname, '..', m[1]);
+  assert.ok(fs.existsSync(icoFuente), 'falta el.ico fuente que usa el empaquetado: ' + icoFuente);
   assert.ok(fs.statSync(icoFuente).size > 1000, 'el.ico fuente esta vacio o truncado');
 });

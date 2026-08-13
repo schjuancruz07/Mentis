@@ -1,90 +1,81 @@
-// temas.js -- las paletas que se pueden elegir, para la app Y para la pagina del celular.
+// temas.js -- las dos paletas de Mentis, para la app Y para la pagina del celular.
 //
-// POR QUE EXISTE (2026-08-06, pedido del usuario): Mentis pasa a usarlo mas gente, y cada uno tiene que
-// poder ponerlo a su gusto. El naranja sobre negro es la identidad de Mentis para el usuario, no
-// necesariamente para un familiar.
+// POR QUE HAY DOS Y NO SIETE (2026-08-10, decision del usuario): hasta hoy habia siete paletas
+// (naranja, azul, bosque, vino, violeta, papel) porque Mentis pasaba a usarlo mas gente y la idea
+// era que cada uno lo pusiera a su gusto. Eso cambio: Mentis ahora TIENE una identidad -- terracota,
+// blanco y negro -- y una identidad que se puede cambiar por un violeta no es una identidad. Lo que
+// queda es la unica eleccion que sigue siendo del usuario y no de la marca: **claro u oscuro**, que
+// no es gusto sino la luz que tenga en la pieza y como le vengan los ojos.
+//
+// LA IDEA DE CADA UNO, en palabras del usuario:
+//   - El claro simula texturas naturales: papel, lienzo, pergamino. Nada de blanco de pantalla.
+//   - El oscuro mantiene la calidez de la marca SIN negros puros ni grises azulados. El gris
+//     carbon #141413 tiene una pizca de amarillo; un #0a0a0f cualquiera se ve azul al lado del
+//     terracota y ensucia la marca entera.
 //
 // VIVE EN UN SOLO ARCHIVO Y LO USAN LOS DOS. La app lo importa y el servidor de la pagina lo sirve
-// desde /estatico, igual que formato.js y el cuerpo digital. Y funciona porque la app y la web ya
-// usaban EXACTAMENTE los mismos nombres de variable CSS: --fondo, --texto, --acento y compania. Si
-// hubiera dos listas de temas, un dia la app tendria un color y el telefono otro.
+// desde /estatico, igual que formato.js y el cuerpo digital. Si hubiera dos listas de temas, un dia
+// la app tendria un color y el telefono otro.
 //
-// EL CONTRASTE NO ES DECORACION: cada paleta tiene que dejar el texto legible sobre su fondo. Hay
-// un test (tests/temas_casos.mjs) que calcula el contraste real de las combinaciones que importan y
-// falla si alguna baja del minimo. Un tema lindo con texto ilegible es un tema roto.
+// EL CONTRASTE NO ES DECORACION: hay un test (tests/temas_casos.mjs) que calcula el contraste real
+// segun WCAG y falla si alguna combinacion baja del minimo. Un tema lindo con texto ilegible es un
+// tema roto.
+//
+// DOS COLORES DE LA PALETA DE MARCA NO LLEGAN EN EL TEMA CLARO, y esta medido, no supuesto:
+//   - Cloudy (#b1ada1) como texto secundario sobre el crema da 2.13 (minimo 3.0). En el OSCURO da
+//     8.22 y ahi si se usa. En el claro queda para bordes, que son decoracion y no se leen.
+//   - Crail (#d97757) como acento sobre el crema da 2.96, apenas por debajo de 3.0. En el oscuro
+//     da 5.90 y ahi es el acento.
+// el usuario dio dos opciones de cada uno ("gris medio o Cloudy", "#d97757 o #c15f3c"), asi que cada tema
+// usa la que pasa: no se invento ningun color fuera de la paleta que el eligio.
 
 export const TEMAS = {
-  'mentis-clasico': {
-    nombre: 'Mentis clásico',
+  // El predeterminado. Gris carbon calido + crema + terracota Crail.
+  //
+  // EL ROJO DE PELIGRO NO ES TERRACOTA Y NO DEBE SERLO: terracota ya es un rojo apagado, asi que
+  // un peligro del mismo tono haria que el boton de borrar se confunda con el de aceptar. Se
+  // separan por saturacion, no por tono. Si alguien lo apaga "para que combine mejor", rompe la
+  // unica senal visual de que algo es destructivo.
+  'mentis-oscuro': {
+    nombre: 'Mentis oscuro',
     claro: false,
+    logo: 'oscuro',
     vars: {
-      '--fondo': '#050507', '--principal': '#141418', '--secundario': '#1c1c22',
-      '--texto': '#dcdcdc', '--texto-dim': '#8b8b93',
-      '--acento': '#ff6600', '--acento-soft': 'rgba(255, 102, 0, 0.16)',
-      '--peligro': '#ff1100', '--peligro-soft': 'rgba(255, 17, 0, 0.16)',
-      '--border': '#2e2e36', '--bubble-usuario': '#1f1f26',
+      '--fondo': '#141413', '--principal': '#1f1e1d', '--secundario': '#2a2927',
+      '--texto': '#faf9f5', '--texto-dim': '#b1ada1',
+      '--acento': '#d97757', '--acento-soft': 'rgba(217, 119, 87, 0.16)',
+      '--acento-rgb': '217, 119, 87',
+      '--peligro': '#ff453a', '--peligro-soft': 'rgba(255, 69, 58, 0.16)',
+      '--border': '#33322f', '--bubble-usuario': '#232220',
     },
   },
-  'noche-azul': {
-    nombre: 'Noche azul',
-    claro: false,
-    vars: {
-      '--fondo': '#04070f', '--principal': '#0e1524', '--secundario': '#151f33',
-      '--texto': '#dde5f2', '--texto-dim': '#8496b3',
-      '--acento': '#3d9dff', '--acento-soft': 'rgba(61, 157, 255, 0.16)',
-      '--peligro': '#ff5169', '--peligro-soft': 'rgba(255, 81, 105, 0.16)',
-      '--border': '#24314a', '--bubble-usuario': '#18233a',
-    },
-  },
-  'bosque': {
-    nombre: 'Bosque',
-    claro: false,
-    vars: {
-      '--fondo': '#050a07', '--principal': '#101a13', '--secundario': '#17251b',
-      '--texto': '#dbe6dd', '--texto-dim': '#879a8d',
-      '--acento': '#4ecb7a', '--acento-soft': 'rgba(78, 203, 122, 0.16)',
-      '--peligro': '#ff6b5b', '--peligro-soft': 'rgba(255, 107, 91, 0.16)',
-      '--border': '#243527', '--bubble-usuario': '#1a2a1f',
-    },
-  },
-  'vino': {
-    nombre: 'Vino',
-    claro: false,
-    vars: {
-      '--fondo': '#0a0507', '--principal': '#1a1014', '--secundario': '#26171d',
-      '--texto': '#eadde1', '--texto-dim': '#a98d97',
-      '--acento': '#ff5c8a', '--acento-soft': 'rgba(255, 92, 138, 0.16)',
-      '--peligro': '#ff3b30', '--peligro-soft': 'rgba(255, 59, 48, 0.16)',
-      '--border': '#3a242c', '--bubble-usuario': '#2a1a20',
-    },
-  },
-  'violeta': {
-    nombre: 'Violeta',
-    claro: false,
-    vars: {
-      '--fondo': '#07050c', '--principal': '#151024', '--secundario': '#1e1733',
-      '--texto': '#e2dcf2', '--texto-dim': '#9589b8',
-      '--acento': '#a97bff', '--acento-soft': 'rgba(169, 123, 255, 0.16)',
-      '--peligro': '#ff5169', '--peligro-soft': 'rgba(255, 81, 105, 0.16)',
-      '--border': '#2f2547', '--bubble-usuario': '#221a3a',
-    },
-  },
-  // El unico claro. Va con color-scheme distinto para que los controles del sistema (scrollbars,
-  // menus) no salgan oscuros arriba de un fondo blanco.
-  'papel': {
-    nombre: 'Papel (claro)',
+
+  // Papel, lienzo, pergamino. Va con color-scheme distinto para que los controles del sistema
+  // (barras de desplazamiento, menus, campos nativos) no salgan oscuros sobre un fondo claro.
+  //
+  // Las TARJETAS son blanco puro y el FONDO es crema, no al reves: asi los bloques de texto se
+  // levantan del lienzo en vez de fundirse con el. Con los dos en blanco no se distingue donde
+  // termina un mensaje y empieza el siguiente.
+  'mentis-claro': {
+    nombre: 'Mentis claro',
     claro: true,
+    logo: 'claro',
     vars: {
-      '--fondo': '#f7f5f0', '--principal': '#ffffff', '--secundario': '#eeebe3',
-      '--texto': '#22201c', '--texto-dim': '#6b6760',
-      '--acento': '#c2410c', '--acento-soft': 'rgba(194, 65, 12, 0.12)',
-      '--peligro': '#b91c1c', '--peligro-soft': 'rgba(185, 28, 28, 0.12)',
-      '--border': '#d6d1c6', '--bubble-usuario': '#e4e0d6',
+      '--fondo': '#faf9f5', '--principal': '#ffffff', '--secundario': '#f4f3ee',
+      '--texto': '#141413', '--texto-dim': '#8a857a',
+      '--acento': '#c15f3c', '--acento-soft': 'rgba(193, 95, 60, 0.12)',
+      '--acento-rgb': '193, 95, 60',
+      '--peligro': '#c62828', '--peligro-soft': 'rgba(198, 40, 40, 0.12)',
+      '--border': '#b1ada1', '--bubble-usuario': '#f4f3ee',
     },
   },
 };
 
-export const TEMA_POR_DEFECTO = 'mentis-clasico';
+// El naranja sobre negro ('mentis-clasico') fue el default hasta 2026-08-10, junto con otras cinco
+// paletas de color que se retiraron el mismo dia. Si alguien las quiere de vuelta estan en el
+// historial de git -- pero volver a meterlas significa volver a decidir que Mentis no tiene color
+// propio, y esa fue justamente la decision que se tomo al reves.
+export const TEMA_POR_DEFECTO = 'mentis-oscuro';
 
 export function aplicarTema(id, raiz) {
   const t = TEMAS[id] || TEMAS[TEMA_POR_DEFECTO];
@@ -95,10 +86,16 @@ export function aplicarTema(id, raiz) {
   // negras y se ve roto por un detalle que no esta en ningun CSS nuestro.
   el.style.setProperty('color-scheme', t.claro ? 'light' : 'dark');
   el.dataset.tema = id;
+  // El tema tambien decide QUE LOGO se ve (pedido del usuario, 2026-08-10): el de fondo terracota va
+  // con el tema claro y el de fondo carbon con el oscuro. Se expone como dato en el <html> para
+  // que lo lea tanto el CSS como el proceso principal, que es quien cambia el icono de la ventana
+  // y el de la bandeja -- esos no son CSS y no se pueden pintar desde aca.
+  el.dataset.logo = t.logo || (t.claro ? 'claro' : 'oscuro');
   return t;
 }
 
 export function listaDeTemas() {
   return Object.entries(TEMAS).map(([id, t]) => ({ id, nombre: t.nombre, claro: !!t.claro,
+                                                   logo: t.logo || (t.claro ? 'claro' : 'oscuro'),
                                                    muestra: [t.vars['--fondo'], t.vars['--acento'], t.vars['--texto']] }));
 }
