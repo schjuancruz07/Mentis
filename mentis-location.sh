@@ -2,7 +2,7 @@
 # mentis-location.sh -- ubicacion REAL del usuario (pedido 2026-07-25: "que sepa donde estoy en el
 # saludo y en cualquier momento").
 #
-# Antes: la ubicacion estaba HARDCODEADA en Villa Lugano (main.js, 2026-07-16) porque el geo-IP
+# Antes: la ubicacion estaba HARDCODEADA en main.js (2026-07-16) porque el geo-IP
 # que habia antes ubicaba mal (daba Lanus, ~10 km de error: el geo-IP resuelve la central del
 # ISP, no la casa). Una constante en el codigo no es "saber donde estoy" -- si el usuario se muda o
 # viaja, miente sin avisar.

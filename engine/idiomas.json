@@ -1,0 +1,48 @@
+{
+  "_que_es_esto": "Los idiomas en los que Mentis puede HABLAR (voz), ESCUCHAR (transcripcion) y ESCRIBIR (sus respuestas). Es la unica fuente: la app, el motor, el TTS y el reconocimiento de voz leen de aca. Una lista repetida en cuatro archivos se desincroniza el primer dia que se agrega un idioma.",
+  "_como_se_verifico": "Cada voz se probo generando audio de verdad con mentis-tts.sh el 2026-08-13; las seis devolvieron un.wav valido de entre 164 y 228 KB. Que el modelo acepte el nombre de la voz NO prueba que suene bien en ese idioma -- eso solo lo puede juzgar alguien que lo escuche.",
+  "_dos_ajustes_separados_a_proposito": "LECTURA es en que idioma te escribe; HABLA es la voz con la que suena y el idioma en el que te entiende. Van separados porque no siempre coinciden: se puede querer leer en espaniol y practicar escuchando ingles, o al reves. Juntarlos en un solo ajuste obligaria a elegir entre las dos cosas.",
+  "por_defecto": {
+    "lectura": "es",
+    "habla": "es"
+  },
+  "idiomas": {
+    "es": {
+      "nombre": "Español",
+      "voz": "Magpie-Multilingual.ES-US.Isabela.Happy",
+      "whisper": "es",
+      "instruccion": ""
+    },
+    "en": {
+      "nombre": "English",
+      "voz": "Magpie-Multilingual.EN-US.Sofia.Happy",
+      "whisper": "en",
+      "instruccion": "REGLA DE IDIOMA: escribi TODAS tus respuestas en INGLES, aunque el usuario te escriba en espaniol. No traduzcas su pregunta: contesta en ingles directamente."
+    },
+    "pt": {
+      "nombre": "Português",
+      "voz": "Magpie-Multilingual.PT-BR.Marcela.Happy",
+      "whisper": "pt",
+      "instruccion": "REGLA DE IDIOMA: escribi TODAS tus respuestas en PORTUGUES de Brasil, aunque el usuario te escriba en espaniol. No traduzcas su pregunta: contesta en portugues directamente."
+    },
+    "fr": {
+      "nombre": "Français",
+      "voz": "Magpie-Multilingual.FR-FR.Louise.Happy",
+      "whisper": "fr",
+      "instruccion": "REGLA DE IDIOMA: escribi TODAS tus respuestas en FRANCES, aunque el usuario te escriba en espaniol. No traduzcas su pregunta: contesta en frances directamente."
+    },
+    "de": {
+      "nombre": "Deutsch",
+      "voz": "Magpie-Multilingual.DE-DE.Leni.Happy",
+      "whisper": "de",
+      "instruccion": "REGLA DE IDIOMA: escribi TODAS tus respuestas en ALEMAN, aunque el usuario te escriba en espaniol. No traduzcas su pregunta: contesta en aleman directamente."
+    },
+    "it": {
+      "nombre": "Italiano",
+      "voz": "Magpie-Multilingual.IT-IT.Giulia.Happy",
+      "whisper": "it",
+      "instruccion": "REGLA DE IDIOMA: escribi TODAS tus respuestas en ITALIANO, aunque el usuario te escriba en espaniol. No traduzcas su pregunta: contesta en italiano directamente."
+    }
+  },
+  "_la_instruccion_va_en_espaniol": "La orden esta escrita en ESPANIOL y no en el idioma destino, a proposito y medido (2026-08-13): escrita en ingles ('Write all your answers in English') el modelo la ignoraba y seguia contestando en espaniol, porque compite contra un system entero en espaniol y pierde. En espaniol pesa igual que el resto y se respeta. El portugues funcionaba en los dos idiomas por parecido con el espaniol, lo que hacia parecer que el mecanismo andaba a medias."
+}

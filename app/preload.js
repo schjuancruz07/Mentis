@@ -49,6 +49,10 @@ contextBridge.exposeInMainWorld('mentisAPI', {
   saveProfile: (fields) => ipcRenderer.invoke('mentis:save-profile', fields),
   // Paleta y nombre de la IA (ver settings-store.getApariencia).
   saveApariencia: (fields) => ipcRenderer.invoke('mentis:save-apariencia', fields),
+  // Idiomas: en cual te escribe (lectura) y en cual te habla y te entiende (habla).
+  idiomasDisponibles: () => ipcRenderer.invoke('mentis:idiomas-disponibles'),
+  getIdioma: () => ipcRenderer.invoke('mentis:get-idioma'),
+  saveIdioma: (fields) => ipcRenderer.invoke('mentis:save-idioma', fields),
   // Modos: Mentis / Code / Designe / Cowork (ver modos.json).
   // El tema decide que logo se ve; el icono de la ventana y el de la bandeja los pinta
   // Windows, no el CSS, asi que hay que avisarle al proceso principal.

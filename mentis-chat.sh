@@ -850,6 +850,18 @@ fi
 # de fallar en silencio o, peor, de inventar que lo hizo. Esa es la diferencia entre un reparto de
 # capacidades que se siente orden y uno que se siente castigo.
 MC_MODO_INICIAL="$(nv_modo_actual)"
+# EL IDIOMA EN EL QUE TE ESCRIBE (2026-08-13). Se agrega al final de la persona y sólo cuando NO
+# es español: la persona entera ya está en español, así que decirle "escribí en español" sería una
+# línea de prompt que no cambia nada -- y cada línea de más cuesta atención del modelo.
+if [ -f "$MENTIS_ENV_DIR/engine/nv-idioma-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$MENTIS_ENV_DIR/engine/nv-idioma-lib.sh" 2>/dev/null
+  MC_IDIOMA_INSTR="$(nv_idioma_instruccion 2>/dev/null)"
+  [ -n "${MC_IDIOMA_INSTR// }" ] && MC_PERSONA="$MC_PERSONA
+
+$MC_IDIOMA_INSTR"
+fi
+
 MC_MODO_TEXTO="$(nv_modo_persona "$MC_MODO_INICIAL")"
 if [ -n "${MC_MODO_TEXTO// }" ] && [ "$MODO_REMOTO" != "1" ]; then
   MC_PERSONA="$MC_PERSONA

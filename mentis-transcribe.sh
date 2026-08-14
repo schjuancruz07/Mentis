@@ -23,6 +23,17 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# EL IDIOMA DE ESCUCHA (2026-08-13). Estaba clavado en "es" adentro del servidor: hablarle en
+# inglés devolvía el inglés transcripto fonéticamente al español, que se lee como una falla del
+# micrófono y no como lo que era. El servidor carga el modelo una vez y queda vivo, así que el
+# idioma se le pasa al PRENDERLO -- si el usuario lo cambia en Configuración hay que reiniciarlo.
+MC_IDIOMA_ESCUCHA="es"
+if [ -f "$HERE/engine/nv-idioma-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$HERE/engine/nv-idioma-lib.sh" 2>/dev/null
+  MC_IDIOMA_ESCUCHA="$(nv_idioma_whisper 2>/dev/null)"
+  [ -z "${MC_IDIOMA_ESCUCHA// }" ] && MC_IDIOMA_ESCUCHA="es"
+fi
 ESTADO="${MENTIS_STT_ESTADO:-$HERE/stt-server-state.json}"
 MODELO_STT="${MENTIS_STT_MODELO:-base}"
 
@@ -58,6 +69,7 @@ _encender() {
   # nada (solo abre lo que recibe por argumento, todo absoluto), asi que mudarlo no le afecta.
   ( cd "${HOME:-/}" 2>/dev/null || cd /
     nohup python3 "$HERE/engine/nv_stt_server.py" --puerto 0 --estado "$ESTADO" --modelo "$MODELO_STT" \
+      --idioma "$MC_IDIOMA_ESCUCHA" \
       >/dev/null 2>>"$HERE/stt-server.log" & ) 2>/dev/null
   # Esperar a que anote el puerto (arranca rapido; el modelo carga despues, en paralelo).
   for _ in $(seq 1 40); do

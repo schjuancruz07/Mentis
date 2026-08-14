@@ -245,7 +245,7 @@ def transcribir(ruta):
     # terminan tardando mas que en fila.
     with LOCK:
         segmentos, info = MODELO.transcribe(
-            ruta, language="es", vad_filter=True,
+            ruta, language=IDIOMA_ESCUCHA, vad_filter=True,
             beam_size=5,
             initial_prompt=PROMPT_CONTEXTO,
             # Cada pedido de voz es una frase suelta, no la continuacion de la anterior. Dejarlo
@@ -333,12 +333,23 @@ class Handler(BaseHTTPRequestHandler):
             self._responder(500, {"ok": False, "error": str(e)[:300]})
 
 
+IDIOMA_ESCUCHA = "es"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--puerto", type=int, default=0, help="0 = que el sistema elija uno libre")
     ap.add_argument("--estado", required=True, help="archivo JSON donde se anota el puerto")
     ap.add_argument("--modelo", default="base", choices=["tiny", "base", "small", "medium"])
+    # EL IDIOMA DE ESCUCHA (2026-08-13). Estaba clavado en "es" adentro de la llamada a
+    # transcribe(): con eso, hablarle en ingles devolvia el ingles transcripto FONETICAMENTE al
+    # espaniol ("wan tu zri"), que se lee como un error del microfono y no como lo que era.
+    # Viene por argumento y no leyendo la config aca porque este servidor arranca una sola vez y
+    # queda vivo: quien lo prende (mentis-transcribe.sh) es el que sabe la preferencia del momento.
+    ap.add_argument("--idioma", default="es", help="codigo del idioma a transcribir (es, en, pt...)")
     args = ap.parse_args()
+    global IDIOMA_ESCUCHA
+    IDIOMA_ESCUCHA = args.idioma or "es"
 
     # ANTES de abrir el socket y ANTES de cargar el modelo: si hay otro servidor vivo, no tiene
     # sentido reservar 1,6 GB para despues descubrirlo.

@@ -178,7 +178,7 @@
             </div>
             <div class="cuadro-ambiente" id="cuadro-clima">
               <div class="cuadro-valor" id="clima-temp">—</div>
-              <div class="cuadro-etiqueta" id="clima-lugar">Villa Lugano</div>
+              <div class="cuadro-etiqueta" id="clima-lugar">—</div>
             </div>
           </div>
         </div>
@@ -416,6 +416,20 @@
           <input id="apariencia-nombre" type="text" maxlength="24" placeholder="Mentis" />
           <p class="settings-hint">Va a usar este nombre para presentarse y responder, también por voz.</p>
           <div id="temas-grilla" role="radiogroup" aria-label="Paleta de colores"></div>
+        </section>
+        <!-- IDIOMAS (pedido del usuario, 2026-08-13). Dos ajustes y no uno: en qué idioma te ESCRIBE
+             y en cuál te HABLA y te ENTIENDE. Van separados porque no siempre coinciden -- se
+             puede querer leer en español y practicar escuchando inglés.
+             Las opciones las llena el JS desde engine/idiomas.json, que es la única lista: el
+             motor, el TTS y el reconocimiento de voz leen de ahí mismo. -->
+        <section class="settings-section">
+          <h3>Idiomas</h3>
+          <p class="settings-hint">En qué idioma te escribe y en cuál te habla. Podés usar uno distinto para cada cosa.</p>
+          <label class="settings-label" for="idioma-lectura">Te escribe en</label>
+          <select id="idioma-lectura"></select>
+          <label class="settings-label" for="idioma-habla">Te habla y te entiende en</label>
+          <select id="idioma-habla"></select>
+          <p class="settings-hint" id="idioma-aviso">Al cambiar el idioma de habla, la voz se reinicia para tomar el nuevo.</p>
         </section>
         <section class="settings-section">
           <h3>Perfil</h3>

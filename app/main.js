@@ -711,6 +711,30 @@ ipcMain.handle('mentis:save-voz', (_event, fields) => settingsStore.saveVoz(MENT
 ipcMain.handle('mentis:save-profile', (_event, fields) => settingsStore.saveProfile(MENTIS_ENV_DIR, fields));
 ipcMain.handle('mentis:save-apariencia', (_event, fields) => settingsStore.saveApariencia(MENTIS_ENV_DIR, fields));
 
+// --- IDIOMAS (2026-08-13) ---------------------------------------------------------------------
+// Al cambiar el idioma de HABLA hay que apagar los dos servidores de voz: el de transcripcion
+// recibe el idioma como argumento AL ARRANCAR (carga el modelo una vez y queda vivo), y el de
+// TTS toma la voz al prenderse. Sin este reinicio, el usuario cambia el idioma, no pasa nada, y no hay
+// forma de saber que lo que falta es reiniciar algo que el no ve.
+ipcMain.handle('mentis:idiomas-disponibles', () => settingsStore.idiomasDisponibles(MENTIS_ENV_DIR));
+ipcMain.handle('mentis:get-idioma', () => settingsStore.getIdioma(MENTIS_ENV_DIR));
+ipcMain.handle('mentis:save-idioma', async (_event, fields) => {
+  const antes = settingsStore.getIdioma(MENTIS_ENV_DIR);
+  const ahora = settingsStore.saveIdioma(MENTIS_ENV_DIR, fields);
+  if (antes.habla !== ahora.habla) {
+    for (const est of ['stt-server-state.json', 'tts-server-state.json']) {
+      try {
+        const p = path.join(MENTIS_ENV_DIR, est);
+        if (!fsSync.existsSync(p)) continue;
+        const { pid } = JSON.parse(fsSync.readFileSync(p, 'utf8'));
+        if (pid) { try { process.kill(pid); } catch {} }
+        fsSync.unlinkSync(p);
+      } catch {}
+    }
+  }
+  return ahora;
+});
+
 // --- MODOS (2026-08-10) -----------------------------------------------------------------------
 // Los cuatro modos de Mentis. La app solo lee la lista y guarda cual esta elegido; que puede hacer
 // cada uno lo decide modos.json y lo aplica mentis-chat.sh en el turno.
@@ -1251,15 +1275,24 @@ ipcMain.handle('mentis:connector-status', () => getConnectorStatus());
 // Ubicación + clima (pedido del usuario, 2026-07-15, saludo animado de arranque): clima real,
 // cacheado ~1h para no pegarle a la red en cada arranque si la app se reinicia seguido.
 //
-// 2026-07-25: la ubicación deja de estar HARDCODEADA. Estuvo fija en Villa Lugano desde el
-// 2026-07-16 porque el geo-IP de entonces ubicaba mal (daba Lanús, ~10 km de error: el geo-IP
-// resuelve la central del ISP, no la casa). el usuario pidió que Mentis sepa dónde está de verdad,
-// así que ahora la mide `mentis-location.sh` con la API nativa de Windows (triangulación WiFi,
-// ~150 m, sin API key ni costo) y la traduce a calle/barrio con OpenStreetMap.
+// 2026-07-25: la ubicación deja de estar HARDCODEADA. Antes estaba fija porque el geo-IP de
+// entonces ubicaba mal (~10 km de error: el geo-IP resuelve la central del ISP, no la casa).
+// Ahora la mide `mentis-location.sh` con la API nativa de Windows (triangulación WiFi, ~150 m,
+// sin API key ni costo) y la traduce a calle/barrio con OpenStreetMap.
 // FALLBACK_LOCATION se conserva SOLO para el caso en que la medición falle (permiso revocado,
 // servicio de ubicación apagado): sin él, el saludo se quedaría sin clima.
+//
+// EL FALLBACK NO LLEVA COORDENADAS (corregido 2026-08-14). Hasta hoy tenía el barrio del usuario
+// y sus coordenadas con SIETE decimales -- precisión de metros sobre una casa -- y este archivo
+// se publica en el repositorio abierto. La dirección aproximada de quien lo escribió estuvo
+// publicada seis días, y ninguno de los nueve controles de privacidad la vio: buscan nombres,
+// claves, correos y rutas, y un lugar no es nada de eso.
+// La primera corrección lo cambió por el Obelisco. Mejor, pero seguía siendo una coordenada en un
+// archivo público, y le daba el clima de Buenos Aires a cualquiera que instalara esto en otra
+// ciudad. Ahora es null: si la medición falla y no hay nada configurado, no hay clima. Un dato
+// que no se sabe se deja vacío, no se rellena con el de otro.
 const LOCATION_CACHE_MS = 60 * 60 * 1000; // 1 hora
-const FALLBACK_LOCATION = { city: 'Villa Lugano', lat: -34.6766149, lon: -58.4771849 };
+const FALLBACK_LOCATION = null;
 const LOCATION_SCRIPT = path.join(MENTIS_ENV_DIR, 'mentis-location.sh');
 
 // Devuelve { city, lat, lon } medidos de verdad, o el fallback si no se pudo medir.
@@ -1271,9 +1304,11 @@ function measureLocation() {
       try {
         const d = JSON.parse(stdout);
         if (!d || !d.ok || typeof d.lat !== 'number') return resolve(FALLBACK_LOCATION);
-        // Para el saludo hablado se prefiere el barrio ("Villa Lugano") sobre la ciudad
+        // Para el saludo hablado se prefiere el barrio sobre la ciudad
         // ("Buenos Aires"): es lo que el usuario diría si le preguntaran dónde está.
-        return resolve({ city: d.barrio || d.ciudad || FALLBACK_LOCATION.city, lat: d.lat, lon: d.lon });
+        // Sin FALLBACK_LOCATION.city: con el fallback en null eso seria un TypeError. Si la
+        // medicion no trajo nombre, se deja vacio -- el clima igual sale por coordenadas.
+        return resolve({ city: d.barrio || d.ciudad || '', lat: d.lat, lon: d.lon });
       } catch {
         return resolve(FALLBACK_LOCATION);
       }
@@ -1306,7 +1341,7 @@ const WEATHER_CODE_ES = {
   95: 'con tormenta', 96: 'con tormenta y granizo', 99: 'con tormenta fuerte y granizo'
 };
 
-// VILLA LUGANO, FIJO (pedido del usuario, 2026-08-11). Antes se averiguaba la ubicación preguntándole
+// SU BARRIO, FIJO (pedido del usuario, 2026-08-11). Antes se averiguaba la ubicación preguntándole
 // a un servicio por la IP, que es una llamada más y encima imprecisa: por IP podés aparecer en
 // otro barrio o en otra provincia según por dónde salga la conexión.
 //
@@ -1314,12 +1349,39 @@ const WEATHER_CODE_ES = {
 // dónde estás.** Queda sólo la del clima, con coordenadas que ya sabemos. Menos tráfico y ningún
 // servicio ajeno averiguando la ubicación.
 //
-// Si algún día hay que hacerlo configurable, esto pasa a mentis-settings.json -- pero mientras sea
-// una sola persona en un solo barrio, una constante es más honesta que un ajuste que nadie toca.
-const UBICACION_FIJA = { lat: -34.675, lon: -58.475, city: 'Villa Lugano' };
+// "MIENTRAS SEA UNA SOLA PERSONA EN UN SOLO BARRIO, UNA CONSTANTE ES MÁS HONESTA QUE UN AJUSTE
+// QUE NADIE TOCA." Eso decía acá, y era cierto -- hasta que el repositorio se hizo público
+// (2026-08-08). Desde entonces la constante hacía dos cosas malas a la vez: publicaba el barrio y
+// las coordenadas de quien escribió el código, y le daba a cualquier otra persona que instalara
+// Mentis el clima de un barrio que no es el suyo.
+//
+// Ahora sale de mentis-settings.json, que NO se publica (está en la lista de exclusión desde el
+// principio). El valor por defecto es el Obelisco: un punto público de referencia de Buenos
+// Aires, que no dice dónde vive nadie. Corregido el 2026-08-14, después de encontrarlo grabando
+// el GIF del README -- apareció en pantalla y ninguno de los nueve controles de privacidad lo vio,
+// porque buscan nombres, claves y rutas, no lugares.
+// NO HAY UBICACIÓN POR DEFECTO, y es a propósito. La primera corrección puso el Obelisco como
+// valor de fábrica, y estaba mejor que el barrio de una persona, pero seguía siendo una
+// coordenada escrita en un archivo que se publica -- y encima le daba el clima de Buenos Aires a
+// cualquiera que instalara Mentis en otra ciudad. Sin ubicación configurada simplemente no hay
+// tarjeta de clima: es lo honesto, porque el programa no sabe dónde está hasta que se lo digan.
+// Cada quien pone la suya en mentis-settings.json, que no se publica.
+function ubicacionConfigurada() {
+  try {
+    const s = settingsStore.loadSettings
+      ? settingsStore.loadSettings(MENTIS_ENV_DIR)
+      : JSON.parse(fsSync.readFileSync(path.join(MENTIS_ENV_DIR, 'mentis-settings.json'), 'utf8'));
+    const u = s && s.ubicacion;
+    if (u && Number.isFinite(Number(u.lat)) && Number.isFinite(Number(u.lon))) {
+      return { lat: Number(u.lat), lon: Number(u.lon), city: String(u.city || '') };
+    }
+  } catch {}
+  return null;
+}
 
 async function fetchLocationWeather() {
-  const loc = UBICACION_FIJA;
+  const loc = ubicacionConfigurada();
+  if (!loc) return { ok: false, motivo: 'sin ubicación configurada' };
   const weather = await httpsGetJson(
     `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code`
   );

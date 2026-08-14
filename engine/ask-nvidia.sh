@@ -210,6 +210,7 @@ case "$ROLE" in
   *)          NVMODEL="$ROLE";                                  NVMAX=4096;  NVTEMP=0.6; NVTO=0; SYS="$SYS_GENERAL"; FBMODEL="" ;;
 esac
 
+
 # --- PRESUPUESTOS DE VIDA (2026-08-03) ----------------------------------------------------------
 # Reemplazan al timeout total como criterio de corte. El problema del timeout total es que NO
 # distingue "esta pensando" de "esta colgado": solo mide reloj. Por eso 120 s por modelo, tres
@@ -388,6 +389,29 @@ if [ "$STRUCT" = "1" ]; then
   esac
 fi
 
+# EL IDIOMA VA ACA, DESPUES DE TODO LO QUE REESCRIBE $SYS (2026-08-13). Estaba mas arriba, junto
+# al case de roles, y no funcionaba: el bloque de -j/STRUCT de aca arriba REEMPLAZA $SYS entero,
+# asi que la instruccion de idioma se perdia sin dejar rastro -- Mentis seguia contestando en
+# espaniol con "answer in English" configurado, y desde afuera parecia que el modelo la ignoraba.
+# Todo lo que se le agrega al system tiene que ir despues de la ultima reasignacion, o no existe.
+# --- EL IDIOMA EN EL QUE RESPONDE (2026-08-13) --------------------------------------------------
+# Va en el SYSTEM y no en el mensaje, y eso NO es un detalle: la primera version metia la
+# instruccion adentro del texto del usuario y el modelo la ignoraba -- contestaba en espaniol una
+# pregunta con la instruccion "answer in English" arriba. La razon es que TODOS los SYS_* de este
+# archivo estan escritos en espaniol, y un system en espaniol arrastra al modelo mas fuerte que un
+# pedido en el mensaje. Puesto al final del system, gana.
+#
+# Vale para todos los roles a proposito: el idioma de lectura es una preferencia del usuario sobre
+# como le habla Mentis, no una caracteristica de un rol.
+if [ -f "$NVDIR/nv-idioma-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$NVDIR/nv-idioma-lib.sh" 2>/dev/null
+  NV_INSTR_IDIOMA="$(nv_idioma_instruccion 2>/dev/null)"
+  [ -n "${NV_INSTR_IDIOMA// }" ] && SYS="$SYS
+
+IMPORTANT: $NV_INSTR_IDIOMA"
+fi
+
 # --- prompt: args o stdin ---
 if [ "$#" -gt 0 ]; then NVPROMPT="$*"; else NVPROMPT="$(cat)"; fi
 # --- input de archivos (#5, -f acumulable): se antepone su contenido al prompt (acotado) ---
@@ -460,6 +484,8 @@ sys.exit(2 if st in ("401","429","500","502","503","504") else 4)
 # --- run_model <prompt> <model> <key> [fallback?]: llama con reintentos, loguea telemetria ---
 run_model() {
   local pr="$1" model="$2" key="$3" is_fb="${4:-false}" payload resp out rc attempt t0 t1 ms eff_to
+  [ -n "${NV_DEBUG_SYS:-}" ] && { echo "=== SYS FINAL ==="; printf "%s
+" "$SYS"; echo "=== FIN ==="; } >&2
   payload=$(NVMODEL="$model" NVMAX="$NVMAX" NVTEMP="$NVTEMP" NVPROMPT="$pr" NVEXTRA="$NVEXTRA" NVSYS="$SYS" NVSKILL="$SKILLTEXT" NVIMAGES="$IMGFILE" python3 -c '
 import json,os
 sysparts=[]

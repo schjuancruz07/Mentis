@@ -351,7 +351,50 @@ function saveVoz(mentisEnvDir, fields) {
   return getVoz(mentisEnvDir);
 }
 
+
+// --- IDIOMAS (2026-08-13) ---------------------------------------------------------------------
+// Dos preferencias separadas: 'lectura' (en que idioma escribe) y 'habla' (voz y transcripcion).
+// La lista de idiomas NO vive aca sino en engine/idiomas.json, que es lo que leen tambien el
+// motor, el TTS y el reconocimiento de voz. Duplicarla en el settings-store la desincronizaria
+// el primer dia que se agregue un idioma.
+function idiomasDisponibles(mentisEnvDir) {
+  try {
+    const p = path.join(mentisEnvDir, 'engine', 'idiomas.json');
+    const t = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return Object.entries(t.idiomas || {}).map(([codigo, d]) => ({ codigo, nombre: d.nombre }));
+  } catch {
+    // Sin la tabla queda el espaniol: es mejor un selector con una opcion que un selector vacio
+    // que parece roto.
+    return [{ codigo: 'es', nombre: 'Espanol' }];
+  }
+}
+
+function getIdioma(mentisEnvDir, data) {
+  const d = data || loadSettings(mentisEnvDir);
+  const codigos = idiomasDisponibles(mentisEnvDir).map((x) => x.codigo);
+  const val = (v) => (codigos.includes(v) ? v : 'es');
+  const g = d.idioma || {};
+  return { lectura: val(g.lectura), habla: val(g.habla) };
+}
+
+// Se valida al ESCRIBIR y no solo al leer: guardar un codigo que no existe deja a Mentis pidiendo
+// una voz inexistente al TTS, que falla en el momento de hablar y no al guardar -- o sea lejos de
+// donde se puede entender que paso.
+function saveIdioma(mentisEnvDir, fields) {
+  const data = loadSettings(mentisEnvDir);
+  const actual = getIdioma(mentisEnvDir, data);
+  const codigos = idiomasDisponibles(mentisEnvDir).map((x) => x.codigo);
+  const val = (v, porDefecto) => (codigos.includes(v) ? v : porDefecto);
+  data.idioma = {
+    lectura: fields && fields.lectura !== undefined ? val(fields.lectura, actual.lectura) : actual.lectura,
+    habla: fields && fields.habla !== undefined ? val(fields.habla, actual.habla) : actual.habla,
+  };
+  saveSettings(mentisEnvDir, data);
+  return data.idioma;
+}
+
 module.exports = {
+  idiomasDisponibles, getIdioma, saveIdioma,
   ROLES, PROVIDERS, getPublicSettings, saveCustomModel, removeCustomModel,
   getVoz, saveVoz, VOZ_DEFAULT,
   getIdeogramStatus, saveIdeogramKey, removeIdeogramKey,

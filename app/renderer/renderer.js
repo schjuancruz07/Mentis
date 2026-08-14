@@ -2934,7 +2934,7 @@ document.getElementById('btn-close-status').addEventListener('click', () => {
 // Los dos cuadros de ambiente que reemplazan al cuerpo digital como primera pantalla.
 //
 // EL RELOJ NO TOCA LA RED y se actualiza cada segundo. El CLIMA sí, pero cada 15 minutos y no
-// cada segundo: el tiempo en Villa Lugano no cambia entre un parpadeo y otro, y una consulta por
+// cada segundo: el clima no cambia entre un parpadeo y otro, y una consulta por
 // segundo sería castigar a un servicio gratuito para mostrar el mismo número.
 //
 // SÓLO CORREN CON LA BIENVENIDA A LA VISTA (decisión del usuario: "sólo en la bienvenida y después se
@@ -2967,7 +2967,7 @@ document.getElementById('btn-close-status').addEventListener('click', () => {
       // Si no vino la temperatura se dice, no se inventa ni se deja el guion suelto: un cuadro que
       // muestra "—" para siempre parece roto y no explica nada.
       if (temp) temp.textContent = (typeof c.tempC === 'number') ? Math.round(c.tempC) + '°' : 'sin dato';
-      if (lugar) lugar.textContent = c.description ? `${c.city}, ${c.description}` : (c.city || 'Villa Lugano');
+      if (lugar) lugar.textContent = c.description ? `${c.city}, ${c.description}` : (c.city || '');
     } catch { /* sin red: se queda con lo último que mostró */ }
   }
 
@@ -4785,3 +4785,53 @@ const panelEstudio = (function () {
 // diferencia de 'function'), asi que sin esto ni el arnes de pruebas ni ningun otro archivo
 // pueden tocar el panel. Es la misma razon por la que MENTIS_MODO_ACTUAL viaja por window.
 window.panelEstudio = panelEstudio;
+
+// ===== IDIOMAS EN CONFIGURACIÓN (pedido del usuario, 2026-08-13) ====================================
+// Dos selectores: en qué idioma te ESCRIBE y en cuál te HABLA (voz) y te ENTIENDE (transcripción).
+// Las opciones NO están escritas acá: vienen de engine/idiomas.json, que es la misma lista que
+// leen el motor, el TTS y el reconocimiento de voz. Escribirlas de nuevo en el HTML sería la
+// cuarta copia de la misma lista.
+//
+// Se guarda al elegir, sin botón de "guardar": es el mismo criterio que ya usan la paleta y el
+// modo. Un ajuste de una sola opción con botón aparte hace dudar de si quedó aplicado.
+(function idiomasUI() {
+  const selLectura = document.getElementById('idioma-lectura');
+  const selHabla = document.getElementById('idioma-habla');
+  const aviso = document.getElementById('idioma-aviso');
+  if (!selLectura || !selHabla || !window.mentisAPI.idiomasDisponibles) return;
+
+  async function cargar() {
+    const [lista, actual] = await Promise.all([
+      window.mentisAPI.idiomasDisponibles(),
+      window.mentisAPI.getIdioma(),
+    ]);
+    for (const sel of [selLectura, selHabla]) {
+      sel.replaceChildren();
+      for (const i of lista) {
+        const o = document.createElement('option');
+        o.value = i.codigo;
+        o.textContent = i.nombre;
+        sel.appendChild(o);
+      }
+    }
+    selLectura.value = actual.lectura;
+    selHabla.value = actual.habla;
+    if (aviso) aviso.classList.toggle('hidden', true);
+  }
+
+  async function guardar(campo, valor) {
+    const r = await window.mentisAPI.saveIdioma({ [campo]: valor });
+    // El aviso aparece SOLO al cambiar el idioma de habla, que es el que obliga a reiniciar los
+    // servidores de voz. Mostrarlo siempre lo volvería ruido que se deja de leer.
+    if (aviso && campo === 'habla') {
+      aviso.textContent = 'Listo. La voz se reinició para tomar el idioma nuevo.';
+      aviso.classList.remove('hidden');
+    }
+    return r;
+  }
+
+  selLectura.addEventListener('change', () => guardar('lectura', selLectura.value));
+  selHabla.addEventListener('change', () => guardar('habla', selHabla.value));
+  cargar().catch(() => {});
+  window.recargarIdiomas = cargar;
+})();

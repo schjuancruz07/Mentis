@@ -25,7 +25,17 @@ case ":$PATH:" in
   *) PATH="/usr/bin:/bin:$PATH"; export PATH ;;
 esac
 
-MENTIS_VOZ="${MENTIS_VOZ:-Magpie-Multilingual.ES-US.Isabela.Happy}"
+# LA VOZ SALE DEL IDIOMA ELEGIDO (2026-08-13). Antes estaba clavada en la de espaniol, asi que
+# elegir otro idioma de habla habria dejado a Isabela leyendo ingles con acento espaniol.
+# El default sigue siendo el de antes por si la tabla no esta: quedarse sin voz es peor que
+# hablar en el idioma equivocado.
+_MENTIS_VOZ_IDIOMA=""
+if [ -f "$HERE/engine/nv-idioma-lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$HERE/engine/nv-idioma-lib.sh" 2>/dev/null
+  _MENTIS_VOZ_IDIOMA="$(nv_idioma_voz 2>/dev/null)"
+fi
+MENTIS_VOZ="${MENTIS_VOZ:-${_MENTIS_VOZ_IDIOMA:-Magpie-Multilingual.ES-US.Isabela.Happy}}"
 export NVIDIA_KEY_VOZ_PARLANCHIN="${NVIDIA_KEY_VOZ_PARLANCHIN:-}"
 
 if [ "${1:-}" = "--voces" ]; then
