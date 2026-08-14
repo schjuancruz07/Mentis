@@ -40,6 +40,10 @@ MENTIS_ROOT="$(cd "$NVDIR/.." && pwd)"
 export MENTIS_ROOT
 # shellcheck source=/dev/null
 source "$NVDIR/nv-lib.sh"
+# GATE DE COMPLETITUD: deteccion de "afirma que funciona" (funcion pura, medible sin correr
+# turnos -- ver eval/gate-completitud/medir.sh). Se apaga con MENTIS_GATE_OFF=1.
+# shellcheck source=/dev/null
+source "$NVDIR/nv-gate-lib.sh"
 
 # Carpeta OBLIGATORIA de creaciones (pedido del usuario, 2026-07-12): todo lo que "gen" produce
 # (imagen/3D/documento) va SIEMPRE acá, no a la raiz de trabajo efimera (ROOT) -- asi el usuario la
@@ -806,6 +810,10 @@ _dispatch_tool() {
         VERIFY_YA_HECHA=1
         _verify_code_artifact "$VERIFY_PENDIENTE_REL" "$VERIFY_PENDIENTE_ABS" "$VERIFY_PENDIENTE_LANG" || true
         echo "[nv-agent] iter $it: verificacion final de '$VERIFY_PENDIENTE_REL' -> $VERIFY_VERDICT" >&2
+        # Una verificacion independiente que PASO es prueba fresca tan buena como un exec: otro
+        # modelo escribio tests contra el archivo y corrieron en sandbox. 'fail' y 'unverifiable'
+        # no suman -- no verificar no es lo mismo que verificar bien.
+        [ "$VERIFY_VERDICT" = "pass" ] && EVIDENCIA_N=$((EVIDENCIA_N+1))
         # El resultado se loguea SIEMPRE, no solo cuando falla: si pasa, o si no fue concluyente,
         # tiene que quedar rastro de que se verifico y con que resultado. Sin esto, un "pass"
         # era indistinguible de no haber verificado nunca.
@@ -1373,6 +1381,10 @@ PY
         # test real) -- si falla 2 veces seguidas con el rol base, subimos el CEREBRO (no solo
         # reintentamos con el mismo) para las proximas iteraciones, igual que la escalera
         # autor->tester->sandbox de nv-verify.sh pero sobre el repo real (no un snippet aislado).
+        # PRUEBA FRESCA para el gate de completitud: un comando que corrio de verdad y salio bien.
+        # Un exec que FALLA no cuenta como evidencia a proposito -- si el comando fallo y el turno
+        # igual afirma que funciona, es justo el caso que el gate tiene que agarrar.
+        [ "$RC" = "0" ] && EVIDENCIA_N=$((EVIDENCIA_N+1))
         if [ "${ALLOW_WRITE:-0}" = "1" ]; then
           nv_record_quality "$ITER_ROLE" "$CODE_LANG_GUESS" "$([ "$RC" = "0" ] && echo 1 || echo 0)"
           if [ "$RC" = "0" ]; then
@@ -2368,6 +2380,15 @@ _foto_antes_de_tocar() {
 # a propósito -- si un turno se corta a la mitad, los archivos quedan para poder mirarlos.
 rm -rf "$ROOT/$OBSDIR_REL" 2>/dev/null || true
 WRITE_CNT=0; EXEC_CNT=0
+# EVIDENCIA_N: cuantas PRUEBAS FRESCAS de terminal hubo en este turno. Distinto de EXEC_CNT, que
+# cuenta INTENTOS de exec (se incrementa incluso cuando el comando se rechaza por permisos o
+# llega vacio, casos donde no se ejecuto nada). Solo suman: un 'exec' que corrio de verdad y
+# salio con exit 0, y una verificacion independiente que PASO. Es lo unico que el gate de
+# completitud acepta como respaldo de un "funciona".
+EVIDENCIA_N=0
+# Cuantas veces se rechazo el cierre por falta de evidencia. A la segunda no se rechaza mas: se
+# corrige el texto (misma leccion que la guarda de documento -- rechazar en bucle quema el turno).
+GATE_RECHAZOS=0
 
 PROTOCOL="Sos un agente que resuelve una tarea explorando un directorio en SOLO-LECTURA y razonando paso a paso.
 En CADA turno respondé EXCLUSIVAMENTE con UN objeto JSON, sin texto antes ni después, sin markdown. Herramientas:
@@ -2972,6 +2993,50 @@ ERROR: tu respuesta habla de un documento (informe/word/pdf/presentación) pero 
 "
     STATUS="budget"; FINAL=""
   fi
+
+  # GATE DE COMPLETITUD (2026-08-14, idea 2 de docs/godmode-que-sirve.md).
+  #
+  # Las dos guardas de arriba preguntan si el ARTEFACTO existe ("decis que creaste un documento:
+  # ¿lo creaste?"). Esta pregunta otra cosa, que es la familia de errores mas frecuente de la
+  # bitacora: el artefacto existe, pero nadie lo probo y el turno igual dice que funciona.
+  # ERR-141 y ERR-144 son eso -- una herramienta informando un resultado que no midio.
+  #
+  # LA REGLA, UNA SOLA: si la respuesta final afirma que algo funciona / anda / pasa los tests /
+  # quedo verificado, tiene que haber en ESTE turno una prueba fresca (EVIDENCIA_N > 0).
+  #
+  # LAS DOS CONDICIONES QUE LA ACOTAN (esto salio de medir, no de suponer -- ver
+  # eval/gate-completitud/medir.sh sobre las 74 respuestas reales del historial del usuario):
+  #   a) El turno tiene que haber TOCADO algo (write o intento de exec). Sin esta condicion el
+  #      gate se metia en conversaciones donde "funciona" es descriptivo y no una afirmacion de
+  #      completitud -- "el Enter funciona correctamente", "la webcam funciona". Son 5 de las 74
+  #      y ninguna escribio un archivo: con la condicion (a), el gate toca 0 de 74. La palabra
+  #      "funciona" no es el problema; decirla despues de escribir codigo sin correrlo lo es.
+  #   b) A la SEGUNDA no se rechaza de nuevo. Rechazar en bucle quema el presupuesto entero y
+  #      deja al usuario sin respuesta (medido en la guarda de documento: un turno se comio 10
+  #      minutos asi). La segunda vez pasa, pero con la afirmacion corregida.
+  if [ "${MENTIS_GATE_OFF:-0}" != "1" ] && [ "$STATUS" = "done" ] && [ "${EVIDENCIA_N:-0}" -eq 0 ] \
+     && [ $(( WRITE_CNT + ${EXEC_CNT:-0} )) -gt 0 ] && nv_gate_afirma_listo "$FINAL"; then
+    # Se corrige el texto -- en vez de rechazar -- en DOS casos: si ya se rechazo una vez, y si
+    # esta es la ultima iteracion. Lo segundo importa tanto como lo primero: rechazar en la ultima
+    # vuelta deja el turno sin respuesta final, y el usuario termina recibiendo el "reporte parcial
+    # honesto" con el historial crudo en vez de la respuesta que el modelo ya tenia escrita.
+    # Prefiero una respuesta con la advertencia adelante que ninguna respuesta.
+    if [ "${GATE_RECHAZOS:-0}" -ge 1 ] || [ "$it" -ge "$MAXIT" ]; then
+      echo "[nv-agent] iter $it: afirmacion de 'funciona' sin prueba (sin margen para pedirla) -- se corrige el texto" >&2
+      FINAL="$(nv_gate_texto_corregido "$FINAL")"
+    else
+      GATE_RECHAZOS=$(( ${GATE_RECHAZOS:-0} + 1 ))
+      echo "[nv-agent] iter $it: done RECHAZADO -- afirma que funciona y no hay prueba fresca en el turno" >&2
+      HIST="$HIST
+--- turno $it ---
+acción: {\"tool\":\"done\"}
+observación:
+$(nv_gate_observacion_rechazo)
+"
+      STATUS="budget"; FINAL=""
+    fi
+  fi
+
   if [ "$STATUS" = "done" ]; then break; fi
 
   # Previsualizacion en vivo para la app Electron (bug real 2026-07-13): el panel de
