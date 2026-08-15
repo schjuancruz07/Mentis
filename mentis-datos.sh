@@ -11,6 +11,7 @@
 #   mentis-datos.sh nasa apod [fecha YYYY-MM-DD]
 #   mentis-datos.sh archive <query>
 #   mentis-datos.sh doaj <query>
+#   mentis-datos.sh papers <tema>                    # OpenAlex: 250M de trabajos con citas y DOI
 #   mentis-datos.sh wikipedia <termino>
 #   mentis-datos.sh overture <lonmin,latmin,lonmax,latmax> <tipo>   # tipo ej: building, place, segment
 #   mentis-datos.sh nominatim <direccion>   # geocoding mundial (OSM), reemplaza a Mapbox -- sin api key
@@ -194,6 +195,47 @@ for r in results:
     autores = ", ".join(a.get("name","") for a in (bib.get("author") or [])[:3])
     link = next((l.get("url") for l in (bib.get("link") or []) if l.get("url")), "")
     print(f"- {titulo} -- {autores} -- {link}")
+'
+    ;;
+
+  # --- OpenAlex: papers con fuente, sin clave (2026-08-15) -------------------------------------
+  # POR QUE, HABIENDO YA UN 'doaj': DOAJ indexa SOLO revistas de acceso abierto. OpenAlex tiene
+  # 250 millones de trabajos -- abiertos y cerrados --, con año, cantidad de citas y DOI. Para los
+  # modos Study y Science eso es la diferencia entre "encontré algo" y "encontré el paper que se
+  # cita en todos lados". Los dos quedan: DOAJ para leer el texto completo gratis, OpenAlex para
+  # saber qué existe y cuánto pesa.
+  #
+  # El User-Agent con un mail es lo que pide su documentación para el pool rápido; sin eso la API
+  # responde igual pero por la cola lenta. No hay clave ni registro.
+  papers)
+    QUERY="$*"
+    [ -n "${QUERY// }" ] || _die "falta la busqueda. Uso: papers <tema>"
+    RESP="$(curl -s -H "User-Agent: Mentis/1.0 (https://github.com/usuario/Mentis)" -m 25 \
+      "https://api.openalex.org/works?search=$(_urlenc "$QUERY")&per-page=8&sort=cited_by_count:desc")"
+    [ -n "${RESP// }" ] || _die "sin respuesta de OpenAlex."
+    NV_JSON="$RESP" python3 -c '
+import json, os
+data = json.loads(os.environ["NV_JSON"])
+total = (data.get("meta") or {}).get("count", 0)
+res = data.get("results") or []
+print(f"{total} trabajo(s) encontrado(s) (mostrando {len(res)}, los mas citados primero).")
+for w in res:
+    titulo = (w.get("title") or "sin titulo")[:130]
+    anio = w.get("publication_year") or "?"
+    citas = w.get("cited_by_count", 0)
+    autores = ", ".join(
+        ((a.get("author") or {}).get("display_name") or "") for a in (w.get("authorships") or [])[:3]
+    )
+    doi = w.get("doi") or ""
+    # open_access.oa_url es el PDF gratis cuando existe; sin eso, el DOI es lo unico accionable.
+    oa = ((w.get("open_access") or {}).get("oa_url") or "")
+    link = oa or doi
+    abierto = "ACCESO ABIERTO" if oa else "sin PDF gratis"
+    print(f"- {titulo} ({anio}) -- {citas} citas -- {abierto}")
+    if autores:
+        print(f"    {autores}")
+    if link:
+        print(f"    {link}")
 '
     ;;
 

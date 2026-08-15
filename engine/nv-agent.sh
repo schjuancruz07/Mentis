@@ -922,6 +922,20 @@ $CAPTXT"
       fi ;;
     read)
       REL="$(_b64d "$PATH_B64")"
+      # ¿ESTE MISMO TURNO LO ESCRIBIO Y SIGUE IGUAL? Se resuelve antes de leer, comparando la
+      # huella guardada al escribir contra la del archivo tal como esta ahora.
+      RELEE_PROPIO=0
+      # El guard de "$REL" no vacio va PRIMERO y no es cosmetico: bajo `set -u`, indexar un array
+      # asociativo con un subscript vacio aborta el turno entero con "bad array subscript". Paso en
+      # vivo el 2026-08-15 -- un 'read' sin path mato la corrida a la mitad y el duelo la anoto
+      # como 7/11 en 74 segundos, que parecia "rapido pero peor" cuando en realidad estaba roto.
+      if [ -n "${REL:-}" ] && [ -n "${ESCRITO_HUELLA["$REL"]:-}" ]; then
+        _RP_ABS="$(_ruta_leible "$REL" 2>/dev/null || true)"
+        if [ -n "$_RP_ABS" ] && [ -f "$_RP_ABS" ]; then
+          _RP_H="$(cksum < "$_RP_ABS" 2>/dev/null | cut -d' ' -f1)"
+          [ -n "${_RP_H:-}" ] && [ "$_RP_H" = "${ESCRITO_HUELLA["$REL"]}" ] && RELEE_PROPIO=1
+        fi
+      fi
       if ABS="$(_ruta_leible "$REL")" && [ -f "$ABS" ]; then
         # Bug real (2026-07-14): leer un binario (imagen/audio/video/etc) con cat metía sus bytes
         # crudos en la observación, y esa basura rompía el JSON de la respuesta del modelo en el
@@ -1117,6 +1131,8 @@ $OBS_C"
         CONTENT="$(_b64d "$CONTENT_B64")"
         printf '%s' "$CONTENT" > "$ABS"
         OBS="OK: archivo escrito ($(printf '%s' "$CONTENT" | wc -c) bytes): $REL"
+        # Huella del contenido recien escrito (cksum: un proceso corto y sin dependencias).
+        ESCRITO_HUELLA["$REL"]="$(printf '%s' "$CONTENT" | cksum | cut -d' ' -f1)"
         echo "[nv-agent] iter $it: write $REL" >&2
         WLANG=""
         case "$REL" in
@@ -2095,7 +2111,7 @@ else:
         DPATH="$(_b64d "${PATH_B64:-}" 2>/dev/null || true)"
         DVALUE="$(_b64d "${VALUE_B64:-}" 2>/dev/null || true)"
         case "$DACTION" in
-          overpass|archive|doaj|wikipedia|nominatim)
+          overpass|archive|doaj|papers|wikipedia|nominatim)
             DOUT="$(bash "$MENTIS_ROOT/mentis-datos.sh" "$DACTION" "$DVALUE" 2>&1)"; DRC=$?
             ;;
           georef)
@@ -2112,7 +2128,7 @@ else:
             DOUT="$(bash "$MENTIS_ROOT/mentis-datos.sh" overture "$DPATH" "$DVALUE" 2>&1)"; DRC=$?
             ;;
           *)
-            DOUT="accion de datos desconocida: '$DACTION'. Usa overpass|georef|opensky|nasa|archive|doaj|wikipedia|overture|nominatim."; DRC=1
+            DOUT="accion de datos desconocida: '$DACTION'. Usa overpass|georef|opensky|nasa|archive|doaj|papers|wikipedia|overture|nominatim."; DRC=1
             ;;
         esac
         if [ "$DRC" = "0" ]; then
@@ -2511,6 +2527,7 @@ if [ "$ALLOW_DATOS" = "1" ]; then
   {\"tool\":\"datos\",\"action\":\"nasa\",\"value\":\"<fecha YYYY-MM-DD opcional>\"}       -> foto astronómica del día de la NASA (APOD). Sin 'value' devuelve la de hoy.
   {\"tool\":\"datos\",\"action\":\"archive\",\"value\":\"<query>\"}                        -> busca en Internet Archive (libros, audio, video, software viejo).
   {\"tool\":\"datos\",\"action\":\"doaj\",\"value\":\"<query>\"}                           -> busca artículos académicos de acceso abierto (DOAJ).
+  {\"tool\":\"datos\",\"action\":\"papers\",\"value\":\"<tema>\"}                         -> busca papers en OpenAlex (250 millones de trabajos, abiertos Y cerrados): devuelve título, año, cantidad de CITAS, autores y el PDF gratis si existe, ordenados por citas. Es la fuente para 'qué se investigó sobre esto' y para citar con referencia real; DOAJ en cambio sólo tiene revistas de acceso abierto.
   {\"tool\":\"datos\",\"action\":\"wikipedia\",\"value\":\"<termino>\"}                    -> resumen real de un término en Wikipedia en español.
   {\"tool\":\"datos\",\"action\":\"overture\",\"path\":\"<lonmin,latmin,lonmax,latmax>\",\"value\":\"<tipo>\"} -> descarga real de Overture Maps por bounding box (tipo ej: building, place, segment, land_use) -- edificios/lugares/calles reales con nombre cuando lo tienen.
   {\"tool\":\"datos\",\"action\":\"nominatim\",\"value\":\"<dirección>\"}                  -> geocoding mundial (dirección -> coordenadas) vía OpenStreetMap Nominatim, sin necesitar ninguna key."
@@ -2733,6 +2750,11 @@ PREV_TOOL=""; SAME_TOOL_STREAK=0; DELEGATE_LIKE_COUNT=0; HAD_REAL_ACTION=0
 # (A, B, A, B) es igual de mortal que uno seguido y la version por rachas no lo veia.
 declare -A OK_SIG_COUNT=()
 OK_SIG_MAX=3
+# LO QUE ESTE TURNO ESCRIBIO, con su huella (2026-08-15). Sirve para no releer lo propio: ver la
+# guarda "YA LO ESCRIBISTE VOS" mas abajo. La huella es del CONTENIDO, no de la ruta: si un
+# comando modifica el archivo despues, deja de coincidir y releerlo vuelve a ser legitimo.
+declare -A ESCRITO_HUELLA=()
+RELEE_PROPIO=0
 # CUANDO YA LO LOGRASTE, TERMINA (2026-08-08).
 #
 # EL AGUJERO: todas las guardas de este archivo miran en UNA sola direccion -- que el modelo no
@@ -3320,6 +3342,29 @@ No alcanza con haber preparado el contenido: mientras no lo escribas con {\"tool
   # No corta el turno: le devuelve el contenido UNA vez mas con un empujon a contestar. Cortar
   # castigaria al modelo por una accion que estuvo bien -- el problema no es que lea, es que no
   # se da cuenta de que ya lo tiene.
+  # YA LO ESCRIBISTE VOS (2026-08-15, sale del duelo contra Goose).
+  #
+  # EL DATO: con el mismo cerebro y la misma tarea, Goose tardaba 85 segundos y Mentis 159. Las
+  # trazas lo explicaban solas -- Goose: write, write, write, shell, listo. Mentis: los cuatro
+  # write y despues LEER cada archivo, uno por uno. Cada relectura es una llamada entera al
+  # modelo: ahi estaban los 70 segundos.
+  #
+  # NO LO VEIA NINGUNA GUARDA: el detector de bucles mira la MISMA accion repetida, y aca cada
+  # lectura es de un archivo distinto y ninguna se repite.
+  #
+  # NO SE BLOQUEA LA LECTURA: el contenido se devuelve igual, con una linea adelante. Bloquear
+  # seria negarle algo que a veces necesita; lo que le falta es darse cuenta de que ya lo tiene.
+  # Y si el archivo cambio desde que lo escribio -- por ejemplo, porque un comando lo modifico --
+  # la huella no coincide y no se dice nada: releer eso es exactamente lo correcto.
+  # Apagado: MENTIS_RELECTURA_OFF=1.
+  if [ "${MENTIS_RELECTURA_OFF:-0}" != "1" ] && [ "$TOOL" = "read" ] && [ "${RELEE_PROPIO:-0}" = "1" ] \
+     && [[ "$OBS" != ERROR:* ]]; then
+    OBS="AVISO: este archivo ('${REL:-}') lo escribiste VOS en este mismo turno y no cambio desde entonces -- lo que sigue es exactamente lo que mandaste. Leerlo no te dice nada nuevo y cuesta un paso entero. Segui con lo que falta; si ya esta todo, respondé con done.
+
+$OBS"
+    echo "[nv-agent] iter $it: relectura de lo propio ($REL) -- avisado" >&2
+  fi
+
   # GENERALIZADO EL 2026-08-14. La version anterior de esta guarda miraba SOLO 'read'. El agujero
   # aparecio probando el gate de completitud: se le pidio un archivo y escribio el MISMO
   # 'resta_gate_7k2.py' seis veces seguidas -- seis 'write' exitosos, uno atras del otro -- hasta

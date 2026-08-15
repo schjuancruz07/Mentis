@@ -27,5 +27,19 @@
       "GITHUB_TOOLSETS": "repos,context"
     },
     "_nota": "Solo lectura. Para permitir que escriba (crear issues, PRs, commits), sacar --read-only de args."
+  },
+  {
+    "name": "memoria-grafo",
+    "type": "stdio",
+    "enabled": false,
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-memory"
+    ],
+    "env": {
+      "MEMORY_FILE_PATH": "${MENTIS_ROOT}/memoria/grafo.json"
+    },
+    "_nota": "MCP oficial de memoria en GRAFO (entidades + relaciones). Probado el 2026-08-15: conecta, expone 9 herramientas y guarda/recupera bien. ARRANCA APAGADO A PROPOSITO: Mentis ya recuerda con Kai Vault (busqueda por significado) y con las memorias firmes. Dos memorias activas que no se hablan terminan contradiciendose -- es la misma objecion que dejo afuera a Mem0. Si se enciende, que sea para algo que Kai Vault NO hace: el mapa de entidades y como se relacionan, no el historial de lo conversado."
   }
 ]
