@@ -51,10 +51,15 @@ grep -q 'id="btn-status-full"' "$H" \
 grep -q 'icono-agrandar' "$H" && grep -q 'icono-achicar' "$H" \
   && _ok "tiene los dos iconos (flechitas para afuera y para adentro)" \
   || _mal "los dos iconos" "sin cambiar el icono, el boton no dice si vas a agrandar o achicar"
-grep -q '#status-panel.pantalla-completa' "$C" \
+# 2026-08-15: el panel tiene dos tamanos con nombres nuevos -- 'columna' (el normal, alto y a la
+# derecha, que no tapa) y 'completa' (cubre todo). Se verifican los dos.
+grep -q '#status-panel.columna' "$C" \
+  && _ok "hay estilo del tamano normal (columna alta)" \
+  || _mal "estilo columna" "el panel volveria al cuadradito de 340px"
+grep -q '#status-panel.completa' "$C" \
   && _ok "hay estilo de pantalla completa" \
   || _mal "estilo" "el boton no haria nada"
-grep -q "e.key === 'Escape' && panel.classList.contains('pantalla-completa')" "$R" \
+grep -q "e.key === 'Escape' && panel.classList.contains('completa')" "$R" \
   && _ok "se sale con Escape" \
   || _mal "salida con Escape" "en una vista que ocupa todo, el boton no siempre es obvio"
 

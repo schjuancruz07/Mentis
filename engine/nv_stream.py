@@ -279,7 +279,14 @@ def main():
     req = urllib.request.Request(
         URL, data=json.dumps(payload).encode("utf-8"), method="POST",
         headers={"Authorization": "Bearer " + (os.environ.get("NVKEY") or ""),
-                 "Content-Type": "application/json", "Accept": "text/event-stream"})
+                 "Content-Type": "application/json", "Accept": "text/event-stream",
+                 # USER-AGENT PROPIO (2026-08-15). urllib manda "Python-urllib/3.x" y hay
+                 # proveedores detras de Cloudflare que lo rechazan con un 403 y una pagina HTML
+                 # -- Groq es uno. El sintoma era desconcertante: el mismo modelo, con el mismo
+                 # payload y la misma key, andaba por curl (NV_STREAM_OFF=1) y "no respondia" por
+                 # el camino normal, asi que parecia un problema del modelo y no del cliente.
+                 # curl nunca lo sufrio porque manda su propio User-Agent.
+                 "User-Agent": "Mentis/1.0 (+https://github.com/usuario/Mentis)"})
 
     try:
         # El plazo inicial es el presupuesto de PRIMER TOKEN: si la conexion no da senales en ese

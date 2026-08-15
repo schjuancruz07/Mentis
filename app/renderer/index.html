@@ -140,6 +140,12 @@
             </svg>
           </button>
         </div>
+        <!-- TABLERO DE TAREAS (2026-08-15, pedido del usuario para Cowork): la lista de puntos del
+             turno, que se van tachando. Va ARRIBA de la previsualización y no flotando sobre la
+             conversación: el panel ya se abre solo cuando hay actividad, así que el tablero
+             aparece donde uno ya está mirando en vez de taparle lo que lee.
+             Los renglones los pinta el JS con lo que manda el motor ("[nv-agent] PLAN:..."). -->
+        <div id="tablero-tareas" class="hidden" aria-live="polite"></div>
         <div id="preview-content">Sin actividad todavía en este turno.</div>
         <!-- EL PANEL DE ESTUDIO (pedido del usuario, 2026-08-13): en Mentis Study, en vez del
              previsualizador va la botonera de los nueve formatos. No es otro panel: es el MISMO,

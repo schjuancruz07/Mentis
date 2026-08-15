@@ -1422,6 +1422,29 @@ PY
           if [ "$BENDPOINT" = "buscar-en-cadena" ]; then
             # Se prueba buscador por buscador hasta que uno conteste algo que no sea un desafio.
             BRESP=""; BUSADO=""
+            # TAVILY PRIMERO, SI HAY CLAVE (2026-08-15). Desde esta red, Bing, DuckDuckGo y
+            # Mojeek devuelven CAPTCHA (medido, ver _urls_de_busqueda), asi que la busqueda queda
+            # reducida a Marginalia -- indice independiente y chico -- y Wikipedia. Eso, y no el
+            # modelo, es por que las busquedas salen flojas.
+            #
+            # Tavily es una API pensada para agentes: uno se identifica con una clave en vez de
+            # disimular. Va PRIMERO y la escalera de siempre queda de respaldo. Sin clave no cambia
+            # nada: el script devuelve vacio y sigue todo como hasta hoy.
+            _TAVILY_KEY="$(grep '^TAVILY_API_KEY=' "$MENTIS_ROOT/.custom-models-secrets.env" 2>/dev/null | cut -d= -f2- | tr -d '
+')"
+            if [ -n "${_TAVILY_KEY// }" ]; then
+              _TV="$(TAVILY_API_KEY="$_TAVILY_KEY" timeout 40 python3 "$(_win_path "$NVDIR/tavily_buscar.py")" "$BQUERY" 2>/dev/null | tr -d '
+')"
+              if [ -n "${_TV// }" ]; then
+                BRESP="$(BT="$_TV" python3 -c 'import json,os;print(json.dumps({"ok":True,"texto":os.environ["BT"]}))' | tr -d '
+')"
+                echo "[nv-agent] iter $it: browse search (tavily)" >&2
+              fi
+            fi
+
+            # La escalera de buscadores queda de RESPALDO: si Tavily ya trajo resultados, no se
+            # gastan cuatro viajes mas para tirarlos. Sin clave de Tavily, esto corre como siempre.
+            if [ -z "${BRESP// }" ]; then
             while IFS= read -r BSURL; do
               [ -n "$BSURL" ] || continue
               BJSON="$(python3 -c 'import json,sys;print(json.dumps({"url":sys.argv[1]}))' "$BSURL")"
@@ -1438,6 +1461,7 @@ PY
               echo "[nv-agent] iter $it: browse search ($BUSADO rechazo, pruebo el siguiente)" >&2
               BRESP="$BRESP_TRY"
             done <<< "$(_urls_de_busqueda "$BQUERY")"
+            fi
             BENDPOINT="open"; BYA_LOGUEADO=1
           elif [ -n "$BENDPOINT" ]; then
             BRESP="$(curl -s -m 30 -X POST "http://127.0.0.1:$BPORT/$BENDPOINT" -H 'Content-Type: application/json' -d "$BJSON" 2>/dev/null)"
@@ -2310,10 +2334,12 @@ except Exception:
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 
+REPARTO=0
+TABLERO=0
 ROLE="reason"; MAXIT=20; ROOT="$PWD"; ALLOW_WRITE=0; ALLOW_BROWSE=0; ALLOW_MCP=0; ALLOW_GEN=0; ALLOW_SCREEN=0; ALLOW_DANGEROUS=0; ALLOW_CONTROL=0; ALLOW_EDITOR=0; ALLOW_ARDUINO=0; ALLOW_DATOS=0; ALLOW_CARBS=0; ALLOW_WEBCAM=0; ALLOW_TELEFONO=0; ALLOW_SKILLS=0; ALLOW_TELEFONO=0
 IMG_ATTACH=()
 SIN_TOOLS="${NVA_SIN_TOOLS:-}"
-while getopts ":d:m:i:n:wbtgscexaDCVPKI:" opt; do
+while getopts ":d:m:i:n:wbtgscexaDCVPKpTI:" opt; do
   case "$opt" in
     d) ROOT="$OPTARG" ;;
     m) ROLE="$OPTARG" ;;
@@ -2334,6 +2360,13 @@ while getopts ":d:m:i:n:wbtgscexaDCVPKI:" opt; do
     e) ALLOW_EDITOR=1 ;;
     a) ALLOW_ARDUINO=1 ;;
     D) ALLOW_DATOS=1 ;;
+    # -p: reparto automatico (paralelo). OJO: en mentis-chat.sh "-R" ya significa modo remoto, por
+    # eso aca la letra es otra. El motor pide un plan y, si la tarea se parte en dos o mas piezas
+    # independientes, las resuelve EN PARALELO antes de empezar el loop. Lo pasa mentis-chat.sh
+    # cuando el modo tiene la herramienta 'parallel' (hoy: Cowork). Ver el bloque AUTO-REPARTO.
+    p) REPARTO=1 ;;
+    # -T: tablero de tareas del turno (modo Cowork). Ver el bloque TABLERO DE TAREAS.
+    T) TABLERO=1 ;;
     I) IMG_ATTACH+=("$OPTARG") ;;
     *) echo "ERROR: opción inválida -$OPTARG" >&2; exit 1 ;;
   esac
@@ -2389,6 +2422,8 @@ EVIDENCIA_N=0
 # Cuantas veces se rechazo el cierre por falta de evidencia. A la segunda no se rechaza mas: se
 # corrige el texto (misma leccion que la guarda de documento -- rechazar en bucle quema el turno).
 GATE_RECHAZOS=0
+# Idem para la guarda de "los archivos que nombra existen".
+ARCH_RECHAZOS=0
 
 PROTOCOL="Sos un agente que resuelve una tarea explorando un directorio en SOLO-LECTURA y razonando paso a paso.
 En CADA turno respondé EXCLUSIVAMENTE con UN objeto JSON, sin texto antes ni después, sin markdown. Herramientas:
@@ -2693,8 +2728,11 @@ FINAL=""; STATUS="budget"
 # (no vuelve a bajar a 'fast' a mitad de una tarea que ya demostro necesitar mas criterio).
 CU_ESCALATED=0
 PREV_TOOL=""; SAME_TOOL_STREAK=0; DELEGATE_LIKE_COUNT=0; HAD_REAL_ACTION=0
-# Bucle de ACIERTOS: la misma lectura repetida no dispara ningun detector de errores.
-OK_SIG_KEY_PREV=""; OK_SIG_STREAK=0
+# Bucle de ACIERTOS: la misma accion EXITOSA repetida no dispara ningun detector de errores.
+# Cuenta por FIRMA de accion (herramienta + argumentos), no consecutivas: un bucle alternado
+# (A, B, A, B) es igual de mortal que uno seguido y la version por rachas no lo veia.
+declare -A OK_SIG_COUNT=()
+OK_SIG_MAX=3
 # CUANDO YA LO LOGRASTE, TERMINA (2026-08-08).
 #
 # EL AGUJERO: todas las guardas de este archivo miran en UNA sola direccion -- que el modelo no
@@ -2771,6 +2809,163 @@ VERIFY_YA_HECHA=0
 # mismo formato "[nv-agent]..." para que quien ya lee esas lineas no tenga que aprender otra cosa.
 # Si alguien corre nv-agent.sh a mano, es una linea mas de contexto y nada se rompe.
 echo "[nv-agent] PRESUPUESTO: $MAXIT" >&2
+
+# --- AUTO-REPARTO DEL MODO COWORK (2026-08-14, pedido del usuario) ----------------------------------
+#
+# EL PROBLEMA MEDIDO: en el duelo contra CrewAI (eval/duelo-cowork-crewai/), Mentis corrio tres
+# veces la misma tarea de tres partes independientes con 'delegate' y 'parallel' HABILITADAS y no
+# uso ninguna de las dos: resolvio todo en fila. El paralelismo de CrewAI no lo decide el modelo,
+# lo declara el programador -- por eso siempre reparte.
+#
+# POR QUE ESTO NO ES UN PARRAFO EN LA PERSONA DEL MODO: porque ya sabemos como termina. La persona
+# de Cowork YA dice "cuando una tarea tenga partes independientes, repartilas en paralelo" y el
+# modelo la leyo las tres veces. Una defensa escrita como instruccion es una sugerencia (ERR-133).
+# Asi que reparte el MOTOR: se pide un plan, y si el plan tiene dos o mas partes independientes,
+# se lanzan en paralelo sin preguntarle al modelo.
+#
+# LO QUE CUESTA: una llamada corta por turno de Cowork (rol 'extract', el mas rapido). Si el plan
+# devuelve menos de dos partes, no se reparte nada y esa llamada fue el unico costo. Por eso entra
+# medido contra el mismo duelo: si no baja el tiempo o baja el puntaje, se apaga.
+#
+# APAGADO: MENTIS_REPARTO_OFF=1. Se activa solo con -R (mentis-chat.sh lo pasa en modo Cowork).
+_auto_reparto() {
+  local plan roles_prompts n tmpd pi pids=() roles=() out=""
+  plan="$(printf 'Tarea que hay que resolver:\n%s\n\nDividila en partes que se puedan hacer AL MISMO TIEMPO, sin que ninguna necesite el resultado de otra. Devolvé SOLO un array JSON, sin texto alrededor, con este formato:\n[{"role":"general","prompt":"…"},{"role":"general","prompt":"…"}]\n\nReglas: máximo 4 partes; cada "prompt" tiene que ser autosuficiente (quien lo reciba NO ve la tarea original ni lo que hacen los demás); "role" puede ser general, code, reason o extract. Si la tarea NO se puede partir en partes independientes, devolvé exactamente [].' "$TASK" \
+    | timeout 90 bash "$NVDIR/ask-nvidia.sh" -r extract 2>/dev/null)" || return 1
+  # Parseo tolerante: los modelos envuelven el JSON en markdown o lo explican antes. Se busca el
+  # primer array del texto en vez de exigir una respuesta limpia.
+  roles_prompts="$(printf '%s' "$plan" | python3 -c '
+import json, sys, re, base64
+t = sys.stdin.read()
+m = re.search(r"\[.*\]", t, re.S)
+if not m: sys.exit(0)
+try: d = json.loads(m.group(0))
+except Exception: sys.exit(0)
+if not isinstance(d, list): sys.exit(0)
+for item in d[:4]:
+    if not isinstance(item, dict): continue
+    r = item.get("role", "general")
+    p = item.get("prompt", "")
+    if not isinstance(r, str) or r not in ("general","code","reason","extract"): r = "general"
+    if not isinstance(p, str) or not p.strip(): continue
+    print(r + "\t" + base64.b64encode(p.encode("utf-8", "replace")).decode())
+' 2>/dev/null)" || return 1
+  n="$(printf '%s' "$roles_prompts" | grep -c. || true)"
+  [ "${n:-0}" -ge 2 ] || return 1
+
+  tmpd="$(mktemp -d)"; pi=0
+  while IFS=$'\t' read -r _rol _p64; do
+    [ -n "${_rol:-}" ] || continue
+    roles[$pi]="$_rol"
+    ( printf '%s' "$_p64" | base64 -d 2>/dev/null | timeout 180 bash "$NVDIR/ask-nvidia.sh" -r "$_rol" > "$tmpd/out-$pi.txt" 2>/dev/null ) &
+    pids+=("$!")
+    pi=$((pi+1))
+  done <<< "$roles_prompts"
+  for _pid in "${pids[@]}"; do wait "$_pid" 2>/dev/null || true; done
+
+  for (( pi=0; pi<n; pi++ )); do
+    out="$out
+--- parte $((pi+1)) (${roles[$pi]:-general}) ---
+$(cat "$tmpd/out-$pi.txt" 2>/dev/null || true)"
+  done
+  rm -rf "$tmpd"
+  REPARTO_OBS="$(printf '%s' "$out" | _trunc)"
+  REPARTO_N="$n"
+  return 0
+}
+
+if [ "${REPARTO:-0}" = "1" ] && [ "${MENTIS_REPARTO_OFF:-0}" != "1" ]; then
+  echo "[nv-agent] reparto automatico: pidiendo el plan" >&2
+  if _auto_reparto; then
+    echo "[nv-agent] reparto automatico: $REPARTO_N partes resueltas EN PARALELO antes de empezar" >&2
+    # Entra al historial como una accion ya hecha, con una instruccion acotada: el material ya
+    # esta, lo que falta es usarlo. Sin esta linea el modelo vuelve a generarlo todo de nuevo y
+    # el reparto no habria servido para nada.
+    HIST="$HIST
+--- turno 0 (reparto automatico) ---
+acción: {\"tool\":\"parallel\"}
+observación:
+$REPARTO_OBS
+
+NOTA: estas $REPARTO_N partes ya se resolvieron en paralelo antes de empezar. NO las vuelvas a generar: usá este material tal cual.
+OJO, LO MAS IMPORTANTE: este material NO está guardado en ningún archivo -- vive sólo acá, en esta conversación. Si la tarea pide archivos, los tenés que escribir vos con 'write', uno por uno, y recién ahí existen. Medido el 2026-08-14: con el material a la vista, el turno escribió UN archivo de tres y cerró diciendo que había hecho los tres.
+"
+  else
+    echo "[nv-agent] reparto automatico: la tarea no se parte en partes independientes; sigo normal" >&2
+  fi
+fi
+
+# --- TABLERO DE TAREAS (2026-08-15, pedido del usuario para el modo Cowork) -------------------------
+#
+# QUE ES: al arrancar el turno se le pide al modelo un plan corto -- 3 a 6 tareas en castellano, y
+# para cada una, el archivo que deberia existir cuando esté cumplida. El plan sale por stderr como
+# lineas "[nv-agent] PLAN: n|texto|archivo", que la app dibuja como una lista de puntos.
+#
+# LO QUE HACE QUE ESTO NO SEA UNA DECORACION: las tareas se tachan cuando el ARCHIVO APARECE, no
+# cuando el modelo dice que las hizo. Es la misma regla que la guarda de archivos nombrados y la
+# del gate de completitud: el tablero informa lo que se puede comprobar. Una tarea sin archivo
+# asociado NO se tacha sola -- queda sin marcar, que es la verdad.
+#
+# NO BLOQUEA EL TURNO. La llamada al planificador corre en segundo plano y el loop arranca sin
+# esperarla; el tablero aparece cuando llega. Si el modelo no contesta o contesta cualquier cosa,
+# no hay tablero y el turno sigue igual. Esto es deliberado: el reparto automático se apagó el
+# mismo día justamente por costar tiempo, y un tablero que retrase el trabajo no vale la pena.
+#
+# Se activa con -T (mentis-chat.sh lo pasa en los modos con "tablero": true). Apagado:
+# MENTIS_TABLERO_OFF=1.
+TABLERO_FILE=""
+declare -A TABLERO_HECHO=()
+if [ "${TABLERO:-0}" = "1" ] && [ "${MENTIS_TABLERO_OFF:-0}" != "1" ]; then
+  TABLERO_FILE="$(mktemp)"
+  (
+    _tb_plan="$(printf 'Tarea del usuario:\n%s\n\nEscribí el plan en 3 a 6 pasos, en castellano, cada uno de menos de 60 caracteres y empezando con un verbo. Si un paso termina con un archivo concreto, poné su nombre; si no produce archivo, dejá "".\n\nDevolvé SOLO un array JSON, sin texto alrededor:\n[{"t":"Armar la lista de precios","archivo":"precios.csv"},{"t":"Revisar los números","archivo":""}]' "$TASK" \
+      | timeout 60 bash "$NVDIR/ask-nvidia.sh" -r extract 2>/dev/null)" || exit 0
+    printf '%s' "$_tb_plan" | python3 -c '
+import json, sys, re
+t = sys.stdin.read()
+m = re.search(r"\[.*\]", t, re.S)
+if not m: sys.exit(0)
+try: d = json.loads(m.group(0))
+except Exception: sys.exit(0)
+if not isinstance(d, list): sys.exit(0)
+n = 0
+for it in d[:6]:
+    if not isinstance(it, dict): continue
+    texto = str(it.get("t", "")).strip().replace("|", " ")[:80]
+    arch = str(it.get("archivo", "") or "").strip().replace("|", " ")[:80]
+    if not texto: continue
+    n += 1
+    print("%d\t%s\t%s" % (n, texto, arch))
+' > "$TABLERO_FILE.tmp" 2>/dev/null || exit 0
+    # mv atomico: el loop lee este archivo mientras esto corre, y leer un plan a medio escribir
+    # mostraria un tablero incompleto que despues cambia solo.
+    if [ -s "$TABLERO_FILE.tmp" ]; then
+      mv -f "$TABLERO_FILE.tmp" "$TABLERO_FILE"
+      while IFS=$'\t' read -r _n _txt _arch; do
+        [ -n "${_n:-}" ] && echo "[nv-agent] PLAN: $_n|$_txt|${_arch:-}" >&2
+      done < "$TABLERO_FILE"
+    else
+      rm -f "$TABLERO_FILE.tmp"
+    fi
+  ) &
+fi
+
+# _tablero_revisar: marca las tareas cuyo archivo YA existe. Se llama una vez por iteración.
+_tablero_revisar() {
+  [ -n "${TABLERO_FILE:-}" ] && [ -s "$TABLERO_FILE" ] || return 0
+  local n txt arch
+  while IFS=$'\t' read -r n txt arch; do
+    [ -n "${n:-}" ] || continue
+    [ -n "${arch// }" ] || continue
+    [ -n "${TABLERO_HECHO[$n]:-}" ] && continue
+    if [ -e "$ROOT/$arch" ] || [ -n "$(find "$ROOT" -maxdepth 3 -name "$arch" -print -quit 2>/dev/null)" ] \
+       || [ -n "$(find "$MENTIS_CREATIONS_DIR" -maxdepth 2 -name "$arch" -print -quit 2>/dev/null)" ]; then
+      TABLERO_HECHO[$n]=1
+      echo "[nv-agent] PLAN-HECHO: $n" >&2
+    fi
+  done < "$TABLERO_FILE"
+}
+
 for (( it=1; it<=MAXIT; it++ )); do
   CORRECTION_NOTE=""
   # ¿La vuelta anterior produjo algo? Se compara el contador de acciones reales contra el valor
@@ -3037,6 +3232,53 @@ $(nv_gate_observacion_rechazo)
     fi
   fi
 
+  # ¿LOS ARCHIVOS QUE NOMBRA EXISTEN? (2026-08-14, encontrado midiendo el reparto)
+  #
+  # Un turno cerró así: "Se generaron los tres archivos requeridos: mercado.md, competencia.md y
+  # plan90.md, cumpliendo con los requisitos especificados de estructura y longitud". Existía UNO.
+  # Las tres guardas de arriba lo dejaron pasar y cada una por su motivo: la de acción real vio un
+  # 'write' exitoso, la de documento sólo mira las palabras documento/informe/pdf, y el gate de
+  # completitud busca "funciona/probado" -- "se generaron" no es ninguna de las tres.
+  #
+  # POR QUE ESTA GUARDA ES DISTINTA (y mejor) QUE LAS OTRAS: no busca frases. El motor sabe qué
+  # archivos hay. Se toman los nombres de archivo que la respuesta menciona y se pregunta si
+  # existen. Es una respuesta objetiva -- no depende de cómo esté redactada la afirmación, que es
+  # justo donde se escapan las otras tres.
+  #
+  # Se busca en la raíz de trabajo, en sus subcarpetas y en la carpeta de creaciones (ahí van los
+  # documentos de 'gen', que no viven en la raíz). Apagado: MENTIS_ARCHIVOS_OFF=1.
+  if [ "${MENTIS_ARCHIVOS_OFF:-0}" != "1" ] && [ "$STATUS" = "done" ] && [ "${ALLOW_WRITE:-0}" = "1" ]; then
+    ARCH_FALTAN=""
+    for _a in $(printf '%s' "$FINAL" | grep -oE '[A-Za-z0-9_-]+\.(md|csv|txt|py|js|json|html|css|sh|docx|pdf|xlsx|pptx)' | sort -u); do
+      [ -e "$ROOT/$_a" ] && continue
+      [ -n "$(find "$ROOT" -maxdepth 3 -name "$_a" -print -quit 2>/dev/null)" ] && continue
+      [ -n "$(find "$MENTIS_CREATIONS_DIR" -maxdepth 3 -name "$_a" -print -quit 2>/dev/null)" ] && continue
+      ARCH_FALTAN="$ARCH_FALTAN $_a"
+    done
+    if [ -n "${ARCH_FALTAN// }" ]; then
+      if [ "${ARCH_RECHAZOS:-0}" -ge 1 ] || [ "$it" -ge "$MAXIT" ]; then
+        # Igual que las otras: a la segunda no se rechaza de nuevo, se corrige. Pero acá la
+        # corrección puede ser EXACTA, porque sabemos cuáles faltan.
+        echo "[nv-agent] iter $it: sigue nombrando archivos inexistentes ($ARCH_FALTAN) -- se corrige el texto" >&2
+        FINAL="Ojo: de lo que sigue, estos archivos NO existen —no llegué a crearlos—:$ARCH_FALTAN
+
+$FINAL"
+      else
+        ARCH_RECHAZOS=$(( ${ARCH_RECHAZOS:-0} + 1 ))
+        echo "[nv-agent] iter $it: done RECHAZADO -- nombra archivos que no existen:$ARCH_FALTAN" >&2
+        HIST="$HIST
+--- turno $it ---
+acción: {\"tool\":\"done\"}
+observación:
+ERROR: tu respuesta nombra estos archivos, y NO existen:$ARCH_FALTAN
+
+No alcanza con haber preparado el contenido: mientras no lo escribas con {\"tool\":\"write\",\"path\":\"...\",\"content\":\"...\"}, el archivo no existe y quien lo busque no lo va a encontrar. Escribí ahora los que falten, uno por uno, y recién después terminá. Si alguno no lo podés hacer, decilo en la respuesta final en vez de darlo por hecho.
+"
+        STATUS="budget"; FINAL=""
+      fi
+    fi
+  fi
+
   if [ "$STATUS" = "done" ]; then break; fi
 
   # Previsualizacion en vivo para la app Electron (bug real 2026-07-13): el panel de
@@ -3045,6 +3287,8 @@ $(nv_gate_observacion_rechazo)
   # moria DENTRO de este proceso, nunca salia hacia la app, asi que el usuario solo veia la etiqueta
   # de la accion sin nada mas. Se manda una linea aplanada (sin saltos de linea, la app
   # reenvia stderr linea por linea) con la observacion real de esta accion.
+  # El tablero se revisa una vez por vuelta: es un par de stat(), no cuesta nada.
+  _tablero_revisar
   PREVIEW_FLAT="$(printf '%s' "$OBS" | tr '\n' ' ' | head -c 800)"
   echo "[nv-agent] PREVIEW: $PREVIEW_FLAT" >&2
 
@@ -3076,16 +3320,48 @@ $(nv_gate_observacion_rechazo)
   # No corta el turno: le devuelve el contenido UNA vez mas con un empujon a contestar. Cortar
   # castigaria al modelo por una accion que estuvo bien -- el problema no es que lea, es que no
   # se da cuenta de que ya lo tiene.
-  if [ "$TOOL" = "read" ] && [ "$OK_SIG_KEY_PREV" = "read|$REL" ] && [[ "$OBS" != ERROR:* ]]; then
-    OK_SIG_STREAK=$((OK_SIG_STREAK+1))
-    if [ "$OK_SIG_STREAK" -ge 2 ]; then
-      OBS="AVISO: ya leiste '$REL' $((OK_SIG_STREAK+1)) veces en este mismo turno y su contenido no cambio -- lo tenes completo mas arriba, en las observaciones anteriores. Volver a leerlo no te va a dar nada nuevo y te queda poco presupuesto. Contesta AHORA con lo que ya leiste; si de verdad falta algo, es que no esta en ese archivo."
-      echo "[nv-agent] iter $it: read repetido $((OK_SIG_STREAK+1)) veces sobre '$REL' -- empujando a responder" >&2
+  # GENERALIZADO EL 2026-08-14. La version anterior de esta guarda miraba SOLO 'read'. El agujero
+  # aparecio probando el gate de completitud: se le pidio un archivo y escribio el MISMO
+  # 'resta_gate_7k2.py' seis veces seguidas -- seis 'write' exitosos, uno atras del otro -- hasta
+  # agotar el presupuesto y terminar sin responder. Ningun detector lo vio: el de errores porque
+  # no habia errores, y el de aciertos porque solo entendia de 'read'. Para el usuario se ve igual que
+  # un cuelgue.
+  #
+  # Ahora cuenta por FIRMA DE ACCION (herramienta + argumentos), y por total, no por racha:
+  # un bucle alternado (write A, write B, write A, write B) es igual de mortal y la version
+  # por rachas lo daba por bueno.
+  #
+  # QUE ENTRA EN LA FIRMA, Y POR QUE NO ES LO MISMO PARA TODAS LAS HERRAMIENTAS:
+  #   - write/edit: la firma es ruta + contenido. Reescribir el mismo archivo con contenido
+  #     DISTINTO es corregir, y eso es trabajo legitimo: no cuenta.
+  #   - todo lo demas (read/search/exec/git/browse/...): la firma incluye WRITE_CNT, o sea el
+  #     estado del mundo. Volver a correr el mismo test DESPUES de escribir algo es exactamente
+  #     lo que queremos que haga -- la firma cambia sola y no se lo penaliza. Repetirlo sin haber
+  #     tocado nada en el medio es el bucle.
+  if [[ "$OBS" != ERROR:* ]] && [ "$TOOL" != "done" ]; then
+    case "$TOOL" in
+      write|edit) OK_SIG_RAW="$TOOL|${PATH_B64:-}|${CONTENT_B64:-}|${NEW_B64:-}|${OLD_B64:-}" ;;
+      *)          OK_SIG_RAW="$TOOL|${PATH_B64:-}|${QUERY_B64:-}|${CODE_B64:-}|${URL_B64:-}|${ACTION_B64:-}|${TARGET_B64:-}|w$WRITE_CNT" ;;
+    esac
+    OK_SIG_KEY="$(printf '%s' "$OK_SIG_RAW" | cksum | cut -d' ' -f1)"
+    OK_SIG_COUNT["$OK_SIG_KEY"]=$(( ${OK_SIG_COUNT["$OK_SIG_KEY"]:-0} + 1 ))
+    OK_SIG_VECES="${OK_SIG_COUNT["$OK_SIG_KEY"]}"
+    if [ "$OK_SIG_VECES" -ge "$OK_SIG_MAX" ]; then
+      # No corta el turno: le devuelve el resultado UNA vez mas con un empujon. Cortar castigaria
+      # al modelo por una accion que estuvo BIEN -- el problema no es la accion, es no darse
+      # cuenta de que ya la tiene hecha. Cortar aca dejaria al usuario sin nada teniendo el trabajo
+      # hecho, que es el error que ya costo el cierre forzado de 2026-08-08.
+      case "$TOOL" in
+        write|edit)
+          OBS="AVISO: ya escribiste '${REL:-ese archivo}' $OK_SIG_VECES veces en este turno con EXACTAMENTE el mismo contenido. El archivo ya existe y ya dice eso: volver a escribirlo no cambia nada y te queda menos presupuesto. Segui con lo que falta, o si ya esta todo, respondé con done." ;;
+        read)
+          OBS="AVISO: ya leiste '${REL:-ese archivo}' $OK_SIG_VECES veces en este mismo turno y su contenido no cambio -- lo tenes completo mas arriba, en las observaciones anteriores. Volver a leerlo no te va a dar nada nuevo y te queda poco presupuesto. Contesta AHORA con lo que ya leiste; si de verdad falta algo, es que no esta en ese archivo." ;;
+        *)
+          OBS="AVISO: esta es la ${OK_SIG_VECES}a vez que hacés esta misma acción ('$TOOL') con los mismos argumentos en este turno, y no cambió nada en el medio: el resultado es el mismo que ya tenés más arriba. Repetirla no te va a dar información nueva. Si te falta algo, probá otra cosa; si ya tenés lo que necesitabas, respondé con done." ;;
+      esac
+      echo "[nv-agent] iter $it: BUCLE DE ACIERTOS -- '$TOOL' repetido $OK_SIG_VECES veces con la misma firma; empujando a avanzar" >&2
     fi
-  else
-    OK_SIG_STREAK=0
   fi
-  [ "$TOOL" = "read" ] && OK_SIG_KEY_PREV="read|$REL" || OK_SIG_KEY_PREV=""
 
   # registrar el turno en el historial (acción compacta + observación truncada)
   ACTLINE="{\"tool\":\"$TOOL\"}"

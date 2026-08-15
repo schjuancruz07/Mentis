@@ -80,6 +80,9 @@ contextBridge.exposeInMainWorld('mentisAPI', {
   // contenido para dibujarlo acá; 'listarCreaciones' es la galería de todo lo que Mentis hizo.
   verArtefacto: (artifact) => ipcRenderer.invoke('mentis:ver-artefacto', artifact),
   listarCreaciones: (modo) => ipcRenderer.invoke('mentis:listar-creaciones', modo),
+  // En Code la galería mira el PROYECTO (los archivos abribles de la carpeta de trabajo), no las
+  // creaciones de 'gen': ahí es donde están las apps que uno quiere probar.
+  listarArtefactosProyecto: () => ipcRenderer.invoke('mentis:listar-artefactos-proyecto'),
   anotarCreacion: (ruta, modo) => ipcRenderer.invoke('mentis:anotar-creacion', ruta, modo),
   forceStop: () => ipcRenderer.invoke('mentis:force-stop'),
   transcribeAudio: (buffer) => ipcRenderer.invoke('mentis:transcribe-audio', buffer),

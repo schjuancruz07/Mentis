@@ -60,9 +60,19 @@ function servir() {
     panel: !document.getElementById('panel-estudio').classList.contains('hidden'),
     preview: !document.getElementById('preview-content').classList.contains('hidden'),
   }));
-  (!enDesigne.panel && enDesigne.preview)
-    ? _ok('en Designe se ve el previsualizador y NO la botonera')
+  // 2026-08-15: Designe TAMBIEN tiene catalogo (dos filas: imagenes y piezas). Antes esta prueba
+  // verificaba lo contrario -- que el panel fuera exclusivo de Study -- y era correcta hasta hoy.
+  // Lo que se sigue cuidando es que catalogo y previsualizador nunca esten los dos a la vez.
+  (enDesigne.panel && !enDesigne.preview)
+    ? _ok('en Designe se ve su catalogo de generacion (y no el previsualizador)')
     : _mal('en Designe el panel no corresponde: ' + JSON.stringify(enDesigne));
+  const filasDesigne = await pagina.evaluate(() => ({
+    secciones: [...document.querySelectorAll('.estudio-seccion')].map((e) => e.textContent),
+    tarjetas: document.querySelectorAll('#panel-estudio-grilla.estudio-tarjeta').length,
+  }));
+  (filasDesigne.secciones.length === 2 && filasDesigne.tarjetas >= 10)
+    ? _ok('el catalogo de Designe tiene sus dos filas (' + filasDesigne.secciones.join(' / ') + ') y ' + filasDesigne.tarjetas + ' tarjetas')
+    : _mal('el catalogo de Designe no se pinto bien: ' + JSON.stringify(filasDesigne));
 
   await pagina.evaluate(() => window.panelEstudio.aplicar('study'));
   await pagina.waitForTimeout(300);

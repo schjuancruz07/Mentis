@@ -1221,6 +1221,32 @@ while true; do
   # camara es que una prohibicion que vive solo en el texto del prompt es una sugerencia.
   MC_SIN_TOOLS="$(nv_modo_sin_tools "$MC_MODO")"
 
+  # REPARTO AUTOMATICO (2026-08-14). Los modos que lo declaran ("reparto": true en modos.json --
+  # hoy sólo Cowork) arrancan repartiendo: el motor pide un plan y resuelve en paralelo las partes
+  # independientes antes de la primera iteración.
+  #
+  # POR QUE HACE FALTA: medido en eval/duelo-cowork-crewai/, Cowork tenía 'parallel' habilitada y
+  # no la usó ni una vez en tres corridas -- resolvió todo en fila. Pedírselo en la persona del
+  # modo ya está escrito y no alcanzó: una defensa redactada como instrucción es una sugerencia.
+  #
+  # Se exigen las DOS cosas -- que el modo lo declare y que tenga la herramienta 'parallel' -- por
+  # la misma regla de siempre: el modo sólo puede quitar. Si alguien apaga 'parallel' por
+  # herramientas_fuera, el reparto se apaga con ella en vez de sobrevivirle por una clave suelta.
+  #
+  # Nunca en modo remoto: gasta llamadas desde el teléfono sin que nadie esté mirando.
+  # TABLERO DE TAREAS (2026-08-15): los modos que lo declaran muestran la lista de puntos del turno.
+  # Nunca en remoto: es una llamada de mas para una pantalla chica donde el panel ni se ve.
+  if [ "$(nv_modo_tablero "$MC_MODO")" = "1" ] && [ "$MODO_REMOTO" != "1" ]; then
+    NVA_FLAGS="$NVA_FLAGS -T"
+  fi
+
+  if [ "$(nv_modo_reparto "$MC_MODO")" = "1" ] && [ "$MODO_REMOTO" != "1" ]; then
+    case " $MC_SIN_TOOLS " in
+      *" parallel "*) : ;;
+      *) NVA_FLAGS="$NVA_FLAGS -p" ;;
+    esac
+  fi
+
   NVA_IMG_FLAGS=()
   for _p in "${ATTACH_IMG_PATHS[@]:-}"; do
     [ -n "$_p" ] && NVA_IMG_FLAGS+=("-I" "$_p")

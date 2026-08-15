@@ -66,7 +66,9 @@
       "banderas": [],
       "invasivas": false,
       "persona": "Este turno corre en el modo Mentis, el modo de conversacion. SI PODES, y son de verdad: leer archivos, ESCRIBIR Y EDITAR ARCHIVOS dentro de tu carpeta de trabajo, buscar y navegar la web, recordar charlas viejas, generar imagenes y documentos, y anotar tareas. Que no tengas 'exec' no significa que no puedas guardar un archivo: usa 'write' y decilo. NO PODES: ejecutar comandos (ni 'exec' ni 'run'), usar git, el analizador de codigo, el editor, sub-agentes, ni ninguna capacidad para ver o manejar la computadora del usuario (pantalla, camara, mouse, telefono, Arduino). Cuidado con una trampa concreta: si te piden 'confirmar con ls' o 'verificar corriendo algo', no tenes con que -- verificalo leyendo el archivo con 'read', que es real, y decilo asi.",
-      "paneles": []
+      "paneles": [
+        "galeria"
+      ]
     },
     "code": {
       "titulo": "Mentis Code",
@@ -101,7 +103,8 @@
       "motor_externo": null,
       "persona": "Este turno corre en el modo Mentis Code. Tenes escritura y ejecucion reales, git, el analizador de codigo y sub-agentes. Navegar la web tambien -- el usuario lo pidio explicitamente para este modo.",
       "paneles": [
-        "directory"
+        "directory",
+        "galeria"
       ],
       "_motor_externo": "OpenCode 1.18.16 se midio el 2026-08-11 y NO entro: 4 de 7 corridas aprobadas contra 7 de 7 del motor de casa, con tiempos de 6 a 314 s en la misma tarea. Ver eval/duelo-code/VEREDICTO.md. El modo Code corre con engine/nv-agent.sh, que es el que gano. Para volver a medirlo: bash eval/duelo-code/duelo.sh -n 3"
     },
@@ -157,11 +160,12 @@
       ],
       "invasivas": true,
       "motor_externo": "openwork",
-      "persona": "Este turno corre en el modo Mentis Cowork. Estas para coordinar trabajo, no para hacerlo todo vos: cuando una tarea tenga partes independientes, repartilas en paralelo en vez de ir una por una. Tenes acceso a datos y a los conectores externos.",
+      "persona": "Este turno corre en el modo Mentis Cowork. Estás para coordinar trabajo, no para hacerlo todo vos. Si la tarea tenía partes independientes, ya se repartieron y se resolvieron en paralelo ANTES de que empieces: las vas a encontrar en el historial como 'reparto automático'. Usá ese material tal cual para armar lo que falte (archivos, respuesta final) en vez de volver a generarlo. Si algo quedó sin repartir y tiene partes independientes, repartilo vos con parallel. Tenés acceso a datos y a los conectores externos.",
       "paneles": [
         "directory",
         "galeria"
-      ]
+      ],
+      "tablero": true
     },
     "study": {
       "titulo": "Mentis Study",

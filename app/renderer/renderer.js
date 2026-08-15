@@ -10,6 +10,11 @@ const PREVIEW_LOG_RE = /^\[nv-agent\] PREVIEW: (.*)$/;
 // Cuántos pasos tiene permitidos el turno. Lo emite nv-agent.sh al arrancar; sirve para mostrar
 // "paso 3 de 10" en vez de un "paso 3" que no dice si falta mucho o nada.
 const PRESUPUESTO_LOG_RE = /^\[nv-agent\] PRESUPUESTO: (\d+)$/;
+// Tablero de tareas del turno (2026-08-15). El motor manda un renglón por tarea y después avisa
+// cuál se cumplió. Se tacha SÓLO con estos avisos: el motor los emite cuando el archivo de la
+// tarea aparece de verdad, no cuando el modelo dice que la hizo.
+const PLAN_LOG_RE = /^\[nv-agent\] PLAN: (\d+)\|([^|]*)\|(.*)$/;
+const PLAN_HECHO_LOG_RE = /^\[nv-agent\] PLAN-HECHO: (\d+)$/;
 
 // Miniatura de adjuntos en el historial (pedido del usuario, 2026-07-14): antes el tag
 // "[archivo adjunto:...]" quedaba visible como texto crudo en la burbuja, tanto en el mensaje
@@ -678,9 +683,81 @@ function abrirPanelSiHaceFalta() {
   panelAbiertoEsteTurno = true;
 }
 
+// ===== EL TABLERO DE TAREAS (2026-08-15) ======================================================
+// Lo que se ve: la lista de lo que Mentis se propuso hacer en este turno, tachándose sola.
+//
+// LAS TAREAS CUMPLIDAS NO DESAPARECEN: quedan tachadas. Ver el avance es la mitad del punto de
+// tener un tablero; una lista que se vacía sola termina mostrando nada justo cuando más hizo.
+//
+// LA ANIMACIÓN (recomendación que pidió el usuario): la línea de tachado se DIBUJA de izquierda a
+// derecha en 180 ms, el texto baja a opacidad y el tilde entra con un pop corto. Sin rebotes: es
+// un tablero de trabajo, no una notificación de premio. Y con prefers-reduced-motion, cambio seco.
+const tablero = (function () {
+  const caja = () => document.getElementById('tablero-tareas');
+  const filas = new Map();   // n -> <li>
+
+  function limpiar() {
+    filas.clear();
+    const c = caja();
+    if (c) { c.replaceChildren(); c.classList.add('hidden'); }
+  }
+
+  function agregar(n, texto, archivo) {
+    const c = caja();
+    if (!c || !n || !texto) return;
+    if (!filas.size) {
+      c.replaceChildren();
+      const t = document.createElement('p');
+      t.className = 'tablero-titulo';
+      t.textContent = 'Plan de este turno';
+      c.appendChild(t);
+      const ul = document.createElement('ul');
+      ul.className = 'tablero-lista';
+      c.appendChild(ul);
+      c.classList.remove('hidden');
+      // La entrada del tablero: fade + 8px. Se dispara en el siguiente cuadro para que la
+      // transición tenga desde dónde arrancar.
+      c.classList.add('tablero-entrando');
+      requestAnimationFrame(() => c.classList.remove('tablero-entrando'));
+    }
+    if (filas.has(n)) return;
+    const li = document.createElement('li');
+    li.className = 'tablero-item';
+    const tilde = document.createElement('span');
+    tilde.className = 'tablero-tilde';
+    tilde.textContent = '✓';
+    const txt = document.createElement('span');
+    txt.className = 'tablero-texto';
+    txt.textContent = texto;
+    li.append(tilde, txt);
+    // El archivo esperado va en el title: si una tarea no se tacha, esto dice qué se estaba
+    // esperando -- que es la única forma de entender por qué quedó sin marcar.
+    if (archivo) li.title = 'Se marca cuando exista: ' + archivo;
+    else li.title = 'Sin archivo asociado: no se marca sola';
+    c.querySelector('.tablero-lista').appendChild(li);
+    filas.set(n, li);
+  }
+
+  function tachar(n) {
+    const li = filas.get(n);
+    if (li) li.classList.add('hecha');
+  }
+
+  return { agregar, tachar, limpiar };
+})();
+// Publicado en window por la misma razón que panelEstudio: un 'const' de nivel superior no crea
+// propiedad global, así que sin esto el arnés visual no puede pintar un tablero de prueba -- y un
+// tablero que no se puede fotografiar es un tablero que nadie revisó.
+window.tablero = tablero;
+
 function handleAgentLogLine(line) {
   const pres = line.match(PRESUPUESTO_LOG_RE);
   if (pres) { pasosTotales = parseInt(pres[1], 10) || 0; actualizarProgreso(0); return; }
+
+  const plan = line.match(PLAN_LOG_RE);
+  if (plan) { tablero.agregar(parseInt(plan[1], 10), plan[2], plan[3]); abrirPanelSiHaceFalta(); return; }
+  const hecho = line.match(PLAN_HECHO_LOG_RE);
+  if (hecho) { tablero.tachar(parseInt(hecho[1], 10)); return; }
 
   const taskMatch = line.match(TASK_LOG_RE);
   if (taskMatch) {
@@ -1505,6 +1582,9 @@ async function sendCurrentMessage(text) {
   panelAbiertoEsteTurno = false;
   pasosTotales = 0;
   actualizarProgreso(0);
+  // El tablero es del turno, no de la conversación: arrancar uno nuevo con el plan del anterior
+  // mostraría tareas cumplidas que no tienen nada que ver con lo que se acaba de pedir.
+  tablero.limpiar();
   if (!activeConversationId) {
     await openConversation(null);
   }
@@ -3115,29 +3195,58 @@ function estadoPonerTiempo(txt) {
   });
 })();
 
-// --- Previsualizador a pantalla completa (2026-08-10) ------------------------------------------
-(function previewPantallaCompleta() {
+// --- Los dos tamaños del previsualizador (2026-08-10; rehecho 2026-08-15) ----------------------
+//
+// QUÉ CAMBIÓ Y POR QUÉ. Había un tamaño chico (360x340, arriba a la derecha) y un "agrandado" que
+// era una columna alta pegada a la derecha. el usuario: "el tamaño grande del previsualizador pasa a ser
+// el común y el grande pasa a ser pantalla completa".
+//
+//   COLUMNA  -> ahora es el estado NORMAL. Alta, a la derecha, y NO tapa la conversación: la zona
+//               de trabajo se corre para hacerle lugar (eso ya funcionaba así).
+//   COMPLETA -> el estado nuevo del botón. Cubre el área de trabajo entera.
+//
+// El chico desaparece como estado propio: era demasiado poco para lo que muestra (una lista de
+// acciones y previsualizaciones de archivos), que es justamente lo que llevó a este pedido.
+//
+// LA SALIDA TIENE QUE SER OBVIA, y por eso la cabecera del panel queda visible en pantalla
+// completa con su botón adentro, más Escape. La lección del 2026-08-11 -- "un pantalla completa
+// que tapa los controles de la ventana deja al usuario sin forma obvia de salir" -- no se derogó:
+// se cumple dejando la salida a la vista en vez de no cubrir nada.
+(function previewTamanos() {
   const btn = document.getElementById('btn-status-full');
   const panel = document.getElementById('status-panel');
   if (!btn || !panel) return;
   const agrandar = btn.querySelector('.icono-agrandar');
   const achicar = btn.querySelector('.icono-achicar');
+  const CLAVE = 'mentis:preview-completa';
 
   function aplicar(full) {
-    panel.classList.toggle('pantalla-completa', full);
+    // 'columna' está SIEMPRE puesta: es el tamaño normal. 'completa' se suma encima.
+    panel.classList.add('columna');
+    panel.classList.toggle('completa', full);
     // Abrirlo en grande y dejarlo colapsado a la vez sería una pantalla completa vacía.
     if (full) panel.classList.remove('collapsed');
     btn.setAttribute('aria-pressed', String(full));
-    btn.title = full ? 'Volver al tamaño normal' : 'Agrandar';
-    agrandar.classList.toggle('hidden', full);
-    achicar.classList.toggle('hidden', !full);
+    btn.title = full ? 'Volver al tamaño normal' : 'Ver en pantalla completa';
+    if (agrandar) agrandar.classList.toggle('hidden', full);
+    if (achicar) achicar.classList.toggle('hidden', !full);
   }
 
-  btn.addEventListener('click', () => aplicar(!panel.classList.contains('pantalla-completa')));
-  // Escape sale, como en cualquier pantalla completa. Sin esto la única salida es encontrar el
-  // botón, que en una vista que ocupa todo no siempre es obvio.
+  // Se recuerda entre sesiones: si alguien trabaja en pantalla completa, volver al tamaño normal
+  // en cada arranque es una molestia diaria.
+  aplicar(localStorage.getItem(CLAVE) === '1');
+
+  btn.addEventListener('click', () => {
+    const full = !panel.classList.contains('completa');
+    aplicar(full);
+    localStorage.setItem(CLAVE, full ? '1' : '0');
+  });
+  // Escape sale, como en cualquier pantalla completa.
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && panel.classList.contains('pantalla-completa')) aplicar(false);
+    if (e.key === 'Escape' && panel.classList.contains('completa')) {
+      aplicar(false);
+      localStorage.setItem(CLAVE, '0');
+    }
   });
 })();
 
@@ -4646,6 +4755,63 @@ const ESTUDIO_FORMATOS = [
       { clave: 'contenido', texto: 'Qué ordena', ops: ['Conceptos y definiciones', 'Datos numéricos', 'Comparación'] } ] },
 ];
 
+// ===== EL CATÁLOGO DE DESIGNE (2026-08-15, pedido del usuario) =====================================
+// Mismo mecanismo que la botonera de Study -- tarjetas, preguntas fijas, y la línea preparada en el
+// cuadro de texto sin ejecutar nada -- pero para generar. Va en DOS FILAS porque son dos cosas
+// distintas: una imagen sale de un modelo de imagen, y una presentación o un currículum salen del
+// generador de documentos.
+//
+// LO QUE NO ESTÁ, Y ES A PROPÓSITO. La captura que pasó el usuario traía catorce plantillas (email HTML,
+// research, color+type pairing...). Acá entran sólo las que HOY tienen un generador real detrás:
+// imágenes (FLUX/Ideogram), documentos (docx/pdf/pptx/xlsx) y 3D (TripoSR). Una tarjeta que al
+// tocarla no puede cumplir es peor que una tarjeta que no está: enseña que el panel miente.
+// Video queda afuera por la decisión firme del 2026-07-29.
+//
+// 'ideogram' marca las piezas donde el TEXTO tiene que leerse (logo, afiche, banner): ahí el
+// pedido lo dice explícitamente, porque el default de la casa es FLUX y renderiza mal el texto.
+const DESIGNE_CATALOGO = [
+  { seccion: 'Imágenes', items: [
+    { id: 'logo', titulo: 'Logo', icono: '◆', plantilla: 'Generá un logo de {tema} con Ideogram', preguntas: [
+        { clave: 'proporcion', texto: 'Proporción', ops: ['1:1', '16:9', '9:16'] },
+        { clave: 'estilo', texto: 'Estilo', ops: ['Plano', 'Línea', '3D', 'Retro'] } ] },
+    { id: 'ilustracion', titulo: 'Ilustración', icono: '✎', plantilla: 'Generá una ilustración de {tema}', preguntas: [
+        { clave: 'estilo', texto: 'Estilo', ops: ['Realista', 'Plano', 'Acuarela', '3D'] },
+        { clave: 'proporcion', texto: 'Proporción', ops: ['1:1', '16:9', '9:16'] } ] },
+    { id: 'icono', titulo: 'Ícono', icono: '◈', plantilla: 'Generá un ícono de {tema}, fondo liso', preguntas: [
+        { clave: 'estilo', texto: 'Estilo', ops: ['Línea', 'Relleno', '3D'] } ] },
+    { id: 'banner', titulo: 'Banner o portada', icono: '▬', plantilla: 'Generá un banner de {tema} con Ideogram', preguntas: [
+        { clave: 'proporcion', texto: 'Proporción', ops: ['16:9', '3:1', '4:5'] },
+        { clave: 'texto', texto: 'Lleva texto', ops: ['Sí, con título', 'No, sólo imagen'] } ] },
+    { id: 'producto', titulo: 'Foto de producto', icono: '⬒', plantilla: 'Generá una foto de producto de {tema}', preguntas: [
+        { clave: 'fondo', texto: 'Fondo', ops: ['Blanco de estudio', 'En ambiente', 'De color'] } ] },
+    { id: 'fondo', titulo: 'Fondo', icono: '▨', plantilla: 'Generá una imagen de fondo de {tema}', preguntas: [
+        { clave: 'orientacion', texto: 'Orientación', ops: ['Horizontal', 'Vertical'] },
+        { clave: 'estilo', texto: 'Estilo', ops: ['Abstracto', 'Textura', 'Paisaje'] } ] },
+  ] },
+  { seccion: 'Piezas y plantillas', items: [
+    { id: 'afiche', titulo: 'Afiche o flier', icono: '▯', plantilla: 'Generá un afiche de {tema} con Ideogram, con el texto bien legible', preguntas: [
+        { clave: 'proporcion', texto: 'Formato', ops: ['Vertical tipo A4', 'Cuadrado', 'Horizontal'] } ] },
+    { id: 'diapositivas', titulo: 'Diapositivas', icono: '▭', plantilla: 'Generá una presentación en pptx sobre {tema}', preguntas: [
+        { clave: 'cantidad', texto: 'Cuántas diapositivas', ops: ['6', '10', '15'] } ] },
+    { id: 'curriculum', titulo: 'Currículum', icono: '▤', plantilla: 'Generá un currículum en docx de {tema}', preguntas: [
+        { clave: 'extension', texto: 'Extensión', ops: ['Una carilla', 'Dos carillas'] } ] },
+    { id: 'diagrama', titulo: 'Diagrama', icono: '⌗', plantilla: 'Generá un diagrama de {tema} con Ideogram, con las etiquetas legibles', preguntas: [
+        { clave: 'tipo', texto: 'Qué muestra', ops: ['Un flujo', 'Una jerarquía', 'Una comparación'] } ] },
+    { id: 'wireframe', titulo: 'Wireframe', icono: '▦', plantilla: 'Generá un wireframe de {tema}, en escala de grises', preguntas: [
+        { clave: 'pantalla', texto: 'Para qué pantalla', ops: ['Celular', 'Escritorio'] } ] },
+    { id: 'modelo3d', titulo: 'Objeto 3D', icono: '◳', plantilla: 'Generá un modelo 3D de {tema}', preguntas: [] },
+  ] },
+];
+
+// Los dos catálogos, cada uno con su etiqueta y su forma de armar la línea. El panel es el mismo:
+// lo único que cambia por modo son estos datos.
+const PANEL_CATALOGOS = {
+  study:   { etiqueta: 'Crear con tu material', placeholder: 'Sobre qué tema (opcional)',
+             secciones: [{ seccion: null, items: ESTUDIO_FORMATOS }] },
+  designe: { etiqueta: 'Qué querés crear', placeholder: 'De qué es (ej: una panadería de barrio)',
+             secciones: DESIGNE_CATALOGO },
+};
+
 const panelEstudio = (function () {
   const panel = document.getElementById('panel-estudio');
   const grilla = document.getElementById('panel-estudio-grilla');
@@ -4657,22 +4823,38 @@ const panelEstudio = (function () {
   let modoActualId = null;
   let enActividad = false;
 
+  // La grilla se arma del catálogo del modo. Si el catálogo trae secciones con nombre (Designe:
+  // "Imágenes" y "Piezas y plantillas"), se pinta un encabezado por sección; Study tiene una sola
+  // sección sin nombre y se ve igual que siempre.
   function pintarGrilla() {
     grilla.replaceChildren();
-    for (const f of ESTUDIO_FORMATOS) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'estudio-tarjeta';
-      b.dataset.formato = f.id;
-      const i = document.createElement('span');
-      i.className = 'estudio-icono';
-      i.textContent = f.icono;
-      const t = document.createElement('span');
-      t.className = 'estudio-titulo';
-      t.textContent = f.titulo;
-      b.append(i, t);
-      b.addEventListener('click', () => preguntar(f));
-      grilla.appendChild(b);
+    const cat = PANEL_CATALOGOS[modoActualId];
+    if (!cat) return;
+    for (const s of cat.secciones) {
+      if (s.seccion) {
+        const h = document.createElement('p');
+        h.className = 'estudio-seccion';
+        h.textContent = s.seccion;
+        grilla.appendChild(h);
+      }
+      const fila = document.createElement('div');
+      fila.className = 'estudio-fila';
+      for (const f of s.items) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'estudio-tarjeta';
+        b.dataset.formato = f.id;
+        const i = document.createElement('span');
+        i.className = 'estudio-icono';
+        i.textContent = f.icono;
+        const t = document.createElement('span');
+        t.className = 'estudio-titulo';
+        t.textContent = f.titulo;
+        b.append(i, t);
+        b.addEventListener('click', () => preguntar(f));
+        fila.appendChild(b);
+      }
+      grilla.appendChild(fila);
     }
   }
 
@@ -4725,7 +4907,7 @@ const panelEstudio = (function () {
     const tema = document.createElement('input');
     tema.type = 'text';
     tema.className = 'estudio-tema';
-    tema.placeholder = 'Sobre qué tema (opcional)';
+    tema.placeholder = (PANEL_CATALOGOS[modoActualId] || {}).placeholder || 'Sobre qué tema (opcional)';
     zonaPreg.appendChild(tema);
 
     const listo = document.createElement('button');
@@ -4736,10 +4918,20 @@ const panelEstudio = (function () {
       const detalles = f.preguntas
 .filter((p) => elegido[p.clave])
 .map((p) => p.texto.toLowerCase() + ': ' + elegido[p.clave]);
-      let linea = '/material ' + f.id;
       const t = tema.value.trim();
-      if (t) linea += ' ' + t;
-      if (detalles.length) linea += ' -- ' + detalles.join('; ');
+      let linea;
+      if (f.plantilla) {
+        // Designe: un pedido en castellano. No hay una capability '/imagen' -- lo que hay es 'gen',
+        // y a 'gen' se llega pidiéndoselo. Si no se completó el tema, la línea queda abierta a
+        // propósito y con el cursor al final, para escribirlo ahí mismo.
+        linea = f.plantilla.replace('{tema}', t || '');
+        if (detalles.length) linea += ' (' + detalles.join('; ') + ')';
+        linea = linea.replace(/\s{2,}/g, ' ').trim();   // sin tema queda un hueco doble
+      } else {
+        linea = '/material ' + f.id;
+        if (t) linea += ' ' + t;
+        if (detalles.length) linea += ' -- ' + detalles.join('; ');
+      }
       const input = document.getElementById('message-input');
       if (input) {
         input.value = linea;
@@ -4760,8 +4952,8 @@ const panelEstudio = (function () {
   // Qué se ve en el panel AHORA. En Study manda el modo, salvo mientras hay un turno corriendo:
   // ahí lo que importa es ver qué está haciendo, y al terminar vuelve solo a los formatos.
   function repintar() {
-    const esStudy = modoActualId === 'study';
-    const mostrarFormatos = esStudy && !enActividad;
+    const cat = PANEL_CATALOGOS[modoActualId];
+    const mostrarFormatos = !!cat && !enActividad;
     panel.classList.toggle('hidden', !mostrarFormatos);
     // En Study el panel se ABRE solo. Es la herramienta principal del modo: si quedara colapsado
     // como en los demas, la botonera existiria pero nadie la veria hasta descubrir el botón del
@@ -4771,8 +4963,10 @@ const panelEstudio = (function () {
       if (caja) caja.classList.remove('collapsed');
     }
     if (preview) preview.classList.toggle('hidden', mostrarFormatos);
-    if (etiqueta) etiqueta.textContent = mostrarFormatos ? 'Crear con tu material' : 'Previsualización';
-    if (mostrarFormatos && !grilla.childElementCount) pintarGrilla();
+    if (etiqueta) etiqueta.textContent = mostrarFormatos ? cat.etiqueta : 'Previsualización';
+    // Se repinta SIEMPRE al mostrar, no sólo si está vacía: si no, al pasar de Study a Designe
+    // quedaría la botonera del modo anterior -- se veía la grilla llena y no se tocaba nada.
+    if (mostrarFormatos) pintarGrilla();
   }
 
   return {

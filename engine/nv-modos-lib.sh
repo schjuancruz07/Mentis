@@ -80,6 +80,28 @@ nv_modo_persona() {
     process.stdout.write(m && m.persona ? m.persona : "")'
 }
 
+# nv_modo_reparto <id> -> "1" si este modo arranca REPARTIENDO el trabajo en paralelo.
+#
+# Es una clave propia del modo ("reparto": true) y no se deduce de tener la herramienta
+# 'parallel': el modo Code tambien la tiene, y meterle una llamada de planificacion a cada turno
+# de codigo lo haria mas lento sin motivo -- un fix de una linea no se parte en pedazos. Que sea
+# explicito ademas deja el criterio a la vista en modos.json, que es donde el usuario lo va a buscar.
+nv_modo_reparto() {
+  MODO_ID="${1:-mentis}" _nvmodos_node '
+    const m = d.modos[process.env.MODO_ID] || {};
+    process.stdout.write(m.reparto ? "1" : "0")'
+}
+
+# nv_modo_tablero <id> -> "1" si este modo dibuja el TABLERO DE TAREAS del turno.
+#
+# Clave propia ("tablero": true) por el mismo motivo que reparto: cuesta una llamada corta por
+# turno, asi que lo declara el modo que la quiere en vez de heredarla todo el mundo.
+nv_modo_tablero() {
+  MODO_ID="${1:-mentis}" _nvmodos_node '
+    const m = d.modos[process.env.MODO_ID] || {};
+    process.stdout.write(m.tablero ? "1" : "0")'
+}
+
 # nv_modo_banderas <id> -> "-b -g -K -w -e" : las banderas que ESTE modo habilita.
 #
 # Son nucleo + las del modo + (las invasivas, si el modo las tiene). Quien llama tiene que

@@ -22,6 +22,15 @@ que sigue siendo tuyo cuando lo cerrás.
 - **Trabaja aparte.** Le podés dar una tarea larga y seguir con lo tuyo; te avisa cuando termina.
 - **Desde el celular.** Abre una página en tu red local para escribirle desde el teléfono, sin
   instalar nada.
+- **Cambia de modo.** El mismo Mentis con distintas manos: *Code* para programar, *Designe* para
+  crear, *Study* para estudiar con tu propio material, *Science* para datos con fuente, *Cowork*
+  para trabajo con muchas partes. Cada modo muestra sólo lo que ese trabajo necesita.
+- **Tiene catálogo.** En Designe y en Study no hace falta saber qué pedir: elegís de una grilla
+  (logo, afiche, diapositivas, cuestionario, mapa mental…), contestás dos preguntas y el pedido
+  queda escrito, listo para revisar antes de enviarlo.
+- **No dice que algo funciona sin haberlo probado.** Si una respuesta afirma que anda, tiene que
+  haber en ese mismo turno la salida del comando que lo demuestra; y si nombra archivos que no
+  existen, el cierre se rechaza y los escribe. No es una promesa del prompt: es código, con tests.
 
 ## Qué necesitás
 
@@ -34,6 +43,14 @@ que sigue siendo tuyo cuando lo cerrás.
 
 No hace falta una placa de video potente: los modelos corren en la nube, tu computadora sólo
 coordina.
+
+**Dos claves opcionales, gratis, que cambian bastante la experiencia** (el instalador las pide y se
+pueden saltear):
+
+| | Para qué | Por qué conviene |
+|---|---|---|
+| [Groq](https://console.groq.com/keys) | Las respuestas rápidas | Medido acá: acierta más (15/15 contra 13/15) y tarda 4,6 veces menos. Sin tarjeta. |
+| [Tavily](https://tavily.com) | Buscar en la web | 1000 búsquedas por mes. Sin esto la búsqueda queda con índices chicos: los buscadores grandes contestan con CAPTCHA a los programas. |
 
 ## Instalación
 

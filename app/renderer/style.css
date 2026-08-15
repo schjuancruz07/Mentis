@@ -225,7 +225,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    que crece hacia abajo.
    Ojo con el ancho: usa la MISMA variable que el hueco que deja #zona-central (menos el margen),
    para que el panel no se salga del espacio que le abrieron ni deje una franja vacía al lado. */
-#status-panel.pantalla-completa {
+#status-panel.columna {
   position: absolute; top: 8px; right: 12px; bottom: 8px; left: auto;
   width: calc(var(--ancho-panel-estado) - 24px);
   z-index: 30;
@@ -235,9 +235,31 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   background: var(--secundario);
   border: 1px solid var(--border);
 }
-#status-panel.pantalla-completa #preview-content {
+#status-panel.columna #preview-content {
   flex: 1; overflow: auto; font-size: 13px; line-height: 1.6;
 }
+
+/* PANTALLA COMPLETA DE VERDAD (2026-08-15, pedido del usuario: "el tamaño grande pasa a ser el común
+   y el grande pasa a ser pantalla completa").
+   Acá SÍ cubre todo, que es lo que se pidió -- y por eso la salida tiene que ser obvia: el botón
+   de achicar queda arriba a la derecha, dentro del panel, y Escape también sale. La lección del
+   2026-08-11 sigue valiendo (un pantalla completa que tapa los controles deja sin salida), y se
+   respeta dejando la cabecera del panel SIEMPRE visible, con su botón adentro.
+   Cubre #main y no la ventana entera: la barra de título con cerrar/minimizar queda accesible. */
+#status-panel.completa {
+  position: absolute; inset: 8px 12px 8px 12px;
+  width: auto; max-height: none; z-index: 40;
+  border-radius: var(--radius);
+  display: flex; flex-direction: column;
+  background: var(--secundario); border: 1px solid var(--border);
+}
+#status-panel.completa #preview-content {
+  flex: 1; overflow: auto; font-size: 14px; line-height: 1.65;
+}
+/* En pantalla completa el contenido NO se corre: el panel ya cubre el lugar del chat. */
+#main:has(#status-panel.completa) #zona-central,
+#main:has(#status-panel.completa) #composer,
+#main:has(#status-panel.completa) #linea-estado { padding-right: 0; }
 #btn-status-full {
   display: flex; align-items: center; justify-content: center;
   background: transparent; border: 0; padding: 4px; border-radius: var(--radius);
@@ -1636,6 +1658,17 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    dentro de un recuadro chico obliga a hacer scroll adentro de un scroll. */
 .visor-3d { width: 100%; height: 100%; min-height: 420px; border-radius: var(--radius); overflow: hidden; }
 .visor-marco { width: 100%; height: 100%; min-height: 420px; border: 0; background: #fff; border-radius: var(--radius); }
+
+/* Aviso de "esta pagina necesita archivos de al lado" (2026-08-15). Va ARRIBA del marco y no
+   encima: tapar la pagina para avisar que la pagina se ve incompleta seria absurdo. El marco
+   sigue ocupando todo lo que sobra. */
+.visor-con-aviso { display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%; }
+.visor-con-aviso.visor-marco { flex: 1; min-height: 0; }
+.visor-aviso {
+  flex: 0 0 auto; padding: 8px 12px; border-radius: var(--radius);
+  background: var(--secundario); border: 1px solid var(--border);
+  color: var(--texto-dim); font-size: 12px; line-height: 1.5;
+}
 .visor-texto {
   width: 100%; height: 100%; margin: 0; padding: 16px; overflow: auto;
   font-family: var(--font-mono); font-size: 13px; color: var(--texto);
@@ -1710,8 +1743,16 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    su propio título. */
 #panel-estudio { padding: 10px; overflow-y: auto; }
 #panel-estudio.hidden { display: none; }
-#panel-estudio-grilla { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* La grilla pasa a ser una PILA DE SECCIONES (2026-08-15): Study tiene una sola sección sin
+   nombre -- se ve igual que antes -- y Designe tiene dos con encabezado. Las tarjetas siguen
+   yendo de a dos por fila; lo que cambió es que ahora hay filas agrupadas. */
+#panel-estudio-grilla { display: flex; flex-direction: column; gap: 10px; }
 #panel-estudio-grilla.hidden { display: none; }
+.estudio-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.estudio-seccion {
+  margin: 2px 0 0; font-size: 11px; font-weight: 600; letter-spacing:.04em;
+  text-transform: uppercase; color: var(--texto-dim);
+}
 .estudio-tarjeta {
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   background: var(--secundario); border: 1px solid var(--border); border-radius: 10px;
@@ -1756,3 +1797,63 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   font-family: var(--font-sans);
 }
 .estudio-listo:hover { filter: brightness(1.08); }
+
+
+/* ===== TABLERO DE TAREAS (2026-08-15, pedido del usuario para Cowork) =============================
+   Va arriba de la previsualización, dentro del panel de la derecha. Es una lista de puntos que se
+   tachan solos cuando el motor confirma que la tarea produjo su archivo.
+
+   LA ANIMACIÓN, Y POR QUÉ ESTA Y NO OTRA:
+   - El tablero ENTRA con fade + 8px hacia abajo (150 ms). Aparecer de golpe en el medio de un
+     turno se lee como un salto de la interfaz.
+   - El tachado se DIBUJA de izquierda a derecha (scaleX en 180 ms) en vez de aparecer entero: el
+     ojo sigue la línea y entiende que algo se acaba de completar, sin tener que releer.
+   - El tilde entra con un pop corto (0.8 -> 1 en 120 ms) y NO rebota. Un rebote acá sería un
+     festejo; esto es un tablero de trabajo que puede tacharse seis veces en un minuto.
+   - Las tareas cumplidas SE QUEDAN, tachadas. Ver el avance es medio punto de tener tablero.
+   Con prefers-reduced-motion no hay transiciones: el estado cambia seco, que es lo que esa
+   preferencia pide. */
+#tablero-tareas {
+  margin: 8px 10px 0; padding: 10px 12px;
+  background: var(--principal); border: 1px solid var(--border); border-radius: 10px;
+  opacity: 1; transform: none; transition: opacity.15s ease, transform.15s ease;
+}
+#tablero-tareas.hidden { display: none; }
+#tablero-tareas.tablero-entrando { opacity: 0; transform: translateY(-8px); }
+.tablero-titulo {
+  margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing:.04em;
+  text-transform: uppercase; color: var(--texto-dim);
+}
+.tablero-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tablero-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12.5px; line-height: 1.4; color: var(--texto);
+}
+.tablero-tilde {
+  flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 4px;
+  font-size: 10px; color: transparent; background: transparent;
+  transition: color.12s ease, background.12s ease, border-color.12s ease, transform.12s ease;
+}
+/* El texto lleva su propia línea de tachado como pseudo-elemento: con text-decoration no se puede
+   animar el trazo, y aparecería entero de un cuadro al otro. */
+.tablero-texto { position: relative; }
+.tablero-texto::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 50%;
+  height: 1px; background: currentColor;
+  transform: scaleX(0); transform-origin: left center;
+  transition: transform.18s ease-out;
+}
+.tablero-item.hecha.tablero-texto { color: var(--texto-dim); }
+.tablero-item.hecha.tablero-texto::after { transform: scaleX(1); }
+.tablero-item.hecha.tablero-tilde {
+  color: var(--principal); background: var(--acento); border-color: var(--acento);
+  transform: scale(1);
+  animation: tablero-pop.12s ease-out;
+}
+@keyframes tablero-pop { from { transform: scale(.8); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  #tablero-tareas,.tablero-tilde,.tablero-texto::after { transition: none; }
+.tablero-item.hecha.tablero-tilde { animation: none; }
+}

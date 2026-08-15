@@ -182,7 +182,7 @@ const _mal = (m) => { mal++; console.log('  MAL  ' + m); };
     return { w: Math.round(r.width), h: Math.round(r.height) };
   });
   await pagina.evaluate(() => {
-    document.getElementById('status-panel').classList.add('pantalla-completa');
+    document.getElementById('status-panel').classList.add('columna'); // 2026-08-15: la columna alta es el tamano NORMAL; 'completa' es el nuevo estado del boton
   });
   await pagina.waitForTimeout(400);
   const grande = await pagina.evaluate(() => {

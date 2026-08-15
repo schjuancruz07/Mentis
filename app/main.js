@@ -1737,7 +1737,17 @@ ipcMain.handle('mentis:ver-artefacto', async (_event, artifact) => {
     }
   }
   const mime = VISOR_MIME[ext] || 'application/octet-stream';
-  return { ok: true, tipo, nombre, ext, dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
+  const resp = { ok: true, tipo, nombre, ext, dataUrl: `data:${mime};base64,${buf.toString('base64')}` };
+  // ¿ESTA PÁGINA NECESITA ARCHIVOS DE AL LADO? (2026-08-15). El visor la muestra en un iframe
+  // sandbox sin allow-same-origin -- correcto: una página escrita por un modelo no tiene por qué
+  // poder tocar la app. Pero con origen opaco, un <link href="estilo.css"> o un <script src="app.js">
+  // vecino NO carga, y la página se ve pelada. Quien la mire creería que la escribió mal.
+  // El flag se calcula ACÁ, que es donde está el contenido: el renderer sólo recibe el dataUrl.
+  if (tipo === 'html') {
+    const txt = buf.toString('utf8').slice(0, 200000);
+    resp.dependeDeVecinos = /<(link|script)\s[^>]*(href|src)\s*=\s*["'](?!https?:|data:|#|\/\/)/i.test(txt);
+  }
+  return resp;
 });
 
 // A QUÉ MODO PERTENECE UNA CREACIÓN (2026-08-13, "la galería tiene que ser por modos").
@@ -1787,6 +1797,59 @@ ipcMain.handle('mentis:listar-creaciones', async (_event, modo) => {
       ? archivos
       : archivos.filter((a) => a.modo === modo);
     return { ok: true, archivos: filtrados.slice(0, 200), total: archivos.length, modo: modo || null };
+  } catch (e) {
+    return { ok: false, error: String(e.message || e) };
+  }
+});
+
+// LA GALERÍA DE CODE MIRA EL PROYECTO, NO LAS CREACIONES (2026-08-15, pedido del usuario: "quiero
+// ponerlo en Code porque ahí voy a probar las apps que haga con Mentis").
+//
+// 'listar-creaciones' lee la carpeta de creaciones -- lo que produce 'gen': imágenes, modelos 3D,
+// documentos. En Code no se genera nada de eso: se escriben archivos en la carpeta de trabajo. Con
+// la galería de siempre, el modo Code habría mostrado una galería vacía para siempre.
+//
+// Se listan sólo los archivos que el visor sabe ABRIR (html, svg, imágenes, pdf, md, txt): una
+// galería que muestre los.js y los.json de un proyecto sería un explorador de archivos, y para
+// eso ya está el panel Directorio.
+//
+// Recorre subcarpetas hasta 2 niveles y saltea las de dependencias: en un proyecto web de verdad,
+// node_modules tiene decenas de miles de archivos y listarlos colgaría la ventana.
+const GALERIA_PROYECTO_EXT = new Set(['.html', '.htm', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.pdf', '.md', '.txt']);
+const GALERIA_PROYECTO_SALTAR = new Set(['node_modules', '.git', '__pycache__', 'dist', 'build', '.mentis-obs', 'attachments']);
+
+ipcMain.handle('mentis:listar-artefactos-proyecto', async () => {
+  try {
+    const raiz = APP_WORKSPACE_ROOT;
+    if (!fsSync.existsSync(raiz)) return { ok: true, archivos: [] };
+    const archivos = [];
+    async function recorrer(dir, nivel) {
+      if (nivel > 2 || archivos.length >= 200) return;
+      let entradas;
+      try { entradas = await fsSync.promises.readdir(dir, { withFileTypes: true }); } catch { return; }
+      for (const e of entradas) {
+        if (archivos.length >= 200) return;
+        if (e.name.startsWith('.')) continue;
+        const abs = path.join(dir, e.name);
+        if (e.isDirectory()) {
+          if (GALERIA_PROYECTO_SALTAR.has(e.name)) continue;
+          await recorrer(abs, nivel + 1);
+          continue;
+        }
+        const ext = path.extname(e.name).toLowerCase();
+        if (!GALERIA_PROYECTO_EXT.has(ext)) continue;
+        let st;
+        try { st = await fsSync.promises.stat(abs); } catch { continue; }
+        archivos.push({
+          nombre: path.relative(raiz, abs).replace(/\\/g, '/'),
+          ruta: abs, ext, tipo: VISOR_TIPOS[ext] || 'externo',
+          bytes: st.size, cuando: st.mtimeMs, modo: 'code',
+        });
+      }
+    }
+    await recorrer(raiz, 0);
+    archivos.sort((a, b) => b.cuando - a.cuando);
+    return { ok: true, archivos, total: archivos.length, modo: 'code', fuente: 'proyecto' };
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }

@@ -312,6 +312,23 @@ async function abrirVisor(ruta) {
     // la muestra. Con allow-scripts alcanza para que una infografia interactiva funcione.
     marco.setAttribute('sandbox', 'allow-scripts');
     marco.src = r.dataUrl;
+    // UNA PAGINA CON ARCHIVOS HERMANOS NO SE PUEDE PROBAR ACA ADENTRO (2026-08-15). El iframe se
+    // carga como data: y sin allow-same-origin -- que es lo correcto para no darle la app a una
+    // pagina generada por un modelo --, pero eso significa que su origen es opaco: un
+    // <link href="estilo.css"> o un <script src="app.js"> al lado NO cargan. Se ve el HTML pelado.
+    //
+    // Callarse eso seria peor que no mostrarlo: uno miraria una app rota y creeria que la escribio
+    // mal. Se avisa y se ofrece la unica via que si funciona, que es abrirla afuera.
+    if (r.tipo === 'html' && r.dependeDeVecinos) {
+      const aviso = document.createElement('div');
+      aviso.className = 'visor-aviso';
+      aviso.textContent = 'Esta página carga archivos de al lado (estilos o scripts). Acá se ve sin ellos por seguridad: para probarla de verdad, abrila afuera.';
+      const caja = document.createElement('div');
+      caja.className = 'visor-con-aviso';
+      caja.append(aviso, marco);
+      ponerCuerpo(caja);
+      return;
+    }
     ponerCuerpo(marco);
   } else if (r.tipo === 'texto') {
     const pre = document.createElement('pre');
@@ -334,14 +351,27 @@ async function abrirVisor(ruta) {
 // es el comportamiento viejo y nunca deja la galería vacía por un dato que faltó.
 async function abrirGaleria() {
   const modo = window.MENTIS_MODO_ACTUAL || null;
-  const r = await window.mentisAPI.listarCreaciones(modo);
+  // EN CODE LA GALERÍA ES OTRA COSA (2026-08-15). En los demás modos muestra lo que Mentis CREÓ
+  // (imágenes, 3D, documentos); en Code muestra los archivos abribles del PROYECTO, que es lo que
+  // ahí se quiere mirar: la app que uno acaba de escribir. Con la galería de creaciones, Code
+  // habría mostrado una galería vacía siempre.
+  const enCode = modo === 'code';
+  const r = enCode
+    ? await window.mentisAPI.listarArtefactosProyecto()
+    : await window.mentisAPI.listarCreaciones(modo);
   $('visor').classList.remove('hidden');
-  $('visor-nombre').textContent = modo && modo !== 'cowork'
-    ? `Lo que creaste en ${modo}` : 'Todo lo que creó Mentis';
+  $('visor-nombre').textContent = enCode
+    ? 'Archivos de tu proyecto'
+    : (modo && modo !== 'cowork' ? `Lo que creaste en ${modo}` : 'Todo lo que creó Mentis');
   visorActual = null;
   pintarBarra(true);
   if (!r || !r.ok) {
     ponerCuerpo(mensaje('No pude leer la carpeta de creaciones.', (r && r.error) || ''));
+    return;
+  }
+  if (!r.archivos.length && enCode) {
+    ponerCuerpo(mensaje('Todavía no hay nada para abrir en este proyecto.',
+                        'Acá aparecen los.html, imágenes, PDF y notas de tu carpeta de trabajo.'));
     return;
   }
   if (!r.archivos.length) {

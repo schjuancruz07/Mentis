@@ -224,6 +224,15 @@ _revisar() {
     && echo "  OK    NASA (foto astronomica)" \
     || echo "  --    NASA: la foto astronomica anda igual sin clave (usa DEMO_KEY, probado). Una clave propia solo sube el limite."
 
+  # LAS DOS QUE SI CONVIENEN, Y SON GRATIS (2026-08-15). Las de arriba son pagas o cosmeticas;
+  # estas dos cambian como se siente Mentis todos los dias y tienen tier gratuito real sin tarjeta.
+  _tiene_secreto CUSTOM_MODEL_KEY_GROQ \
+    && echo "  OK    Groq (respuestas rapidas)" \
+    || echo "  --    Groq: GRATIS y muy recomendable. Atiende los roles rapidos; medido, 15/15 contra 13/15 y 4,6x mas rapido."
+  _tiene_secreto TAVILY_API_KEY \
+    && echo "  OK    Tavily (busqueda web)" \
+    || echo "  --    Tavily: GRATIS (1000 busquedas/mes). Sin esto la busqueda web queda limitada: Bing, DuckDuckGo y Mojeek dan CAPTCHA."
+
   # ElevenLabs merece una advertencia y no una linea mas: pedirle a alguien que haga el tramite
   # para algo que no va a poder usar es peor que no ofrecerlo. Medido 2026-08-06: el plan gratis da
   # 10 creditos POR MES via API (unos 20 caracteres). Los 10.000 caracteres del plan gratis son de
@@ -333,6 +342,22 @@ os.replace(tmp, ruta)
   echo "Nada de esto hace falta para que funcione."
   echo
 
+  # Primero las gratis: si alguien corta el instalador a la mitad, que al menos haya cargado
+  # las que mas cambian la experiencia y no cuestan nada.
+  echo "Groq: respuestas rapidas. GRATIS, sin tarjeta (https://console.groq.com/keys)."
+  echo "Medido en esta maquina: 15/15 contra 13/15 del modelo anterior, y 4,6 veces mas rapido."
+  printf 'Clave de Groq (Enter para saltear): '
+  local gq=""; read -r gq; gq="$(printf %s "$gq" | tr -d ' \r\n')"
+  [ -n "$gq" ] && _guardar_secreto CUSTOM_MODEL_KEY_GROQ "$gq"
+
+  echo
+  echo "Tavily: busqueda web para agentes. GRATIS, 1000 busquedas por mes (https://tavily.com)."
+  echo "Sin esto la busqueda queda con Marginalia y Wikipedia: Bing, DuckDuckGo y Mojeek dan CAPTCHA."
+  printf 'Clave de Tavily (Enter para saltear): '
+  local tv=""; read -r tv; tv="$(printf %s "$tv" | tr -d ' \r\n')"
+  [ -n "$tv" ] && _guardar_secreto TAVILY_API_KEY "$tv"
+
+  echo
   echo "Ideogram genera imagenes. ES PAGO (https://ideogram.ai)."
   printf 'IDEOGRAM_API_KEY (Enter para saltear): '
   local ig=""; read -r ig; ig="$(printf '%s' "$ig" | tr -d ' \r\n')"
