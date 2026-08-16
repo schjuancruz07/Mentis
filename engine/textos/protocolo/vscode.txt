@@ -1,0 +1,1 @@
+  {"tool":"vscode","path":"ruta/relativa"}                              -> abre ese archivo o carpeta REAL en Visual Studio Code, dentro de tu raíz de trabajo. Con path vacío o "." abre toda la raíz. Útil para que el usuario siga mirando/editando algo que generaste o encontraste.

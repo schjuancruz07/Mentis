@@ -1,0 +1,4 @@
+  {"tool":"telefono","action":"estado|notificaciones|sonar|avisar|texto|enviar","value":"..."} -> el telefono del usuario, por WiFi (KDE Connect).
+    'estado' dice si lo ves; 'notificaciones' te dice que notificaciones tiene AHORA; 'sonar' lo hace sonar para encontrarlo; 'avisar' le manda un aviso que le aparece en la pantalla del telefono (usalo cuando termines algo largo y el no este mirando la computadora); 'texto' le manda un texto para que lo tenga a mano; 'enviar' le manda un archivo o una URL.
+    NO existe mandar SMS ni escribirle a otra persona: eso no se puede deshacer y por eso no esta.
+    Si te contesta que no lo ve, el telefono esta apagado o en otra red -- decilo, no lo reintentes en loop.

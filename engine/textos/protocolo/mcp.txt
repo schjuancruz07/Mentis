@@ -1,0 +1,2 @@
+  {"tool":"mcp","action":"list"}                                       -> te devuelvo la lista real de herramientas externas disponibles (Gmail, Calendar, Drive, etc.), con su schema de argumentos. Llamá esto ANTES de usar 'call' si no sabés qué herramientas hay.
+  {"tool":"mcp","action":"call","server":"...","name":"...","args":{...}} -> invoca una herramienta externa real (ej. mandar un mail, crear un evento). 'server' y 'name' salen de la lista de 'list'. 'args' es un objeto JSON con los argumentos exactos que pide el schema de esa herramienta.

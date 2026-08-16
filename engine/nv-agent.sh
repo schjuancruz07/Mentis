@@ -44,6 +44,12 @@ source "$NVDIR/nv-lib.sh"
 # turnos -- ver eval/gate-completitud/medir.sh). Se apaga con MENTIS_GATE_OFF=1.
 # shellcheck source=/dev/null
 source "$NVDIR/nv-gate-lib.sh"
+# LOS TEXTOS QUE LEE EL MODELO viven en engine/textos/ y no adentro de este archivo (2026-08-15).
+# Motivo medido: escritos como strings de bash hay que escapar cada comilla del JSON de ejemplo, y
+# al editarlos los backslashes se colapsan -- ERR-159, cuatro parches rotos y uno que paso EN
+# SILENCIO (el motor arrancaba y el modelo leia un protocolo mal formado). Ver nv-textos-lib.sh.
+# shellcheck source=/dev/null
+source "$NVDIR/nv-textos-lib.sh"
 
 # Carpeta OBLIGATORIA de creaciones (pedido del usuario, 2026-07-12): todo lo que "gen" produce
 # (imagen/3D/documento) va SIEMPRE acá, no a la raiz de trabajo efimera (ROOT) -- asi el usuario la
@@ -2440,126 +2446,74 @@ EVIDENCIA_N=0
 GATE_RECHAZOS=0
 # Idem para la guarda de "los archivos que nombra existen".
 ARCH_RECHAZOS=0
+# Y para la guarda de eco: cuantas veces se rechazo un 'done' que era mi propio texto de vuelta.
+ECO_RECHAZOS=0
+# Donde se anota TODO lo que este turno le dijo al modelo, para poder preguntarle despues a la
+# respuesta final si es texto propio. Se borra al terminar el turno (trap de abajo): es un dato de
+# trabajo, no un registro que valga la pena guardar.
+NVA_OBS_LOG="${NVA_OBS_LOG:-$(mktemp -t nva-obs-XXXXXX 2>/dev/null || echo "")}"
+[ -n "$NVA_OBS_LOG" ] && trap 'rm -f "$NVA_OBS_LOG" 2>/dev/null' EXIT
 
-PROTOCOL="Sos un agente que resuelve una tarea explorando un directorio en SOLO-LECTURA y razonando paso a paso.
-En CADA turno respondé EXCLUSIVAMENTE con UN objeto JSON, sin texto antes ni después, sin markdown. Herramientas:
-  {\"tool\":\"read\",\"path\":\"ruta/relativa\"}            -> te devuelvo el contenido (truncado) del archivo.
-  {\"tool\":\"search\",\"query\":\"regex\",\"path\":\"subdir\"} -> te devuelvo coincidencias (path opcional).
-  {\"tool\":\"run\",\"code\":\"comando bash\"}              -> corre en un sandbox AISLADO que NO ve el repo (solo cómputo puro).
-  {\"tool\":\"done\",\"answer\":\"respuesta final completa\"} -> terminás y entregás la respuesta.
-  {\"tool\":\"delegate\",\"action\":\"code|reason|deep|general|extract|multimodal|ultra\",\"prompt\":\"...\"} -> le consultás una sub-tarea puntual a OTRO cerebro especializado (una sola llamada, sin herramientas propias) y te devuelvo su respuesta como observación. Usalo cuando la tarea tenga una parte que otro rol resuelve mejor (ej. vos sos 'reason' y necesitás que 'code' te escriba una funcion).
-  {\"tool\":\"parallel\",\"args\":[{\"role\":\"code\",\"prompt\":\"...\"},{\"role\":\"reason\",\"prompt\":\"...\"}]} -> lanzás de 1 a 6 sub-tareas a otros cerebros AL MISMO TIEMPO (paralelo real, no una tras otra) y esperás a que terminen todas juntas. Usalo cuando tengas varias sub-tareas INDEPENDIENTES entre si (ninguna necesita el resultado de otra) y quieras ahorrar tiempo real, no solo dividir el trabajo.
-  {\"tool\":\"subagent\",\"action\":\"code|reason|deep|general|extract|multimodal|ultra\",\"prompt\":\"tarea autonoma completa\",\"value\":\"8\",\"args\":{\"web\":false}} -> a diferencia de 'delegate' (una sola consulta sin herramientas), esto lanza un sub-agente REAL con su propio loop de lectura/búsqueda que investiga por su cuenta y te devuelve una respuesta ya elaborada. Usalo para sub-tareas de EXPLORACIÓN que requieran varios pasos (leer varios archivos, buscar y cruzar información) antes de poder responder, no para una pregunta directa (para eso alcanza 'delegate').
-    'value' es su presupuesto de iteraciones (default 8, máximo 12). Poné más cuando la sub-tarea necesite leer varios archivos: con muy pocas, se queda sin presupuesto a mitad de camino y su trabajo no sirve. Si te devuelve que se quedó SIN PRESUPUESTO, eso NO es una respuesta -- volvé a lanzarlo con más iteraciones y un pedido más acotado, o resolvelo vos.
-    'args':{\"web\":true} le presta además la navegación. Un sub-agente NUNCA puede escribir archivos, ejecutar comandos ni lanzar otro sub-agente, y eso no se puede cambiar desde acá: nadie está mirando lo que hace, así que sólo mira y razona.
-  {\"tool\":\"task\",\"action\":\"create\",\"subject\":\"...\",\"description\":\"...\"} -> anotá un paso pendiente de un trabajo largo de VARIOS pasos (no lo uses para tareas de un solo paso). {\"tool\":\"task\",\"action\":\"update\",\"id\":\"3\",\"status\":\"in_progress|completed\"} -> marcá el avance (in_progress ANTES de empezar ese paso, completed recién cuando esté realmente terminado, nunca antes). {\"tool\":\"task\",\"action\":\"list\"} -> ver el estado actual. Estas tareas persisten en este directorio de trabajo entre turnos de esta misma conversación.
-  {\"tool\":\"lsp\",\"action\":\"definicion|referencias|simbolos|diagnosticos|servidores\",\"path\":\"ruta/relativa\",\"x\":\"linea\",\"y\":\"columna\"} -> preguntas sobre el CODIGO, no sobre el texto: dónde se DEFINE un símbolo, QUIÉN lo usa, qué funciones tiene un archivo, qué errores ve el analizador. Usalo ANTES de cambiar algo, para saber qué se rompe. 'search' busca texto y te trae también los comentarios; esto entiende el lenguaje. Si no hay servidor de lenguaje instalado te lo dice y te da el comando para instalarlo.
-  {\"tool\":\"git\",\"action\":\"status|diff|log|show|branch|remote|blame\",\"path\":\"ruta/relativa opcional\"} -> mira el estado de un repositorio git. Es de SOLO LECTURA: no commitea, no cambia de rama y no toca el historial del usuario. Usalo cuando te pregunten qué cambió, qué quedó sin guardar o qué se hizo último, en vez de adivinar leyendo archivos.
-  {\"tool\":\"recordar\",\"query\":\"de qué se habló\"}       -> busca en TODAS las conversaciones anteriores con el usuario y te devuelve los pasajes con su fecha. Usalo cuando el usuario dé por sabido algo que no está en esta conversación (\"lo que habíamos decidido\", \"como te dije la otra vez\", \"el proyecto ese\") en vez de pedirle que lo repita, y cuando necesites saber si algo ya se discutió antes de proponerlo de nuevo.
-Reglas: las rutas son relativas al directorio raíz; no podés salir de él. No inventes contenido de archivos: leelos.
-Si una observación es muy larga te doy el principio y te aviso que el resto quedó guardado en un archivo (.mentis-obs/...). Esa salida NO se perdió: leé ese archivo con 'read' si necesitás el resto, en vez de repetir la acción que la generó.
-Cuando tengas suficiente para responder la tarea, usá 'done'. Sé económico: no releas lo ya visto."
+PROTOCOL="$(nv_texto protocolo/base)"
 
 if [ "$ALLOW_WRITE" = "1" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"write\",\"path\":\"ruta/relativa\",\"content\":\"contenido completo del archivo\"} -> crea o sobreescribe un archivo real dentro de la raíz. Usalo para archivos NUEVOS o cuando de verdad querés reemplazar todo.
-  {\"tool\":\"edit\",\"path\":\"ruta/relativa\",\"old\":\"texto exacto a reemplazar\",\"new\":\"texto nuevo\"} -> cambia UN pedazo de un archivo que ya existe, sin reescribirlo entero. Es lo que tenés que usar para modificar código existente: leé el archivo primero y copiá en 'old' el fragmento TAL CUAL, con su indentación. Si ese texto aparece más de una vez te lo voy a rechazar: agregá líneas de contexto alrededor hasta que sea único. Reescribir un archivo largo entero con 'write' para cambiar dos líneas es un error -- si te quedás sin espacio a la mitad, lo dejás roto.
-  {\"tool\":\"exec\",\"code\":\"comando bash\"}              -> corre un comando REAL dentro de la raíz (no aislado). Comandos destructivos serán rechazados."
+$(nv_texto protocolo/write)"
   if [ "$ALLOW_DANGEROUS" = "1" ]; then
     PROTOCOL="$PROTOCOL
-  MODO SIN FRENOS ACTIVO: el usuario desactivó a propósito el bloqueo de comandos destructivos (rm -rf, git push, format, etc.) para esta conversación. Esto NO es permiso para ser descuidado -- redoblá el cuidado en 'exec': confirmá que un comando irreversible es realmente necesario antes de correrlo, preferí alternativas no destructivas cuando existan, y sé explícito en tu respuesta sobre qué comando corriste y por qué."
+$(nv_texto protocolo/sin-frenos)"
   fi
 fi
 
 if [ "$ALLOW_BROWSE" = "1" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"browse\",\"action\":\"search\",\"query\":\"texto a buscar\"}     -> busca en la web de verdad y te devuelvo los resultados como texto + links, sin que tengas que armar la URL vos. Si un buscador rechaza el pedido, pruebo solo con el siguiente -- no hace falta que reintentes vos.
-    OJO: los buscadores que aceptan clientes automaticos tienen indice chico. Si buscas algo de HOY (una cotizacion, el clima, una noticia) y la busqueda no lo trae, no insistas: anda DIRECTO con {\"tool\":\"browse\",\"action\":\"open\",\"url\":\"...\"} a un sitio que lo publique. Es mas rapido y sale mejor.
-  {\"tool\":\"browse\",\"action\":\"open\",\"url\":\"https://...\"}            -> abre una URL real en el navegador; te devuelvo el texto y una lista numerada de elementos interactivos.
-  {\"tool\":\"browse\",\"action\":\"click\",\"target\":\"3\"}                  -> hace click en el elemento [3] de la última lista de elementos que te di.
-  {\"tool\":\"browse\",\"action\":\"fill\",\"target\":\"2\",\"value\":\"texto\"} -> completa el input [2] con ese valor, sin navegar.
-  {\"tool\":\"browse\",\"action\":\"scroll\",\"value\":\"down\"}               -> scrollea la página ('down' o 'up').
-  {\"tool\":\"browse\",\"action\":\"read\"}                                    -> releé la página actual sin navegar ni actuar.
-  El navegador mantiene la MISMA pestaña entre turnos de esta conversación — no hace falta reabrir la URL cada vez."
+$(nv_texto protocolo/browse)"
 fi
 
 if [ "$ALLOW_MCP" = "1" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"mcp\",\"action\":\"list\"}                                       -> te devuelvo la lista real de herramientas externas disponibles (Gmail, Calendar, Drive, etc.), con su schema de argumentos. Llamá esto ANTES de usar 'call' si no sabés qué herramientas hay.
-  {\"tool\":\"mcp\",\"action\":\"call\",\"server\":\"...\",\"name\":\"...\",\"args\":{...}} -> invoca una herramienta externa real (ej. mandar un mail, crear un evento). 'server' y 'name' salen de la lista de 'list'. 'args' es un objeto JSON con los argumentos exactos que pide el schema de esa herramienta."
+$(nv_texto protocolo/mcp)"
 fi
 
 if [ "$ALLOW_SCREEN" = "1" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"screen\",\"action\":\"ver\"}                                    -> saca una captura REAL de la pantalla del escritorio del usuario (todos los monitores) y te devuelvo una descripcion detallada de lo que se ve (ventanas abiertas, contenido, texto visible). Es SOLO LECTURA -- no podés clickear ni tipear nada en el escritorio, solo observar."
+$(nv_texto protocolo/screen)"
 fi
 
 if [ "$ALLOW_WEBCAM" = "1" ]; then
   NVA_FICHA_WEBCAM="
-  {\"tool\":\"webcam\",\"action\":\"mirar\"}                                  -> saca UNA foto con la cámara de la computadora y te devuelvo qué se ve. Usalo cuando el usuario te diga \"mirá esto\", \"fijate\", o te pida algo que sólo se puede saber viendo.
-  {\"tool\":\"webcam\",\"action\":\"leer\"}                                   -> igual, pero para LEER: transcribe el texto de lo que el usuario le esté mostrando a la cámara (un papel, un envase, una pantalla, una etiqueta).
-  {\"tool\":\"webcam\",\"action\":\"presencia\"}                              -> responde sólo si hay alguien frente a la pantalla o no. Usalo antes de hablarle por iniciativa propia, para no ponerte a hablar solo.
-    La cámara se prende para la foto y se apaga enseguida, y mientras tanto se enciende su luz -- el usuario SIEMPRE se entera de que estás mirando. Sacá una foto sólo cuando haga falta de verdad para contestar; no es algo para chequear \"por las dudas\". Si la foto sale oscura o no se distingue, te lo voy a decir junto con la descripción: en ese caso decilo vos también en vez de afirmar que viste algo."
+$(nv_texto protocolo/webcam)"
 fi
 
 if [ "$ALLOW_CONTROL" = "1" ]; then
   NVA_FICHA_CONTROL="
-  MODO DE CONTROL ACTIVO (computer-use en vivo): el usuario activó a propósito el control REAL de mouse y teclado sobre su escritorio. Es la capacidad de mayor riesgo que tenés -- un click o una tecla en el lugar equivocado tiene efecto real en cualquier aplicación de su computadora, no solo en un navegador aislado. Antes de la PRIMERA acción, usá 'screen' para ver EXACTAMENTE dónde está lo que necesitás tocar -- no inventes coordenadas. Después de cada acción de 'control' ya te devuelvo automáticamente una descripción de cómo quedó la pantalla (no hace falta que pidas 'screen' de nuevo vos mismo salvo que quieras confirmar algo puntual) -- el usuario también está viendo esa misma captura en vivo en su pantalla mientras controlás, así que las acciones tienen que ser precisas y con propósito claro, no exploratorias.
-  {\"tool\":\"control\",\"action\":\"launch\",\"value\":\"calc\"}              -> abre una aplicación REAL por nombre o ruta (ej. \"calc\", \"notepad\", \"explorer\", o una ruta completa a un.exe). USÁ ESTO para abrir cualquier programa -- nunca intentes 'read' sobre un.exe, no es un archivo de tu carpeta de trabajo y siempre va a fallar.
-  {\"tool\":\"control\",\"action\":\"move\",\"x\":100,\"y\":200}                -> mueve el cursor a esa posición de pantalla (en píxeles, origen arriba-izquierda), sin clickear.
-  {\"tool\":\"control\",\"action\":\"click\",\"x\":100,\"y\":200,\"value\":\"left\"} -> mueve el cursor ahí y hace click. 'value' es opcional: left (default), right, o double.
-  {\"tool\":\"control\",\"action\":\"type\",\"value\":\"texto a escribir\"}     -> escribe ese texto literal en donde esté el foco de teclado ahora mismo (asegurate de haber clickeado el campo correcto antes).
-  {\"tool\":\"control\",\"action\":\"key\",\"value\":\"ctrl+c\"}                -> manda una combinación de teclas (ej. \"ctrl+c\", \"alt+tab\", \"enter\", \"esc\"). El último token es la tecla, los anteriores son modificadores (ctrl, alt, shift).
-  {\"tool\":\"control\",\"action\":\"scroll\",\"value\":\"down\"}               -> scrollea la ventana activa ('down' o 'up')."
+$(nv_texto protocolo/control)"
 fi
 
 if [ "$ALLOW_EDITOR" = "1" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"vscode\",\"path\":\"ruta/relativa\"}                              -> abre ese archivo o carpeta REAL en Visual Studio Code, dentro de tu raíz de trabajo. Con path vacío o \".\" abre toda la raíz. Útil para que el usuario siga mirando/editando algo que generaste o encontraste."
+$(nv_texto protocolo/vscode)"
 fi
 
 if [ "$ALLOW_DATOS" = "1" ]; then
   NVA_FICHA_DATOS="
-  DATOS EXTERNOS (mapas/geoespacial, rastreo en vivo, ciencia/conocimiento abierto) -- fuentes reales, no inventes datos si podés consultar una de estas:
-  {\"tool\":\"datos\",\"action\":\"overpass\",\"value\":\"<query Overpass QL>\"}           -> consulta cruda de OpenStreetMap (bares/comercios/calles/lo que sea con tags OSM) por área. Ejemplo de query: [out:json];node[\"amenity\"=\"cafe\"](around:500,-34.60,-58.38);out 10;
-  {\"tool\":\"datos\",\"action\":\"georef\",\"path\":\"<endpoint>\",\"value\":\"<nombre>\"} -> normalización oficial argentina (Georef, datos.gob.ar). endpoint: provincias|departamentos|municipios|localidades|calles.
-  {\"tool\":\"datos\",\"action\":\"opensky\",\"value\":\"<lamin,lomin,lamax,lomax>\"}      -> vuelos en vivo (OpenSky) dentro de ese bounding box (4 números separados por coma).
-  {\"tool\":\"datos\",\"action\":\"nasa\",\"value\":\"<fecha YYYY-MM-DD opcional>\"}       -> foto astronómica del día de la NASA (APOD). Sin 'value' devuelve la de hoy.
-  {\"tool\":\"datos\",\"action\":\"archive\",\"value\":\"<query>\"}                        -> busca en Internet Archive (libros, audio, video, software viejo).
-  {\"tool\":\"datos\",\"action\":\"doaj\",\"value\":\"<query>\"}                           -> busca artículos académicos de acceso abierto (DOAJ).
-  {\"tool\":\"datos\",\"action\":\"papers\",\"value\":\"<tema>\"}                         -> busca papers en OpenAlex (250 millones de trabajos, abiertos Y cerrados): devuelve título, año, cantidad de CITAS, autores y el PDF gratis si existe, ordenados por citas. Es la fuente para 'qué se investigó sobre esto' y para citar con referencia real; DOAJ en cambio sólo tiene revistas de acceso abierto.
-  {\"tool\":\"datos\",\"action\":\"wikipedia\",\"value\":\"<termino>\"}                    -> resumen real de un término en Wikipedia en español.
-  {\"tool\":\"datos\",\"action\":\"overture\",\"path\":\"<lonmin,latmin,lonmax,latmax>\",\"value\":\"<tipo>\"} -> descarga real de Overture Maps por bounding box (tipo ej: building, place, segment, land_use) -- edificios/lugares/calles reales con nombre cuando lo tienen.
-  {\"tool\":\"datos\",\"action\":\"nominatim\",\"value\":\"<dirección>\"}                  -> geocoding mundial (dirección -> coordenadas) vía OpenStreetMap Nominatim, sin necesitar ninguna key."
+$(nv_texto protocolo/datos)"
 fi
 
 
 if [ "$ALLOW_ARDUINO" = "1" ]; then
   NVA_FICHA_ARDUINO="
-  {\"tool\":\"hardware\",\"action\":\"backends\"}                                -> qué cadenas de herramientas de hardware hay instaladas y cuáles faltan. Empezá SIEMPRE por acá si vas a hacer algo de hardware: si falta la herramienta, no tiene sentido intentar nada más, y la respuesta ya trae el comando exacto para instalarla.
-  {\"tool\":\"hardware\",\"action\":\"placas\"}                                  -> qué hay conectado por USB ahora mismo, y si es una placa reconocida o un puerto serie cualquiera. Que no haya nada conectado NO es un error: casi todo lo de abajo funciona sin placa.
-  {\"tool\":\"hardware\",\"action\":\"nuevo\",\"path\":\"carpeta\",\"value\":\"placa\"} -> arma un proyecto listo para compilar. Placas: uno, nano, mega, esp32, esp8266, pico, skr-mini-e3 (la impresora 3D), bluepill, tang-primer-20k (la FPGA), micropython-pico. Para la FPGA crea además un testbench, que es lo que te deja verificar sin la placa.
-  {\"tool\":\"hardware\",\"action\":\"verificar\",\"path\":\"proyecto\"}          -> compila de verdad y te devuelve los errores reales del compilador. Detecta solo si es Arduino, PlatformIO o Verilog. NO descarga cadenas de herramientas por su cuenta: si falta algo, te lo dice.
-  {\"tool\":\"hardware\",\"action\":\"simular\",\"path\":\"proyecto\"}            -> LA MÁS ÚTIL para FPGA: corre el testbench del Verilog sin ninguna placa y te dice si el diseño funciona. La última línea dice \"RESULTADO: OK\" o \"RESULTADO: FALLO\" con el motivo, y si no compila te devuelve los errores con archivo y línea. Es donde podés iterar de verdad: escribir, simular, leer el error, corregir.
-  {\"tool\":\"hardware\",\"action\":\"laminar\",\"path\":\"modelo.stl\"}          -> convierte un modelo 3D en G-code listo para imprimir.
-  {\"tool\":\"hardware\",\"action\":\"subir\",\"path\":\"proyecto\"}              -> graba el programa en la placa real conectada por USB. PISA lo que tenía y no se puede deshacer desde el software; antes de grabar guarda una copia del código que sube. Requiere que el usuario haya activado el conector de hardware en la app.
-  {\"tool\":\"hardware\",\"action\":\"monitor\",\"path\":\"COM3\",\"value\":\"10\"} -> lee lo que imprime el puerto serie durante N segundos (\"value\", default 10).
-    OJO: si una acción te contesta que falta una herramienta, eso NO es un fallo tuyo ni algo que puedas resolver probando otra cosa. Decíselo al usuario con el comando de instalación que viene en la respuesta y seguí con lo que sí se pueda."
+$(nv_texto protocolo/arduino)"
 fi
 
 if [ "$ALLOW_SKILLS" = "1" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"skill\",\"action\":\"<nombre>\",\"value\":\"lo que la skill necesita\"} -> corres una de las habilidades de Mentis por tu cuenta (las mismas que el usuario invoca con /nombre).
-    el usuario eligio cuales podes usar solo: si no esta habilitada te lo voy a decir, y ahi la sugeris en vez de ejecutarla.
-    Algunas dejan algo hecho DESPUES del turno (agendan una tarea, instalan un conector, escriben memoria, tocan archivos). Esas te devuelven un RECIBO: cuando lo veas, contale al usuario en una linea que la usaste, que hizo y como se deshace. No le pidas permiso -- avisale."
+$(nv_texto protocolo/skills)"
 fi
 
 if [ "$ALLOW_TELEFONO" = "1" ]; then
   NVA_FICHA_TELEFONO="
-  {\"tool\":\"telefono\",\"action\":\"estado|notificaciones|sonar|avisar|texto|enviar\",\"value\":\"...\"} -> el telefono del usuario, por WiFi (KDE Connect).
-    'estado' dice si lo ves; 'notificaciones' te dice que notificaciones tiene AHORA; 'sonar' lo hace sonar para encontrarlo; 'avisar' le manda un aviso que le aparece en la pantalla del telefono (usalo cuando termines algo largo y el no este mirando la computadora); 'texto' le manda un texto para que lo tenga a mano; 'enviar' le manda un archivo o una URL.
-    NO existe mandar SMS ni escribirle a otra persona: eso no se puede deshacer y por eso no esta.
-    Si te contesta que no lo ve, el telefono esta apagado o en otra red -- decilo, no lo reintentes en loop."
+$(nv_texto protocolo/telefono)"
 fi
 
 # --- INDICE DE CAPACIDADES BAJO DEMANDA (2026-08-03, A5 del plan) --------------------------------
@@ -2582,30 +2536,20 @@ fi
 # suba cosas a la nube del usuario sin que el este sentado adelante.
 if [ "$ALLOW_WRITE" = "1" ] && [ -f "$MENTIS_ROOT/mentis-drive.sh" ]; then
   NVA_FICHA_DRIVE="
-  {\"tool\":\"drive\",\"action\":\"estado|cuentas|subir\",\"path\":\"<archivo a subir>\",\"value\":\"<cuenta>\",\"args\":{\"carpeta\":\"<subcarpeta opcional>\"}}
-    Sube un archivo a Google Drive copiandolo a la unidad que monta la app de escritorio. No usa
-    la API de Google (el conector de Workspace no anda), asi que no hace falta ningun token.
-    'estado' dice si Drive corre y que cuentas hay; 'cuentas' lista las cuentas; 'subir' sube.
-    Si Drive esta apagado, lo prende solo y espera a que monte.
+$(nv_texto protocolo/drive)"
+fi
 
-    ESTA TOOL SI PUEDE SALIR DE TU CARPETA DE TRABAJO. El resto del protocolo te dice que trabajas
-    en un directorio en solo-lectura y que las rutas son relativas: eso vale para 'read', 'search'
-    y 'write', NO para esta. En 'path' podes poner una ruta ABSOLUTA de cualquier parte de la
-    computadora -- de hecho es lo normal, porque 'gen' guarda en Documents\\Mentis, que esta
-    afuera. Si el usuario te da una ruta absoluta, usala tal cual y NO digas que no podes acceder.
-
-    HAY VARIAS CUENTAS DE GOOGLE MONTADAS. Nunca elijas vos: si no sabes a cual va, pedi primero
-    'cuentas', mostrale la lista al usuario y preguntale. Un archivo suyo en la cuenta equivocada no
-    se arregla borrandolo. PERO si el usuario ya te dijo la cuenta (aunque sea a medias, como
-    'schneider.rd'), no vuelvas a preguntar: pasasela en 'value' y subi.
-
-    NO existe ningun paso previo que tengas que hacer: no hay que montar nada, ni pedir permiso,
-    ni verificar que el archivo exista con 'read'. Llamas a esta tool y listo. Si algo esta mal,
-    te lo digo yo en la observacion.
-
-    El archivo se sube TAL CUAL. Un.docx queda como.docx: NO se convierte en un documento de
-    Google editable. Si el usuario pide 'un Google Doc', decile esto en vez de dar a entender que
-    quedo convertido."
+# LA FICHA DE 'gen' SE ARMA ACA ARRIBA Y NO ABAJO, Y ESO ES UN ARREGLO (2026-08-15).
+# Estaba despues del indice: _nva_indexar "gen" leia "${NVA_FICHA_GEN:-}" quince lineas antes de
+# que existiera, o sea SIEMPRE vacia, y la funcion sale temprano cuando la ficha esta vacia. Con
+# -g puesto, el modelo no recibia ni la ficha de 'gen' ni su linea en el indice: no sabia que
+# podia generar imagenes, modelos 3D ni documentos.
+# Venia "funcionando" porque el modelo deducia el formato de la persona del modo Designe -- es
+# decir, adivinando exactamente lo que el propio indice le prohibe: "NUNCA lo intentes de memoria
+# inventando el formato". Es ERR-084 otra vez: no falla, hace de menos.
+if [ "$ALLOW_GEN" = "1" ]; then
+  NVA_FICHA_GEN="
+$(nv_texto protocolo/gen CREACIONES="$MENTIS_CREATIONS_DIR")"
 fi
 
 NVA_INDICE=""
@@ -2626,41 +2570,7 @@ _nva_indexar "drive"    "${NVA_FICHA_DRIVE:-}"    "subir archivos a Google Drive
 
 if [ -n "$NVA_INDICE" ]; then
   PROTOCOL="$PROTOCOL
-  {\"tool\":\"capacidad\",\"action\":\"<nombre>\"} -> te devuelvo las instrucciones completas de una de estas capacidades.
-
-  CAPACIDADES QUE TENES DISPONIBLES Y TODAVIA NO ESTAN DETALLADAS ACA:$NVA_INDICE
-
-  Estas capacidades ESTAN ACTIVAS y son tuyas: lo unico que falta es su ficha de uso. Si la tarea
-  necesita una, pedila con 'capacidad' y en la observacion te llegan todos sus comandos; recien
-  entonces la usas. NUNCA digas que no podes hacer algo que esta en esta lista, y NUNCA lo
-  intentes de memoria inventando el formato: primero pedi la ficha, despues actua."
-fi
-
-if [ "$ALLOW_GEN" = "1" ]; then
-  NVA_FICHA_GEN="
-  ANTES QUE NADA, UNA REGLA DE PRIORIDAD: si lo que queres es ILUSTRAR UN DOCUMENTO, NO generes
-  una imagen. Poné una línea '!img <que buscar>' dentro del 'content' del documento y se inserta
-  sola una foto REAL y libre de derechos, con su autor y licencia. Es gratis, es instantáneo y es
-  una foto de verdad y no una invención. Generar una imagen (lo de abajo) es SOLO para cuando la
-  imagen es el producto que el usuario pidió -- un logo, una ilustración, algo que no existe como foto.
-  Y si generaste una imagen y la querés meter en el documento, la línea es
-  '!imgfile <ruta absoluta>|<epígrafe>'. NUNCA escribas un texto tipo '[IMAGEN: archivo.jpg]':
-  eso no inserta nada, es un cartel que le avisa al usuario que el documento le quedó sin la imagen.
-
-  {\"tool\":\"gen\",\"action\":\"image\",\"prompt\":\"...\"}                        -> genera una imagen real a partir de una descripcion de texto (FLUX via NVIDIA; si llega a fallar, cae solo a Pollinations) y te devuelvo la ruta completa donde quedo guardada.
-    ESCRIBI EL PROMPT EN INGLES, aunque el usuario te lo haya pedido en castellano: el modelo entiende ingles mucho mejor. Medido con el mismo pedido: en castellano (\"un mate de calabaza sobre una mesa de madera, luz de manana\") devolvio una VELA encendida; en ingles (\"a traditional argentine mate gourd on a wooden table, morning light\") devolvio exactamente lo pedido. Traducí vos el pedido del usuario antes de mandarlo, y describí la escena con detalle (objeto, entorno, luz, estilo).
-  {\"tool\":\"gen\",\"action\":\"image\",\"prompt\":\"...\",\"provider\":\"ideogram\"} -> usa Ideogram en vez de Pollinations. Ideogram es MUCHO mejor renderizando texto LEGIBLE dentro de la imagen -- usalo cuando el pedido sea un logo, un cartel, una tapa, un meme, o cualquier imagen donde el texto tiene que leerse bien. Para arte general sin texto, seguí usando Pollinations (default, sin este campo). Necesita que el usuario haya configurado su API key de Ideogram; si no, te va a devolver un error explicando eso.
-  {\"tool\":\"gen\",\"action\":\"video\",\"prompt\":\"...\"}                        -> genera un video real (Runway) a partir de una descripcion de texto: primero genera un frame fijo y despues Runway lo anima, te devuelvo la ruta completa del.mp4. Puede tardar varios minutos. Necesita que el usuario haya configurado su API key de Runway (Configuración -> Video); si no, te va a devolver un error explicando eso.
-  {\"tool\":\"gen\",\"action\":\"3d\",\"prompt\":\"...\"}                           -> genera una imagen y despues un modelo 3D real (OBJ/GLB via TripoSR, open-source) a partir de esa descripcion, te devuelvo la ruta completa del.glb.
-  {\"tool\":\"gen\",\"action\":\"3d\",\"path\":\"ruta/relativa/a/imagen.jpg\"}      -> convierte una imagen YA EXISTENTE en tu raiz de trabajo a un modelo 3D real, sin generar una imagen nueva.
-  {\"tool\":\"gen\",\"action\":\"doc\",\"format\":\"docx|pdf|pptx|xlsx\",\"content\":\"...\"} -> genera un documento REAL con formato (Word/PDF/PowerPoint/Excel) y te devuelvo la ruta completa donde quedo guardado.
-    El 'content' es markdown liviano: '# Titulo' y '## Subtitulo' son encabezados, '- item' es vinieta, una linea sola es un parrafo.
-    ILUSTRAR: una linea '!img <que buscar>' inserta ahi mismo una foto real y libre de derechos bajada de Wikimedia Commons, con el autor y la licencia como epigrafe. Ej: '!img panel solar en un techo'. Usalo cuando una imagen ayude de verdad a entender (un lugar, un objeto, un ser vivo, un edificio) y el documento sea para leer, no para un dato suelto. NO sirve para graficos de datos propios ni para diagramas: eso no esta en Commons. Poner una imagen decorativa que no aporta es peor que no poner ninguna.
-    Y una linea '!imgfile <ruta absoluta>|<epigrafe>' inserta una imagen que YA tenes en el disco -- por ejemplo una que acabas de generar con gen action=image. Es la unica forma de meterla adentro del documento: escribir '[IMAGEN: archivo.jpg]' como texto no inserta nada.
-    Para pptx: separa cada slide con una linea sola '---'; el primer encabezado de cada bloque es el titulo de esa slide.
-    Para xlsx: cada linea es una fila de la planilla, con las columnas separadas por coma o por '|' (la primera fila es el encabezado).
-    OJO: todo lo que generes con 'gen' (imagen/3D/documento) se guarda SIEMPRE en la carpeta de creaciones del usuario ($MENTIS_CREATIONS_DIR, organizada por tipo), NUNCA en tu raiz de trabajo -- es una carpeta fija en su computadora para que encuentre todo organizado, no varia entre conversaciones. Decile la ruta completa que te devuelvo, no inventes que quedo en la raiz de trabajo.
-    Cuando 'gen' te contesta LISTO, el trabajo TERMINO: el archivo ya esta escrito y verificado, y el usuario lo ve en pantalla. NO intentes abrirlo ni verificarlo con 'read' -- esa ruta esta fuera de tu jaula y ademas es un binario, asi que solo vas a gastar pasos. Contale que lo generaste y termina con 'done'."
+$(nv_texto protocolo/indice INDICE="$NVA_INDICE")"
 fi
 
 # ===================== HERRAMIENTAS QUE ESTE TURNO NO PUEDE USAR (-n) =====================
@@ -2750,6 +2660,10 @@ PREV_TOOL=""; SAME_TOOL_STREAK=0; DELEGATE_LIKE_COUNT=0; HAD_REAL_ACTION=0
 # (A, B, A, B) es igual de mortal que uno seguido y la version por rachas no lo veia.
 declare -A OK_SIG_COUNT=()
 OK_SIG_MAX=3
+# El techo: a partir de aca no se avisa mas, se corta el turno. Son tres avisos ignorados antes de
+# cortar -- suficiente evidencia de que el modelo no va a reaccionar, y nueve iteraciones menos que
+# las quince del caso que lo motivo. Se puede subir con MENTIS_BUCLE_CORTE.
+OK_SIG_CORTE="${MENTIS_BUCLE_CORTE:-6}"
 # LO QUE ESTE TURNO ESCRIBIO, con su huella (2026-08-15). Sirve para no releer lo propio: ver la
 # guarda "YA LO ESCRIBISTE VOS" mas abajo. La huella es del CONTENIDO, no de la ruta: si un
 # comando modifica el archivo despues, deja de coincidir y releerlo vuelve a ser legitimo.
@@ -3177,6 +3091,47 @@ ERROR: tu respuesta anterior decía que creaste, guardaste o enviaste algo, pero
     STATUS="budget"; FINAL=""
   fi
 
+  # ¿ESTO QUE VA A LEER USUARIO ES MI PROPIO TEXTO? (2026-08-15, bug reportado con captura).
+  #
+  # el usuario pidio un brazalete con modulos intercambiables y lo que leyo en pantalla fue esto:
+  #   "No puedo generar un documento sin contenido. Si ya tenes el contenido, generalo AHORA con
+  #    "tool":"gen","action":"doc"... y recien despues cerra con 'done'."
+  # Es la OBSERVACION que la guarda de documento le inyecto AL MODELO. El modelo la devolvio como
+  # respuesta final y la guarda de "segunda vez" la envolvio en una frase amable y se la mostro.
+  #
+  # POR QUE VA ACA ARRIBA DE TODO: hay 102 puntos que le inyectan texto al modelo y tres guardas
+  # mas abajo que arman la respuesta concatenando lo que devolvio. Preguntar una sola vez, en la
+  # salida, tapa las combinaciones de las dos listas; taparlo en cada guarda seria perseguirlas.
+  #
+  # LA PRIMERA VEZ SE RECHAZA Y SE EXPLICA. No se corrige en silencio: el modelo tiene una
+  # respuesta adentro (el trabajo esta hecho) y lo unico que fallo fue que copio el andamiaje en
+  # vez de escribirla. Vale un paso pedirsela bien.
+  # LA SEGUNDA NO SE INSISTE -- rechazar en bucle quema el turno entero y deja al usuario sin nada,
+  # que es la leccion ya escrita en las guardas de documento y del gate. Se cierra con un mensaje
+  # honesto, y el eco NO se adjunta: mostrarlo era exactamente el bug.
+  # DOS CAPAS, EN ESTE ORDEN (la segunda se sumo el 2026-08-16):
+  #   1. nv_eco_procedencia: ¿esta respuesta salio del registro de lo que YO le dije este turno?
+  #      No envejece -- cubre las guardas que se escriban manana sin tocar ninguna lista.
+  #   2. nv_eco_interno: los marcadores. Cuesta nada y ataja el caso donde no hay registro (un
+  #      llamador que no lo activo) o donde el eco viene de otro turno.
+  # La primera esta medida contra las 75 respuestas reales del usuario: 0 falsos positivos.
+  if [ "$STATUS" = "done" ] && { nv_eco_procedencia "$FINAL" || nv_eco_interno "$FINAL"; }; then
+    if [ "${ECO_RECHAZOS:-0}" -lt 1 ]; then
+      ECO_RECHAZOS=1
+      echo "[nv-agent] iter $it: done RECHAZADO -- la respuesta era eco de mis propias instrucciones" >&2
+      HIST="$HIST
+--- turno $it ---
+acción: {\"tool\":\"done\"}
+observación:
+ERROR: lo que pusiste en 'answer' no es una respuesta para el usuario: es el texto que YO te mandé a vos (instrucciones internas del sistema, el formato JSON de una herramienta, o una orden de cerrar con done). el usuario no tiene que leer nada de eso -- para él, ese texto no significa nada. Escribí con TUS palabras qué hiciste y qué no, en español y dirigido a él. Si no llegaste a hacer lo que pedía, decíselo derecho: es una respuesta perfectamente válida.
+"
+      STATUS="budget"; FINAL=""
+    else
+      echo "[nv-agent] iter $it: segundo eco de instrucciones internas -- se reemplaza el texto" >&2
+      FINAL="No llegué a resolver esto en este turno y no quiero devolverte un texto que no te sirve. Contame de nuevo qué necesitás y lo encaro con otro enfoque."
+    fi
+  fi
+
   # GUARDA POR TIPO DE ARTEFACTO (2026-08-03). La de arriba pregunta si hubo ALGUNA accion real
   # en el turno; alcanza para "cree el archivo" dicho sin haber hecho nada. Pero se le escapa un
   # caso peor y mas creible: hacer UNA cosa y afirmar OTRA.
@@ -3195,9 +3150,16 @@ ERROR: tu respuesta anterior decía que creaste, guardaste o enviaste algo, pero
     # el turno pero se CORRIGE la afirmacion, que es lo unico inaceptable. Mejor una respuesta que
     # admite el limite que una que promete un archivo inexistente.
     echo "[nv-agent] iter $it: segunda afirmacion de documento sin documento -- se corrige el texto" >&2
-    FINAL="No llegué a generar el documento en este turno, así que todavía no existe ningún archivo. Esto es lo que tenía preparado para adentro:
+    # El "esto es lo que tenia preparado" solo se adjunta si de verdad es contenido. Cuando el
+    # modelo devolvia eco de mis instrucciones, esta linea se lo mostraba al usuario envuelto en una
+    # frase amable -- ese fue el bug de la captura del 2026-08-15.
+    if nv_eco_interno "$FINAL"; then
+      FINAL="No llegué a generar el documento en este turno, así que todavía no existe ningún archivo. Tampoco alcancé a dejar el contenido escrito. Si querés, lo encaro de nuevo con el tema más acotado."
+    else
+      FINAL="No llegué a generar el documento en este turno, así que todavía no existe ningún archivo. Esto es lo que tenía preparado para adentro:
 
 $FINAL"
+    fi
   elif [ "$STATUS" = "done" ] && [ "${HAD_DOC:-0}" != "1" ] \
      && printf '%s' "$FINAL" | grep -qiE "(el|un|este) (documento|informe|word|pdf|presentacion|presentación|planilla)|(documento|informe) (word|pdf|adjunto)|te (arme|armé|hice) (el|un) (documento|informe)"; then
     DOC_RECHAZOS=$(( ${DOC_RECHAZOS:-0} + 1 ))
@@ -3356,8 +3318,18 @@ No alcanza con haber preparado el contenido: mientras no lo escribas con {\"tool
   # seria negarle algo que a veces necesita; lo que le falta es darse cuenta de que ya lo tiene.
   # Y si el archivo cambio desde que lo escribio -- por ejemplo, porque un comando lo modifico --
   # la huella no coincide y no se dice nada: releer eso es exactamente lo correcto.
-  # Apagado: MENTIS_RELECTURA_OFF=1.
-  if [ "${MENTIS_RELECTURA_OFF:-0}" != "1" ] && [ "$TOOL" = "read" ] && [ "${RELEE_PROPIO:-0}" = "1" ] \
+  # APAGADA POR DEFECTO DESDE EL 2026-08-15. Se midio (eval/relectura/VEREDICTO.md, 3 corridas
+  # prendida contra 3 apagada, alternadas, mismo modelo y mismo juez) y NO gana:
+  #   - No evita la relectura: en las dos corridas donde se activo, el modelo leyo igual 4
+  #     archivos. Recibe el aviso y lee lo mismo de todas formas.
+  #   - Mediana de 177 s prendida contra 150 s apagada. Si algo, va para el otro lado.
+  #   - La calidad no se mueve: 32/33 contra 32/33.
+  # El mecanismo se deja porque hace exactamente lo que dice y esta probado (15 casos), pero no
+  # entra por la misma regla que dejo afuera a la disputa cruzada: si no le gana a no tenerlo, no va.
+  # Se enciende con MENTIS_RELECTURA_ON=1. (MENTIS_RELECTURA_OFF=1 sigue ganandole, por si algun
+  # script viejo lo pasa.)
+  if [ "${MENTIS_RELECTURA_ON:-0}" = "1" ] && [ "${MENTIS_RELECTURA_OFF:-0}" != "1" ] \
+     && [ "$TOOL" = "read" ] && [ "${RELEE_PROPIO:-0}" = "1" ] \
      && [[ "$OBS" != ERROR:* ]]; then
     OBS="AVISO: este archivo ('${REL:-}') lo escribiste VOS en este mismo turno y no cambio desde entonces -- lo que sigue es exactamente lo que mandaste. Leerlo no te dice nada nuevo y cuesta un paso entero. Segui con lo que falta; si ya esta todo, respondé con done.
 
@@ -3391,7 +3363,28 @@ $OBS"
     OK_SIG_KEY="$(printf '%s' "$OK_SIG_RAW" | cksum | cut -d' ' -f1)"
     OK_SIG_COUNT["$OK_SIG_KEY"]=$(( ${OK_SIG_COUNT["$OK_SIG_KEY"]:-0} + 1 ))
     OK_SIG_VECES="${OK_SIG_COUNT["$OK_SIG_KEY"]}"
-    if [ "$OK_SIG_VECES" -ge "$OK_SIG_MAX" ]; then
+    # EL AVISO SOLO NO ALCANZA (2026-08-15, bug reportado por el usuario con captura).
+    #
+    # Le pidio un brazalete con modulos intercambiables. El turno hizo 'task create' QUINCE veces
+    # con la misma firma: la guarda aviso trece veces seguidas -- de la 3a a la 15a -- y el modelo
+    # siguio igual. Nunca genero el documento, quemo el presupuesto entero y el usuario termino leyendo
+    # un texto interno. Trece avisos ignorados no son un empujon: son un cuelgue con subtitulos.
+    #
+    # POR ESO AHORA HAY DOS ESCALONES. El aviso se mantiene tal cual estaba (a las 3 veces), porque
+    # el razonamiento original sigue en pie: la accion estuvo BIEN y a veces alcanza con avisar. Lo
+    # que se agrega es un techo: a las 6, se corta.
+    #
+    # Y SE CORTA SIN DEJAR A USUARIO SIN NADA, que era la objecion correcta contra cortar. Si el turno
+    # tenia acciones reales, se prende CIERRE_FORZADO y se le pide al modelo la respuesta final con
+    # lo que ya hizo (el mismo camino del cierre por objetivo logrado). Si no hizo nada real -- que
+    # es justo el caso de los 15 'task create' -- se corta como loop y mentis-chat.sh ya tiene el
+    # mensaje honesto para eso. Las dos salidas son mejores que quince vueltas.
+    if [ "$OK_SIG_VECES" -ge "${OK_SIG_CORTE:-6}" ]; then
+      LOOP_DETECTADO=1
+      [ "${ACCIONES_N:-0}" -gt 0 ] && CIERRE_FORZADO=1
+      OBS="ERROR: repetiste '$TOOL' con los mismos argumentos $OK_SIG_VECES veces en este turno y te lo avisé $(( OK_SIG_VECES - OK_SIG_MAX + 1 )) veces. No estás avanzando, así que corto acá para no seguir gastando el presupuesto del usuario."
+      echo "[nv-agent] iter $it: BUCLE DE ACIERTOS -- CORTO EL TURNO: '$TOOL' repetido $OK_SIG_VECES veces pese a $(( OK_SIG_VECES - OK_SIG_MAX + 1 )) avisos" >&2
+    elif [ "$OK_SIG_VECES" -ge "$OK_SIG_MAX" ]; then
       # No corta el turno: le devuelve el resultado UNA vez mas con un empujon. Cortar castigaria
       # al modelo por una accion que estuvo BIEN -- el problema no es la accion, es no darse
       # cuenta de que ya la tiene hecha. Cortar aca dejaria al usuario sin nada teniendo el trabajo
@@ -3416,6 +3409,23 @@ acción: $ACTLINE
 observación:
 $OBS
 "
+
+  # LA PROCEDENCIA DEL TEXTO (2026-08-16). Cada observacion que el motor le da al modelo se anota
+  # tambien en un archivo aparte. Al cerrar, la respuesta final se compara contra ESTE registro:
+  # si comparte con alguna observacion una tirada larga y textual de palabras, es eco, y no se le
+  # muestra al usuario.
+  #
+  # POR QUE ACA Y NO EN CADA GUARDA: hay ~100 puntos en este archivo que arman un OBS, y TODOS
+  # terminan pasando por esta linea. Es la unica puerta. Registrar en un solo lugar cubre tambien
+  # las guardas que se escriban manana, que es lo que la deteccion por marcadores no puede hacer:
+  # esa es una lista que hay que mantener sincronizada a mano, y las listas se desincronizan
+  # (ERR-130, ERR-159, ERR-165 son tres versiones del mismo cuento).
+  #
+  # Va a un ARCHIVO y no a una variable porque el historial de un turno largo pesa, y este dato
+  # solo se lee una vez al final: no tiene por que vivir en memoria todo el turno.
+  if [ -n "${NVA_OBS_LOG:-}" ]; then
+    printf '%s\n\036\n' "$OBS" >> "$NVA_OBS_LOG" 2>/dev/null || true
+  fi
   if [ "$LOOP_DETECTADO" = "1" ]; then
     STATUS="loop_detectado"
     break

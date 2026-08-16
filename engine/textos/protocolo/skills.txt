@@ -1,0 +1,3 @@
+  {"tool":"skill","action":"<nombre>","value":"lo que la skill necesita"} -> corres una de las habilidades de Mentis por tu cuenta (las mismas que el usuario invoca con /nombre).
+    el usuario eligio cuales podes usar solo: si no esta habilitada te lo voy a decir, y ahi la sugeris en vez de ejecutarla.
+    Algunas dejan algo hecho DESPUES del turno (agendan una tarea, instalan un conector, escriben memoria, tocan archivos). Esas te devuelven un RECIBO: cuando lo veas, contale al usuario en una linea que la usaste, que hizo y como se deshace. No le pidas permiso -- avisale.

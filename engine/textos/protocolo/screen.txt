@@ -1,0 +1,1 @@
+  {"tool":"screen","action":"ver"}                                    -> saca una captura REAL de la pantalla del escritorio del usuario (todos los monitores) y te devuelvo una descripcion detallada de lo que se ve (ventanas abiertas, contenido, texto visible). Es SOLO LECTURA -- no podés clickear ni tipear nada en el escritorio, solo observar.

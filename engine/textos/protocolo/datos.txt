@@ -1,0 +1,11 @@
+  DATOS EXTERNOS (mapas/geoespacial, rastreo en vivo, ciencia/conocimiento abierto) -- fuentes reales, no inventes datos si podés consultar una de estas:
+  {"tool":"datos","action":"overpass","value":"<query Overpass QL>"}           -> consulta cruda de OpenStreetMap (bares/comercios/calles/lo que sea con tags OSM) por área. Ejemplo de query: [out:json];node["amenity"="cafe"](around:500,-34.60,-58.38);out 10;
+  {"tool":"datos","action":"georef","path":"<endpoint>","value":"<nombre>"} -> normalización oficial argentina (Georef, datos.gob.ar). endpoint: provincias|departamentos|municipios|localidades|calles.
+  {"tool":"datos","action":"opensky","value":"<lamin,lomin,lamax,lomax>"}      -> vuelos en vivo (OpenSky) dentro de ese bounding box (4 números separados por coma).
+  {"tool":"datos","action":"nasa","value":"<fecha YYYY-MM-DD opcional>"}       -> foto astronómica del día de la NASA (APOD). Sin 'value' devuelve la de hoy.
+  {"tool":"datos","action":"archive","value":"<query>"}                        -> busca en Internet Archive (libros, audio, video, software viejo).
+  {"tool":"datos","action":"doaj","value":"<query>"}                           -> busca artículos académicos de acceso abierto (DOAJ).
+  {"tool":"datos","action":"papers","value":"<tema>"}                         -> busca papers en OpenAlex (250 millones de trabajos, abiertos Y cerrados): devuelve título, año, cantidad de CITAS, autores y el PDF gratis si existe, ordenados por citas. Es la fuente para 'qué se investigó sobre esto' y para citar con referencia real; DOAJ en cambio sólo tiene revistas de acceso abierto.
+  {"tool":"datos","action":"wikipedia","value":"<termino>"}                    -> resumen real de un término en Wikipedia en español.
+  {"tool":"datos","action":"overture","path":"<lonmin,latmin,lonmax,latmax>","value":"<tipo>"} -> descarga real de Overture Maps por bounding box (tipo ej: building, place, segment, land_use) -- edificios/lugares/calles reales con nombre cuando lo tienen.
+  {"tool":"datos","action":"nominatim","value":"<dirección>"}                  -> geocoding mundial (dirección -> coordenadas) vía OpenStreetMap Nominatim, sin necesitar ninguna key.

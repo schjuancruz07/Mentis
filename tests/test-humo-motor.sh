@@ -45,10 +45,38 @@ printf '%s' "$SALIDA" | grep -q 'PRESUPUESTO:' \
 
 # Y las fichas de herramientas tienen que estar completas: si una comilla las corta, el modelo
 # recibe media lista y no se entera nadie.
-for t in read write exec browse datos gen done; do
-  grep -q "\\\\\"tool\\\\\":\\\\\"$t\\\\\"" "$A" \
-    && _ok "la ficha de '$t' sigue en el protocolo" \
-    || _mal "ficha de '$t'" "desaparecio del protocolo"
+#
+# SE MIRA EL PROTOCOLO REAL, NO EL CODIGO FUENTE (corregido 2026-08-15). Hasta hoy esto hacia
+# grep de "\\\"tool\\\":\\\"read\\\"" adentro de nv-agent.sh, o sea buscaba el texto CON los
+# escapes de bash en el archivo del motor. Cuando los textos se mudaron a engine/textos/*.txt el
+# test empezo a fallar por 'browse' y 'datos'... y a PASAR por 'read', 'write', 'exec', 'gen' y
+# 'done', que aparecen en otras partes del script (el despacho, los mensajes de error). Es decir:
+# cinco de siete casos venian pasando por casualidad, sin mirar ninguna ficha.
+# Preguntarle al motor que protocolo arma es la misma leccion de ERR-130 que ya esta escrita en
+# test-modos.sh: se comprueba contra lo que corre, nunca contra una copia.
+PROTO_REAL="$(cd "$HUMO_TMP" && NVA_SOLO_PROTOCOLO=1 timeout 60 bash "$A" -d. -w -b -t -g -s -c -e -a -D -V -P -K "humo" 2>/dev/null)"
+
+# Las que viajan ENTERAS en cada turno.
+for t in read write exec browse done; do
+  case "$PROTO_REAL" in
+    *"{\"tool\":\"$t\""*) _ok "la ficha de '$t' llega al modelo bien formada" ;;
+    *) _mal "ficha de '$t'" "no esta en el protocolo que recibe el modelo" ;;
+  esac
+done
+
+# Y las CAPACIDADES BAJO DEMANDA (2026-08-03): de estas no viaja la ficha sino una linea en el
+# indice, y la ficha se pide con {"tool":"capacidad"}. Pedirles la ficha completa aca seria
+# comprobar un diseño que no existe desde agosto -- que es lo que hacia este test hasta hoy y por
+# eso marcaba en rojo a 'datos' estando todo bien.
+#
+# 'gen' esta en esta lista por un bug real que aparecio justo aca (2026-08-15): su ficha se armaba
+# DESPUES del indice, asi que no llegaba ni una cosa ni la otra y el modelo no sabia que podia
+# generar imagenes. Este caso es lo que impide que vuelva.
+for c in gen datos arduino webcam telefono; do
+  case "$PROTO_REAL" in
+    *"- \"$c\":"*) _ok "la capacidad '$c' se anuncia en el indice" ;;
+    *) _mal "capacidad '$c'" "el modelo no se entera de que existe" ;;
+  esac
 done
 rm -rf "$HUMO_TMP"
 

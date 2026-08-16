@@ -1,0 +1,60 @@
+{
+  "_que_es_esto": "Cuando el modo Study ofrece un formato de /material. Es el gemelo de disparadores.json para una decision distinta: disparadores.json mira lo que el usuario ESCRIBE y ejecuta un comando; esto mira lo que el usuario escribio y, si la respuesta no lo ofrecio sola, le agrega UNA linea al final contandole que ese material se puede convertir.",
+
+  "_por_que_existe": "Los nueve formatos existen desde el 2026-08-12 y se ofrecian desde la persona del modo Study en modos.json: 'Ofrecele el que le sirva -- tarjetas o cuestionario para un examen, audio si esta viajando -- y decile la linea exacta'. Medido en uso real: a veces lo ofrece y a veces no. No es un bug del texto, es lo que pasa siempre que una funcion del producto depende de que el modelo se acuerde. Es la misma leccion de la camara y del reparto de Cowork, escrita en modos.json con estas palabras: 'una defensa redactada como instruccion es una sugerencia'. Nueve formatos que el usuario no sabe que existen son nueve formatos que no existen.",
+
+  "_por_que_no_lo_decide_un_modelo": "Se penso preguntarle a un modelo chico '¿que formato le viene bien a esto?'. Se descarto: cuesta una llamada por turno de Study para adornar una respuesta que ya esta lista, y ya sabemos lo que cuesta bloquear un turno por una mejora opcional (el verificador se comia 138 s de mediana con la respuesta escrita del otro lado). Esto es un grep contra una lista, cuesta milisegundos y se puede leer.",
+
+  "_las_cuatro_condiciones": "La linea se agrega SOLO si se cumplen las cuatro: (1) el modo es study; (2) hay material cargado en el corpus -- ofrecerle convertir un corpus vacio lo manda a una pared; (3) la respuesta NO menciona ya '/material' -- si el modelo lo ofrecio solo, repetirlo es ruido y ademas delata la costura; (4) el mensaje del usuario matchea alguna regla de aca abajo. Sin la (4) esto seria una firma pegada a todas las respuestas, que es la forma mas rapida de que deje de leerse.",
+
+  "_como_editarlo": "Agregar una regla es agregar un objeto a 'reglas'. Las frases se comparan en minusculas y sin acentos contra el mensaje del usuario, por 'contiene' -- 'parcial' matchea 'tengo un parcial el viernes'. Orden importa: gana la primera regla que matchea, asi que las mas especificas van arriba. Los nueve formatos validos son: audio, video, presentacion, informe, tabla, mapa, tarjetas, cuestionario, infografia.",
+
+  "reglas": [
+    {
+      "formato": "cuestionario",
+      "frases": ["tomame", "tomame examen", "examen", "parcial", "final", "prueba", "evaluame", "preguntame", "ponme a prueba", "poneme a prueba"],
+      "linea": "Si querés que te tome examen de esto, decime: /material cuestionario <tema>"
+    },
+    {
+      "_por_que_audio_va_arriba_de_tarjetas": "Caso real que encontro el test: 'manana lo repaso en el colectivo' matcheaba 'repaso' (tarjetas) antes de llegar a 'el colectivo' (audio). Gana la regla mas ESPECIFICA: 'repasar' aparece en cualquier frase de estudio, mientras que nombrar el colectivo o el tren dice algo que ninguna otra regla dice -- que en ese rato no va a poder mirar la pantalla. Esa es la unica razon del orden; si algun dia se agrega una regla, va arriba de las genericas o abajo de las especificas por el mismo criterio.",
+      "formato": "audio",
+      "frases": ["escuchando", "escuchar", "viajando", "el colectivo", "en el bondi", "caminando", "manejando", "en el tren", "mientras entreno", "sin mirar la pantalla"],
+      "linea": "Si lo querés escuchar en vez de leerlo: /material audio <tema>"
+    },
+    {
+      "formato": "tarjetas",
+      "frases": ["repasar", "repaso", "memorizar", "me olvido", "no me acuerdo", "fechas", "definiciones", "formulas", "fórmulas", "vocabulario"],
+      "linea": "Para repasarlo suelto: /material tarjetas <tema> te arma las tarjetas didácticas."
+    },
+    {
+      "formato": "presentacion",
+      "frases": ["exponer", "exposicion", "presentar", "presentacion", "dar la clase", "mostrar en clase", "diapositivas", "filminas"],
+      "linea": "Para exponerlo: /material presentacion <tema> te arma las diapositivas."
+    },
+    {
+      "formato": "mapa",
+      "frases": ["como se relaciona", "relacion entre", "conectar", "esquema", "mapa mental", "ver todo junto", "panorama", "no me cierra como encaja"],
+      "linea": "Para verlo todo junto y cómo se conecta: /material mapa <tema>"
+    },
+    {
+      "formato": "tabla",
+      "frases": ["comparar", "comparacion", "cuadro comparativo", "diferencias entre", "cual conviene", "columnas"],
+      "linea": "Si lo querés comparado en columnas: /material tabla <tema>"
+    },
+    {
+      "formato": "informe",
+      "frases": ["entregar", "entrega", "trabajo practico", "tp ", "monografia", "informe escrito", "escribir el trabajo"],
+      "linea": "Si tenés que entregarlo escrito: /material informe <tema> lo saca en Word."
+    },
+    {
+      "formato": "infografia",
+      "frases": ["laminas", "lámina", "poster", "afiche", "visual", "de un vistazo", "todo en una hoja"],
+      "linea": "Para tenerlo de un vistazo en una lámina: /material infografia <tema>"
+    },
+    {
+      "formato": "video",
+      "frases": ["en video", "un video", "explicado en video", "mirar en vez de leer"],
+      "linea": "Si lo preferís en video con voz: /material video <tema>"
+    }
+  ]
+}

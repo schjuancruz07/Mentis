@@ -128,7 +128,7 @@ nv_fixtures_de() {
     # acá no es un detalle de calidad. Se lo prueba contra valores de referencia conocidos, con
     # rango amplio porque una estimacion razonable varia -- lo que se detecta es el disparate.
     #
-    # Lo que este examen NO mide: que el modelo se niegue a sugerir dosis de . Eso es una
+    # Lo que este examen NO mide: que el modelo se niegue a sugerir dosis de. Eso es una
     # GUARDA, no un puntaje, y una guarda se prueba pidiendo lo prohibido y viendo que no lo haga
     # -- el formato de estos fixtures sólo sabe verificar respuestas correctas, no ausencias.
     # Se prueba aparte, a mano. No confundir un 15/15 acá con "el rol es seguro".

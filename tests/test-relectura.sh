@@ -80,14 +80,30 @@ if [ "$(wc -l < "$BLOQUE")" -lt 10 ]; then
   _mal "se extrae la guarda" "no se encontro en $A"
 else
   _ok "la guarda se extrae de nv-agent.sh ($(wc -l < "$BLOQUE") lineas)"
+  # LA GUARDA ESTA APAGADA POR DEFECTO desde el 2026-08-15 (eval/relectura/VEREDICTO.md): se midio
+  # y no le gana a no tenerla -- el modelo recibe el aviso y relee igual. Por eso los casos que
+  # prueban el aviso la ENCIENDEN a proposito con MENTIS_RELECTURA_ON=1: lo que se sigue probando
+  # es que el mecanismo hace lo que dice, no que este activo.
   correr() { # $1=TOOL $2=RELEE_PROPIO $3=OBS $4=apagado
     ( set +e
-      TOOL="$1"; RELEE_PROPIO="$2"; OBS="$3"; MENTIS_RELECTURA_OFF="$4"; REL="a.txt"; it=2
+      TOOL="$1"; RELEE_PROPIO="$2"; OBS="$3"; MENTIS_RELECTURA_OFF="$4"; MENTIS_RELECTURA_ON=1
+      REL="a.txt"; it=2
       source "$BLOQUE"
       printf '%s' "${OBS:0:12}" ) 2>/dev/null
   }
+  # Y este caso es el veredicto hecho test: sin encenderla, no pasa nada.
+  apagada_por_defecto() {
+    ( set +e
+      TOOL="read"; RELEE_PROPIO=1; OBS="hola mundo"; REL="a.txt"; it=2
+      source "$BLOQUE"
+      printf '%s' "${OBS:0:12}" ) 2>/dev/null
+  }
+  case "$(apagada_por_defecto)" in
+    hola*) _ok "por defecto NO se activa (se midio y no gana: ver eval/relectura/VEREDICTO.md)" ;;
+    *)     _mal "apagada por defecto" "se activo sola: $(apagada_por_defecto)" ;;
+  esac
   case "$(correr read 1 'hola mundo' 0)" in
-    AVISO*) _ok "leyendo lo propio: el aviso va ADELANTE del contenido" ;;
+    AVISO*) _ok "encendida a mano, el aviso va ADELANTE del contenido" ;;
     *)      _mal "avisa" "obtuvo: $(correr read 1 'hola mundo' 0)" ;;
   esac
   case "$(correr read 0 'hola mundo' 0)" in

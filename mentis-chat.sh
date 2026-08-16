@@ -1382,6 +1382,21 @@ print(msg)
     ANSWER="Tuve un problema generando la respuesta final (el modelo devolvió texto interno en vez de una respuesta real) -- pasó algo raro en este turno. ¿Podés repetir o reformular el pedido?"
   fi
 
+  # LA MISMA FUGA POR LA OTRA PUERTA (2026-08-15). La guarda de arriba mira el PROMPT (el perfil,
+  # Kai Vault, el mensaje del usuario). Pero el texto interno tambien entra por las OBSERVACIONES: los
+  # avisos y errores que las guardas del motor le inyectan al modelo durante el turno. el usuario leyo
+  # uno completo en pantalla -- "generalo AHORA con "tool":"gen"..." -- y no era un caso raro, era
+  # el camino normal de un turno que se traba.
+  #
+  # nv-agent.sh ya lo ataja en el origen (guarda de eco, con un rechazo y un reemplazo). Esto es la
+  # ULTIMA linea, y existe porque la respuesta que ve el usuario no siempre viene del agente: el
+  # verificador de dos modelos puede reemplazarla despues, y ese camino no pasa por ninguna guarda
+  # del motor.
+  if nv_eco_interno "$ANSWER"; then
+    echo "[mentis-chat] AVISO: la respuesta final era eco de instrucciones internas -- reemplazada" >&2
+    ANSWER="No llegué a armar una respuesta como la gente para esto -- me quedé dando vueltas con mis propias instrucciones en vez de contestarte. Probá de nuevo, y si podés acotame un poco el pedido."
+  fi
+
   ANSWER="$(_mc_apply_memory_update "$ANSWER" "mentis-memory-update" "userMemory")"
   ANSWER="$(_mc_apply_memory_update "$ANSWER" "mentis-self-memory-update" "selfMemory")"
 
@@ -1390,6 +1405,28 @@ print(msg)
   # respuesta que Mentis le da al usuario.
   STOP_HOOK_OUT="$(MENTIS_HOOK_ANSWER="$ANSWER" MENTIS_HOOK_ROOT="${ROOT:-}" bash "$MENTIS_ENV_DIR/mentis-hooks.sh" Stop 2>/dev/null)"
   [ -n "$STOP_HOOK_OUT" ] && echo "[mentis-chat] hooks (Stop): $STOP_HOOK_OUT" >&2
+
+  # OFRECER LOS FORMATOS DE /material EN STUDY (2026-08-15). Los nueve formatos existen desde el
+  # 2026-08-12 y se ofrecian solo desde la persona del modo, o sea cuando el modelo se acordaba.
+  # Esto lo hace determinístico: ver nv_study_sugerencia en engine/nv-modos-lib.sh y las reglas en
+  # study-sugerencias.json. Devuelve vacío casi siempre -- exige las cuatro condiciones.
+  #
+  # VA DESPUÉS DEL HOOK Stop a propósito: el hook juzga lo que escribió el modelo (el gate de
+  # completitud, la guarda de archivos nombrados), y esta línea no la escribió el modelo. Metérsela
+  # antes sería darle de comer al verificador texto del propio motor.
+  #
+  # VA ANTES del historial (más abajo) también a propósito: lo que el usuario ve tiene que ser lo que
+  # queda guardado. Si se agregara solo al imprimir, la línea desaparecería al recargar la
+  # conversación y el ofrecimiento se volvería un fantasma que aparece una vez y nunca más.
+  #
+  # Nunca en remoto: desde el teléfono el modo no puede ejecutar /material, y ofrecer algo que ahí
+  # no se puede hacer es peor que no ofrecer nada.
+  if [ "$MODO_REMOTO" != "1" ]; then
+    MC_SUGERENCIA="$(nv_study_sugerencia "$MC_MODO" "$MSG" "$ANSWER" 2>/dev/null || true)"
+    [ -n "${MC_SUGERENCIA// }" ] && ANSWER="$ANSWER
+
+$MC_SUGERENCIA"
+  fi
 
   printf 'Mentis: %s\n' "$ANSWER"
 

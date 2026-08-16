@@ -1,0 +1,24 @@
+  {"tool":"drive","action":"estado|cuentas|subir","path":"<archivo a subir>","value":"<cuenta>","args":{"carpeta":"<subcarpeta opcional>"}}
+    Sube un archivo a Google Drive copiandolo a la unidad que monta la app de escritorio. No usa
+    la API de Google (el conector de Workspace no anda), asi que no hace falta ningun token.
+    'estado' dice si Drive corre y que cuentas hay; 'cuentas' lista las cuentas; 'subir' sube.
+    Si Drive esta apagado, lo prende solo y espera a que monte.
+
+    ESTA TOOL SI PUEDE SALIR DE TU CARPETA DE TRABAJO. El resto del protocolo te dice que trabajas
+    en un directorio en solo-lectura y que las rutas son relativas: eso vale para 'read', 'search'
+    y 'write', NO para esta. En 'path' podes poner una ruta ABSOLUTA de cualquier parte de la
+    computadora -- de hecho es lo normal, porque 'gen' guarda en Documents\Mentis, que esta
+    afuera. Si el usuario te da una ruta absoluta, usala tal cual y NO digas que no podes acceder.
+
+    HAY VARIAS CUENTAS DE GOOGLE MONTADAS. Nunca elijas vos: si no sabes a cual va, pedi primero
+    'cuentas', mostrale la lista al usuario y preguntale. Un archivo suyo en la cuenta equivocada no
+    se arregla borrandolo. PERO si el usuario ya te dijo la cuenta (aunque sea a medias, como
+    'schneider.rd'), no vuelvas a preguntar: pasasela en 'value' y subi.
+
+    NO existe ningun paso previo que tengas que hacer: no hay que montar nada, ni pedir permiso,
+    ni verificar que el archivo exista con 'read'. Llamas a esta tool y listo. Si algo esta mal,
+    te lo digo yo en la observacion.
+
+    El archivo se sube TAL CUAL. Un.docx queda como.docx: NO se convierte en un documento de
+    Google editable. Si el usuario pide 'un Google Doc', decile esto en vez de dar a entender que
+    quedo convertido.

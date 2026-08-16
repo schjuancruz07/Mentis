@@ -40,6 +40,9 @@
     "env": {
       "MEMORY_FILE_PATH": "${MENTIS_ROOT}/memoria/grafo.json"
     },
-    "_nota": "MCP oficial de memoria en GRAFO (entidades + relaciones). Probado el 2026-08-15: conecta, expone 9 herramientas y guarda/recupera bien. ARRANCA APAGADO A PROPOSITO: Mentis ya recuerda con Kai Vault (busqueda por significado) y con las memorias firmes. Dos memorias activas que no se hablan terminan contradiciendose -- es la misma objecion que dejo afuera a Mem0. Si se enciende, que sea para algo que Kai Vault NO hace: el mapa de entidades y como se relacionan, no el historial de lo conversado."
+    "_nota": "MCP oficial de memoria en GRAFO (entidades + relaciones). Probado el 2026-08-15: conecta, expone 9 herramientas y guarda/recupera bien.",
+    "_decision": "QUEDA APAGADO. Decision cerrada el 2026-08-15 -- no volver a abrirla sin el examen de abajo. Mentis ya tiene DOS memorias que funcionan: Kai Vault (busqueda por significado sobre todo lo escrito) y las memorias firmes del learning loop. Una tercera memoria activa que no se habla con las otras dos no agrega recuerdo: agrega la posibilidad de que Mentis se contradiga a si mismo y que nadie sepa cual de las tres tenia razon. Es la misma objecion, ya aplicada, que dejo afuera a Mem0.",
+    "_que_lo_haria_entrar": "Una sola cosa, y es medible: que resuelva preguntas de RELACION que Kai Vault falla. Kai Vault encuentra texto parecido; un grafo responde 'quien trabaja con quien', 'que depende de que'. El examen es el de siempre en este proyecto: 15 preguntas de relacion sobre material real, Kai Vault contra grafo, y entra solo si gana. Si nadie tiene ganas de correr ese examen, la respuesta es que no hacia falta.",
+    "_como_se_enciende": "enabled: true aca. No hay nada mas que instalar: npx lo baja solo y el archivo del grafo se crea en memoria/grafo.json."
   }
 ]

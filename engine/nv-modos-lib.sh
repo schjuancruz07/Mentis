@@ -217,6 +217,69 @@ nv_modo_guardar() {
   printf '%s' "$m"
 }
 
+# nv_study_sugerencia <modo> <mensaje_de_juan> <respuesta_final>
+#   -> imprime la linea que hay que pegarle al final de la respuesta, o nada (codigo 1).
+#
+# POR QUE EXISTE (2026-08-15): los nueve formatos de /material se ofrecian UNICAMENTE desde la
+# persona del modo Study ("Ofrecele el que le sirva... y decile la linea exacta"). En uso real
+# aparecia a veces si y a veces no, que es lo que pasa siempre que una funcion del producto
+# depende de que el modelo se acuerde. Es la misma leccion que ya esta escrita dos veces en este
+# repositorio -- la camara y el reparto de Cowork -- y que modos.json resume asi: "una defensa
+# redactada como instruccion es una sugerencia".
+#
+# POR QUE ES UN GREP Y NO UNA LLAMADA A UN MODELO: preguntarle a un modelo chico que formato
+# corresponde cuesta una llamada por turno de Study para adornar una respuesta que YA esta lista
+# y esperando. Ese es exactamente el gasto que se saco del verificador (138 s de mediana con la
+# respuesta escrita del otro lado). Contra una lista de frases cuesta milisegundos.
+#
+# LAS CUATRO CONDICIONES (las cuatro, o no se agrega nada) estan explicadas en
+# study-sugerencias.json. La tercera es la que no es obvia: si la respuesta YA menciona
+# /material, no se agrega nada. Repetirlo seria ruido y ademas delataria la costura -- el usuario
+# leeria dos ofrecimientos del mismo formato, uno escrito por el modelo y otro pegado por el
+# motor, y sabria que hay una maquina atras adivinando.
+#
+# Apagado: MENTIS_SUGERENCIA_OFF=1.
+NVMODOS_SUGERENCIAS="${MENTIS_SUGERENCIAS_JSON:-$NVMODOS_RAIZ/study-sugerencias.json}"
+
+nv_study_sugerencia() {
+  local modo="${1:-}" msg="${2:-}" resp="${3:-}"
+  [ "${MENTIS_SUGERENCIA_OFF:-0}" = "1" ] && return 1
+  [ "$modo" = "study" ] || return 1
+  [ -f "$NVMODOS_SUGERENCIAS" ] || return 1
+
+  # Condicion 2: que haya material cargado. Ofrecerle convertir un corpus vacio lo manda contra
+  # una pared -- /material le contestaria "de ese tema no hay nada", y el ofrecimiento habria
+  # salido del propio Mentis. Se mira que exista AL MENOS UN archivo, no que la carpeta exista:
+  # knowledge/estudio se crea sola la primera vez que se abre el modo.
+  local corpus
+  corpus="$(nv_modo_corpus "$modo" 2>/dev/null)" || return 1
+  [ -d "$corpus" ] || return 1
+  find "$corpus" -type f -print -quit 2>/dev/null | grep -q. || return 1
+
+  # El mensaje y la respuesta viajan por ENTORNO y no como argumentos del -e. Es deliberado:
+  # meter texto del usuario adentro del cuerpo de un script es la familia de errores de ERR-159 (los
+  # escapes se colapsan al armar el codigo), y aca el texto puede traer comillas, backslashes y
+  # saltos de linea. Por entorno llegan literales, sin que nadie los interprete.
+  SUG_JSON="$NVMODOS_SUGERENCIAS" SUG_MSG="$msg" SUG_RESP="$resp" node -e '
+    const fs = require("fs");
+    // Sin acentos y en minusculas de los dos lados: el usuario escribe "presentación" y "presentacion"
+    // el mismo dia, y una regla que solo matchea una de las dos es una regla rota la mitad de
+    // las veces.
+    const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (norm(process.env.SUG_RESP).includes("/material")) process.exit(1);
+    let d;
+    try { d = JSON.parse(fs.readFileSync(process.env.SUG_JSON, "utf8")); } catch (e) { process.exit(1); }
+    const msg = norm(process.env.SUG_MSG);
+    for (const r of (d.reglas || [])) {
+      if ((r.frases || []).some((f) => f && msg.includes(norm(f)))) {
+        process.stdout.write(String(r.linea || ""));
+        process.exit(r.linea ? 0 : 1);
+      }
+    }
+    process.exit(1);
+  ' 2>/dev/null
+}
+
 # Uso desde la linea de comandos, para poder mirarlo sin escribir un script:
 #   bash engine/nv-modos-lib.sh actual|lista|banderas <id>|sin-tools <id>|titulo <id>
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then

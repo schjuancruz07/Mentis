@@ -630,3 +630,91 @@ d = {"rol": os.environ["NVQ_ROL"], "lang": os.environ["NVQ_LANG"], "n": 1,
 print(json.dumps(d, ensure_ascii=False))
 ' >> "$NV_QSTORE" 2>/dev/null
 }
+
+# nv_eco_interno <texto> -> 0 (verdadero) si ese texto es ECO DEL ANDAMIAJE, no una respuesta.
+#
+# EL BUG QUE LO TRAJO (2026-08-15, reportado por el usuario con captura). Pidio un brazalete con modulos
+# intercambiables. El turno hizo 15 'task create' identicos, nunca genero el documento, y la
+# respuesta que el usuario LEYO en pantalla fue esta:
+#
+#   "No puedo generar un documento sin contenido. Si ya tenes el contenido, generalo AHORA con
+#    "tool":"gen","action":"doc","format":"docx","content":"..." y recien despues cerra con 'done'."
+#
+# Eso no se lo escribio nadie al usuario: es la OBSERVACION que la guarda de documento le inyecto al
+# MODELO. El modelo la devolvio como su respuesta final, y la guarda de "segunda vez" la envolvio
+# en "Esto es lo que tenia preparado para adentro:" y se la mostro. el usuario termino leyendo
+# instrucciones dirigidas a otro.
+#
+# POR QUE ES UNA FAMILIA Y NO UN CASO. Hay 102 puntos en nv-agent.sh que le inyectan texto al
+# modelo, y TRES guardas que arman la respuesta final concatenando lo que el modelo devolvio.
+# Cualquier combinacion de esas dos cosas produce el mismo sintoma. Taparlo caso por caso es
+# perseguir 306 combinaciones; esto pregunta una sola cosa, del lado de la salida: ¿esto que estoy
+# por mostrar es texto mio?
+#
+# LOS MARCADORES SON DE ALTA PRECISION A PROPOSITO. Ninguno aparece en una respuesta escrita para
+# una persona: el protocolo JSON crudo, las ordenes de cierre que solo tienen sentido para el loop,
+# y los prefijos AVISO:/ERROR: con los que arrancan las observaciones. Se prefiere dejar pasar un
+# eco raro antes que censurar una respuesta legitima -- por eso no alcanza con que la respuesta
+# hable de documentos o mencione una herramienta.
+nv_eco_interno() {
+  local t="${1:-}"
+  [ -n "${t// }" ] || return 1
+  # El protocolo crudo: una respuesta para el usuario nunca trae el JSON de una tool.
+  case "$t" in
+    *'"tool":"'*|*'"tool": "'*) return 0 ;;
+  esac
+  # Ordenes de cierre del loop. Solo tienen sentido dichas AL MODELO.
+  # Alternancias explicitas y NO "[eé]": en este entorno grep trata los acentos byte a byte y un
+  # bracket-expression con una letra acentuada no matchea de forma confiable. Ya esta documentado
+  # arriba de la guarda de documento en nv-agent.sh, y volvio a morder aca al escribir esta funcion.
+  printf '%s' "$t" | grep -qiE "(responde|respondé|contesta|contestá|cerra|cerrá|termina|terminá) (con |el turno con )?.?done" && return 0
+  printf '%s' "$t" | grep -qiE "(recien|recién) (despues|después|ahi|ahí) (cerra|cerrá|termina|terminá)" && return 0
+  # Los prefijos con los que arrancan TODAS las observaciones de guarda.
+  case "$t" in
+    AVISO:*|ERROR:*|"AVISO :"*|"ERROR :"*) return 0 ;;
+  esac
+  # Plantillas literales del protocolo, tal como se le muestran al modelo.
+  case "$t" in
+    *"'!img <que buscar>'"*|*"'!img <qué buscar>'"*|*"'!imgfile <ruta"*) return 0 ;;
+  esac
+  return 1
+}
+
+# nv_sin_eco <texto> -> imprime el texto si es una respuesta de verdad, y NADA si es eco.
+# Azucar para los tres lugares que arman la respuesta final concatenando lo que devolvio el modelo.
+nv_sin_eco() {
+  nv_eco_interno "${1:-}" && return 1
+  printf '%s' "${1:-}"
+}
+
+# nv_eco_procedencia <texto> -> 0 si ese texto es ECO DE LO QUE ESTE TURNO le dijo al modelo.
+#
+# LA SEGUNDA CAPA, Y LA QUE NO ENVEJECE. nv_eco_interno (arriba) pregunta si el texto SE PARECE a
+# algo interno, con una lista de marcadores que hay que mantener a mano. Esto pregunta si SALIO DE
+# ACA: compara contra el registro de observaciones que el motor fue anotando durante el turno
+# (NVA_OBS_LOG). Cubre tambien las guardas que se escriban manana.
+#
+# Medido antes de encenderlo (eval/eco-procedencia/): 0 falsos positivos sobre las 75 respuestas
+# reales del historial del usuario, y detecta el caso de la captura del brazalete con 0,43 de
+# cobertura contra un umbral de 0,30. La separacion entre lo legitimo y el eco es total.
+#
+# Si no hay registro (un llamador que no lo activo), devuelve "no es eco" y se queda callado: esta
+# guarda no puede ser el motivo de que un turno falle.
+nv_eco_procedencia() {
+  local t="${1:-}"
+  [ -n "${t// }" ] || return 1
+  [ "${MENTIS_ECO_PROCEDENCIA_OFF:-0}" = "1" ] && return 1
+  [ -n "${NVA_OBS_LOG:-}" ] && [ -s "${NVA_OBS_LOG:-/dev/null}" ] || return 1
+  local det="${NVDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/nv_eco_procedencia.py"
+  [ -f "$det" ] || return 1
+  local tmp; tmp="$(mktemp -t nva-final-XXXXXX 2>/dev/null)" || return 1
+  printf '%s' "$t" > "$tmp"
+  local salida
+  salida="$(python3 "$(cygpath -w "$det" 2>/dev/null || printf '%s' "$det")" \
+                    "$(cygpath -w "$NVA_OBS_LOG" 2>/dev/null || printf '%s' "$NVA_OBS_LOG")" \
+                    "$(cygpath -w "$tmp" 2>/dev/null || printf '%s' "$tmp")" 2>/dev/null)"
+  local codigo=$?
+  rm -f "$tmp" 2>/dev/null
+  [ "$codigo" -eq 0 ] && echo "[nv-lib] eco por procedencia: $salida" >&2
+  return "$codigo"
+}

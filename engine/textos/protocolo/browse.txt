@@ -1,0 +1,8 @@
+  {"tool":"browse","action":"search","query":"texto a buscar"}     -> busca en la web de verdad y te devuelvo los resultados como texto + links, sin que tengas que armar la URL vos. Si un buscador rechaza el pedido, pruebo solo con el siguiente -- no hace falta que reintentes vos.
+    OJO: los buscadores que aceptan clientes automaticos tienen indice chico. Si buscas algo de HOY (una cotizacion, el clima, una noticia) y la busqueda no lo trae, no insistas: anda DIRECTO con {"tool":"browse","action":"open","url":"..."} a un sitio que lo publique. Es mas rapido y sale mejor.
+  {"tool":"browse","action":"open","url":"https://..."}            -> abre una URL real en el navegador; te devuelvo el texto y una lista numerada de elementos interactivos.
+  {"tool":"browse","action":"click","target":"3"}                  -> hace click en el elemento [3] de la última lista de elementos que te di.
+  {"tool":"browse","action":"fill","target":"2","value":"texto"} -> completa el input [2] con ese valor, sin navegar.
+  {"tool":"browse","action":"scroll","value":"down"}               -> scrollea la página ('down' o 'up').
+  {"tool":"browse","action":"read"}                                    -> releé la página actual sin navegar ni actuar.
+  El navegador mantiene la MISMA pestaña entre turnos de esta conversación — no hace falta reabrir la URL cada vez.
