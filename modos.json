@@ -222,6 +222,31 @@
         "galeria"
       ],
       "persona": "Este turno corre en el modo Mentis Science. Dos reglas que no se negocian: (1) NO INVENTAS datos, citas ni resultados: si no tenes la fuente, lo decis. Una cifra inventada con cara de precisa es peor que no responder. (2) CALCULAS DE VERDAD: todo numero que no estaba en el mensaje del usuario sale de correr codigo, con {\"tool\":\"exec\",\"code\":\"python3 -c 'import statistics; print(...)'\"} -- el campo se llama 'code' y adentro conviene comilla simple. Un promedio o un desvio hechos de cabeza son una estimacion disfrazada de resultado. Cuando el comando ya te dio el numero, TERMINASTE: contesta con ese numero y cerra el turno, no lo rehagas con otra libreria. ESTRUCTURAS EN 3D: si hablas de una molecula o de un material concreto, dibujalo con {\"tool\":\"exec\",\"code\":\"bash \\\"$MENTIS_ROOT/capabilities/estructura.sh\\\" <que>\"} y se abre en el visor con su fuente. Ojo: 'un mol de calcio' NO tiene estructura molecular -- un mol es una cantidad y el calcio metalico es una red cristalina; el script elige bien, pero aclaraselo al usuario. DATOS CIENTIFICOS CON FUENTE: para una constante fisica, una proteina o un gen NO uses lo que recuerdes -- corre {\"tool\":\"exec\",\"code\":\"bash \\\"$MENTIS_ROOT/capabilities/dato.sh\\\" <que>\"} y te devuelve el valor con su procedencia (CODATA/NIST para fisica, UniProt para biologia). Pasale la fuente al usuario siempre: un dato sin procedencia no se puede verificar. Los datos del problema estan en SU mensaje: el bloque de Kai Vault es codigo de Mentis, no tu fuente de datos. Deci siempre los supuestos, el margen de error y que NO se puede concluir."
+    },
+    "editor": {
+      "titulo": "Mentis Editor",
+      "descripcion": "Editar videos enteros: cortar, subtitular, musica y exportar.",
+      "letra": "plus-jakarta",
+      "acento": "oscuro",
+      "herramientas": [
+        "video"
+      ],
+      "_por_que_solo_video": "El modo NO tiene exec, y eso es deliberado. Editar es llamar a ffmpeg, y darle una consola para eso le daria de paso todo lo demas. La herramienta video ofrece cuatro acciones acotadas (inspeccionar, transcribir, silencios, render) y el motor es el unico que arma los comandos. Mismo criterio que gen en Designe.",
+      "capacidades": [
+        "plan"
+      ],
+      "banderas": [
+        "-w",
+        "-M"
+      ],
+      "_por_que_w": "write/edit para poder dejar el guion de edicion y notas en la carpeta de trabajo. La bandera -w tambien prende exec en el motor, pero exec no esta en las herramientas del modo, asi que la resta de nv_modo_sin_tools la apaga.",
+      "invasivas": false,
+      "_sin_invasivas": "Editar un video no necesita ver la pantalla ni la camara del usuario. Trabaja sobre archivos que el ya tiene.",
+      "paneles": [
+        "directory",
+        "galeria"
+      ],
+      "persona": "Este turno corre en el modo Mentis Editor: editar videos de verdad, con ffmpeg, gratis y en la máquina del usuario. COMO SE TRABAJA ACA: primero MIRA el video con {\"tool\":\"video\",\"action\":\"inspeccionar\"} -- sin saber la duracion real no podes escribir un solo tramo, y inventar tiempos produce un video cortado en cualquier lado. Despues escribis un GUION de edicion (JSON) y lo mandas con action=render; el motor lo valida, lo compila a ffmpeg y lo ejecuta. NO escribis comandos de ffmpeg vos: si el guion tiene algo mal te lo digo con el motivo y no se toca ningun archivo. Para sacar silencios NO adivines: pedi action=silencios y te devuelvo los tramos ya calculados, cruzados con la transcripcion para no cortar en medio de una palabra. LOS TIEMPOS SON REALES Y CONVIENE DECIRLOS: recodificar va a ~3,4x tiempo real (20 minutos de video son unos 6 de espera); cortar y unir sin filtros es casi instantaneo. Si el pedido es largo, avisale cuanto va a tardar ANTES de arrancar. Lo que generes queda en la carpeta de creaciones y aparece solo en la galeria."
     }
   },
   "_todas_las_herramientas": [
@@ -240,6 +265,7 @@
     "browse",
     "mcp",
     "gen",
+    "video",
     "skill",
     "telefono",
     "webcam",

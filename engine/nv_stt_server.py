@@ -268,9 +268,16 @@ def transcribir(ruta):
         vals = [s.avg_logprob for s in segs if getattr(s, "avg_logprob", None) is not None]
         if vals:
             confianza = round(sum(vals) / len(vals), 3)
+    # LOS TIEMPOS DE CADA SEGMENTO (2026-08-16, para el modo Editor). faster-whisper los calcula
+    # igual -- estan en 'segs' desde siempre -- y hasta hoy se tiraban: solo se devolvia el texto
+    # concatenado. Sin ellos no hay subtitulos ni corte de silencios que respete las palabras, que
+    # es justo lo que evita que un corte se coma el principio de una frase.
+    # Cuesta cero: no se transcribe nada de nuevo, se mira lo que ya estaba en memoria.
+    segmentos = [{"desde": round(s.start, 3), "hasta": round(s.end, 3), "texto": s.text.strip()}
+                 for s in segs]
     return {"ok": True, "texto": texto, "segundos": round(time.time() - t0, 2),
             "duracion_audio": round(getattr(info, "duration", 0) or 0, 2),
-            "confianza": confianza}
+            "confianza": confianza, "segmentos": segmentos}
 
 
 class Handler(BaseHTTPRequestHandler):

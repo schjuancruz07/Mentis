@@ -117,7 +117,11 @@ function contratoTablero() {
           { nombre: 'logo.png', ruta: 'C:/Users/x/Documents/Mentis/logo.png', ext: '.png', tipo: 'imagen', bytes: 4000, cuando: Date.now(), modo: 'designe' },
         ] };
       },
-      verArtefacto: async () => ({ ok: true, tipo: 'imagen', dataUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }),
+      verArtefacto: async (ruta) => (String(ruta).endsWith('.mp4')
+        // Lo que devuelve main.js para un video: la RUTA, nunca el archivo en base64.
+        ? { ok: true, tipo: 'video', nombre: 'clip.mp4', ext: '.mp4',
+            archivoUrl: 'data:video/mp4;base64,AAAAIGZ0eXBpc29t', bytes: 314572800 }
+        : { ok: true, tipo: 'imagen', dataUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=' }),
       // Se guarda el callback con el que el renderer escucha al motor. Es la puerta por la que
       // entran las lineas de verdad (renderer.js:1698), y por eso el tablero se prueba mandandole
       // lineas por aca en vez de llamar a window.tablero a mano: por esta puerta pasa TAMBIEN el
@@ -239,6 +243,26 @@ function contratoTablero() {
     _mal('el tachado marca el punto correcto -- tachadas: ' + JSON.stringify(despues.tachadas));
   }
   await pagina.screenshot({ path: path.join(__dirname, '_2026-08-15-tablero-cowork.png') });
+
+  // --- EL VIDEO EN LA GALERIA (2026-08-16, modo Editor) ------------------------------------
+  // Lo que se prueba no es que "se vea": es que NO viaje en base64. Todo lo demas en este visor
+  // llega como dataUrl, y para un video de 300 MB eso son ~400 MB cruzando el IPC y la ventana
+  // congelada. Si alguien lo "arregla" mandandolo como dataUrl, este caso se pone rojo.
+  await pagina.evaluate(() => { document.getElementById('visor').classList.add('hidden'); });
+  await pagina.evaluate(() => window.MentisVisor.abrir('C:/Users/x/Documents/Mentis/clip.mp4'));
+  await pagina.waitForTimeout(500);
+  const vid = await pagina.evaluate(() => {
+    const v = document.querySelector('video.visor-video');
+    return v ? { hay: true, controles: v.controls, autoplay: v.autoplay,
+                 ancho: Math.round(v.getBoundingClientRect().width) } : { hay: false };
+  });
+  if (vid.hay) _ok(`un.mp4 se abre como <video> reproducible (${vid.ancho}px de ancho)`);
+  else _mal('el video no se pinta en el visor');
+  if (vid.hay && vid.controles) _ok('trae los controles (poder pausar es la mitad de mirar un video)');
+  else if (vid.hay) _mal('el video no tiene controles');
+  if (vid.hay && !vid.autoplay) _ok('no arranca solo (abrir la galeria no tiene por que hacer ruido)');
+  else if (vid.hay) _mal('el video arranca solo al abrir la galeria');
+  await pagina.screenshot({ path: path.join(__dirname, '_2026-08-16-galeria-video.png') });
 
   if (errores.length === 0) _ok('el renderer no tiro ningun error de JavaScript');
   else _mal('errores en la pagina: ' + errores.slice(0, 2).join(' | '));

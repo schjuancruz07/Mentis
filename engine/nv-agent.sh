@@ -2105,6 +2105,61 @@ else:
           fi
         fi
       fi ;;
+    video)
+      # EDITAR VIDEO (2026-08-16, modo Mentis Editor). El modelo NO recibe una consola para llamar a
+      # ffmpeg: recibe cuatro acciones acotadas. Es la misma regla que 'gen' en Designe -- un modo
+      # solo puede QUITAR permisos, asi que darle 'exec' para editar seria darle todo lo demas.
+      if [ "${ALLOW_VIDEO:-0}" != "1" ]; then
+        OBS="ERROR: herramienta deshabilitada (correr nv-agent.sh con -M para habilitar el Editor)."
+        echo "[nv-agent] iter $it: video RECHAZADO (sin -M)" >&2
+      else
+        VACTION="$(_b64d "${ACTION_B64:-}" 2>/dev/null || true)"
+        VPATH="$(_b64d "${PATH_B64:-}" 2>/dev/null || true)"
+        VVALUE="$(_b64d "${VALUE_B64:-}" 2>/dev/null || true)"
+        VCONTENT="$(_b64d "${CONTENT_B64:-}" 2>/dev/null || true)"
+        VOUT=""; VRC=1
+        case "$VACTION" in
+          inspeccionar|transcribir)
+            if [ -z "${VPATH// }" ]; then
+              VOUT="te falto 'path': la ruta del video"; VRC=1
+            else
+              VOUT="$(bash "$MENTIS_ROOT/mentis-editar.sh" "$VACTION" "$VPATH" 2>&1)"; VRC=$?
+            fi ;;
+          silencios)
+            if [ -z "${VPATH// }" ]; then
+              VOUT="te falto 'path': la ruta del video"; VRC=1
+            else
+              VOUT="$(bash "$MENTIS_ROOT/mentis-editar.sh" silencios "$VPATH" "${VVALUE:-0.7}" 2>&1)"; VRC=$?
+            fi ;;
+          render)
+            # El guion viaja en 'content' y se escribe a un archivo: pasarlo por la linea de
+            # comandos lo haria atravesar bash, que es de donde vienen los escapes rotos de ERR-159.
+            if [ -z "${VCONTENT// }" ]; then
+              VOUT="te falto 'content': el guion de edicion en JSON"; VRC=1
+            else
+              VGUION="$ROOT/.editor-guion-$it.json"
+              printf '%s' "$VCONTENT" > "$VGUION"
+              VOUT="$(bash "$MENTIS_ROOT/mentis-editar.sh" render "$VGUION" 2>&1)"; VRC=$?
+              rm -f "$VGUION" 2>/dev/null
+            fi ;;
+          *)
+            VOUT="accion de video desconocida: '$VACTION'. Usa inspeccionar|transcribir|silencios|render."; VRC=1 ;;
+        esac
+        if [ "$VRC" = "0" ]; then
+          OBS="$(_trunc <<< "$VOUT")"
+          echo "[nv-agent] iter $it: video $VACTION" >&2
+          # El render deja un archivo de verdad: cuenta como accion real y como artefacto, igual
+          # que 'gen'. Sin esto, el gate de completitud creeria que el turno no hizo nada.
+          if [ "$VACTION" = "render" ]; then
+            HAD_REAL_ACTION=1; ACCIONES_N=$((ACCIONES_N+1))
+            VFINAL="$(printf '%s' "$VOUT" | grep '^LISTO: ' | sed 's/^LISTO: //')"
+            [ -n "${VFINAL// }" ] && echo "[nv-agent] ARTIFACT: $VFINAL" >&2
+          fi
+        else
+          OBS="ERROR: $VOUT"
+          echo "[nv-agent] iter $it: video FALLO ($VACTION)" >&2
+        fi
+      fi ;;
     datos)
       if [ "${ALLOW_DATOS:-0}" != "1" ]; then
         OBS="ERROR: herramienta deshabilitada (correr nv-agent.sh con -D para habilitar Datos externos)."
@@ -2358,10 +2413,10 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 
 REPARTO=0
 TABLERO=0
-ROLE="reason"; MAXIT=20; ROOT="$PWD"; ALLOW_WRITE=0; ALLOW_BROWSE=0; ALLOW_MCP=0; ALLOW_GEN=0; ALLOW_SCREEN=0; ALLOW_DANGEROUS=0; ALLOW_CONTROL=0; ALLOW_EDITOR=0; ALLOW_ARDUINO=0; ALLOW_DATOS=0; ALLOW_CARBS=0; ALLOW_WEBCAM=0; ALLOW_TELEFONO=0; ALLOW_SKILLS=0; ALLOW_TELEFONO=0
+ROLE="reason"; MAXIT=20; ROOT="$PWD"; ALLOW_WRITE=0; ALLOW_BROWSE=0; ALLOW_MCP=0; ALLOW_GEN=0; ALLOW_SCREEN=0; ALLOW_DANGEROUS=0; ALLOW_CONTROL=0; ALLOW_EDITOR=0; ALLOW_ARDUINO=0; ALLOW_DATOS=0; ALLOW_CARBS=0; ALLOW_WEBCAM=0; ALLOW_TELEFONO=0; ALLOW_SKILLS=0; ALLOW_TELEFONO=0; ALLOW_VIDEO=0
 IMG_ATTACH=()
 SIN_TOOLS="${NVA_SIN_TOOLS:-}"
-while getopts ":d:m:i:n:wbtgscexaDCVPKpTI:" opt; do
+while getopts ":d:m:i:n:wbtgscexaDCVPKpTMI:" opt; do
   case "$opt" in
     d) ROOT="$OPTARG" ;;
     m) ROLE="$OPTARG" ;;
@@ -2382,6 +2437,7 @@ while getopts ":d:m:i:n:wbtgscexaDCVPKpTI:" opt; do
     e) ALLOW_EDITOR=1 ;;
     a) ALLOW_ARDUINO=1 ;;
     D) ALLOW_DATOS=1 ;;
+    M) ALLOW_VIDEO=1 ;;   # Montaje: el modo Editor
     # -p: reparto automatico (paralelo). OJO: en mentis-chat.sh "-R" ya significa modo remoto, por
     # eso aca la letra es otra. El motor pide un plan y, si la tarea se parte en dos o mas piezas
     # independientes, las resuelve EN PARALELO antes de empezar el loop. Lo pasa mentis-chat.sh
@@ -2495,6 +2551,11 @@ if [ "$ALLOW_EDITOR" = "1" ]; then
 $(nv_texto protocolo/vscode)"
 fi
 
+if [ "$ALLOW_VIDEO" = "1" ]; then
+  NVA_FICHA_VIDEO="
+$(nv_texto protocolo/video)"
+fi
+
 if [ "$ALLOW_DATOS" = "1" ]; then
   NVA_FICHA_DATOS="
 $(nv_texto protocolo/datos)"
@@ -2562,6 +2623,7 @@ _nva_indexar() {
 _nva_indexar "gen"      "${NVA_FICHA_GEN:-}"      "generar imagenes, modelos 3D y documentos (docx/pdf/pptx/xlsx) reales."
 _nva_indexar "arduino"  "${NVA_FICHA_ARDUINO:-}"  "programar y hablar con placas Arduino/ESP32 conectadas por USB."
 _nva_indexar "control"  "${NVA_FICHA_CONTROL:-}"  "mover el mouse y escribir con el teclado de la computadora del usuario."
+_nva_indexar "video"    "${NVA_FICHA_VIDEO:-}"    "editar videos: cortar, subtitular, poner musica y exportar (ffmpeg local)."
 _nva_indexar "datos"    "${NVA_FICHA_DATOS:-}"    "fuentes de datos reales: mapas, vuelos en vivo, Wikipedia, papers, NASA."
 _nva_indexar "webcam"   "${NVA_FICHA_WEBCAM:-}"   "mirar por la camara y ver que hay en la habitacion."
 _nva_indexar "${NVA_FICHA_CARBS:-}"    "estimar los gramos de carbohidratos de una comida (el usuario tiene )."

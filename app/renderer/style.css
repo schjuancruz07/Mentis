@@ -1654,6 +1654,10 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
 .visor-imagen { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius); }
+/* El video comparte el encuadre de la imagen: entra entero, sin recortar y sin desbordar el visor.
+   Fondo negro y no transparente -- un video vertical deja franjas a los costados, y en negro se
+   leen como parte del reproductor en vez de como un error de la app. */
+.visor-video { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius); background: #000; }
 /* El 3D y los marcos SÍ ocupan todo: un modelo que se puede girar necesita superficie, y un PDF
    dentro de un recuadro chico obliga a hacer scroll adentro de un scroll. */
 .visor-3d { width: 100%; height: 100%; min-height: 420px; border-radius: var(--radius); overflow: hidden; }

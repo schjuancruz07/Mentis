@@ -299,6 +299,18 @@ async function abrirVisor(ruta) {
     img.src = r.dataUrl;
     img.alt = r.nombre || 'imagen creada por Mentis';
     ponerCuerpo(img);
+  } else if (r.tipo === 'video') {
+    // El único tipo que NO llega como dataUrl: llega su ruta (archivoUrl). Ver el porqué en
+    // main.js -- un video de 300 MB convertido a texto son ~400 MB cruzando el IPC, y además el
+    // <video> necesita poder saltar a cualquier minuto sin tener todo el archivo en memoria.
+    const v = document.createElement('video');
+    v.className = 'visor-video';
+    v.src = r.archivoUrl;
+    v.controls = true;
+    v.preload = 'metadata';
+    // Sin autoplay a propósito: abrir la galería no tiene por qué ponerse a hacer ruido.
+    v.autoplay = false;
+    ponerCuerpo(v);
   } else if (r.tipo === 'modelo3d') {
     ponerCuerpo(mensaje('Cargando el modelo…'));
     await dibujar3D(r.dataUrl, r.ext);

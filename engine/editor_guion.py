@@ -204,7 +204,7 @@ def compilar(guion, raiz='.', salida_dir=None):
 
         if tipo == 'unir':
             lista = os.path.join(salida_dir, '.editor-unir.txt')
-            args = ['ffmpeg', '-y', '-f', 'concat', '-safe', '0', '-i', lista, '-c', 'copy', destino]
+            args = ['ffmpeg', '-nostdin', '-y', '-f', 'concat', '-safe', '0', '-i', lista, '-c', 'copy', destino]
             comandos.append(('unir %d fuentes' % len(fuentes), args, {'lista': lista, 'archivos': fuentes}))
 
         elif tipo == 'cortar':
@@ -215,7 +215,7 @@ def compilar(guion, raiz='.', salida_dir=None):
             cond = '+'.join("between(t,%s,%s)" % (_num(t['desde_s']), _num(t['hasta_s'])) for t in tramos)
             fv = "select='%s',setpts=N/FRAME_RATE/TB" % cond
             fa = "aselect='%s',asetpts=N/SAMPLE_RATE/TB" % cond
-            args = ['ffmpeg', '-y', '-i', actual, '-vf', fv, '-af', fa] + calidad + ['-c:a', 'aac', destino]
+            args = ['ffmpeg', '-nostdin', '-y', '-i', actual, '-vf', fv, '-af', fa] + calidad + ['-c:a', 'aac', destino]
             comandos.append(('cortar: dejar %d tramo(s)' % len(tramos), args, {}))
 
         elif tipo == 'cortar_silencios':
@@ -232,12 +232,12 @@ def compilar(guion, raiz='.', salida_dir=None):
             # recortar. Recortar decide por su cuenta que parte de la imagen se pierde.
             vf = ("scale=%d:%d:force_original_aspect_ratio=decrease,"
                   "pad=%d:%d:(ow-iw)/2:(oh-ih)/2" % (ancho, alto, ancho, alto))
-            args = ['ffmpeg', '-y', '-i', actual, '-vf', vf] + calidad + ['-c:a', 'copy', destino]
+            args = ['ffmpeg', '-nostdin', '-y', '-i', actual, '-vf', vf] + calidad + ['-c:a', 'copy', destino]
             comandos.append(('formato %s' % g['salida']['formato'], args, {}))
 
         elif tipo == 'velocidad':
             f = _num(p['factor'])
-            args = ['ffmpeg', '-y', '-i', actual,
+            args = ['ffmpeg', '-nostdin', '-y', '-i', actual,
                     '-filter_complex', '[0:v]setpts=%s*PTS[v];[0:a]atempo=%s[a]' % (round(1.0 / f, 6), f),
                     '-map', '[v]', '-map', '[a]'] + calidad + ['-c:a', 'aac', destino]
             comandos.append(('velocidad x%s' % f, args, {}))
@@ -253,7 +253,7 @@ def compilar(guion, raiz='.', salida_dir=None):
             # La ruta del.srt va adentro de un filtro: las barras invertidas de Windows y los dos
             # puntos de "C:" rompen el parser de filtros si no se escapan.
             vf = "subtitles='%s':force_style='%s'" % (_esc_filtro(srt.replace('\\', '/')), estilos[estilo])
-            args = ['ffmpeg', '-y', '-i', actual, '-vf', vf] + calidad + ['-c:a', 'copy', destino]
+            args = ['ffmpeg', '-nostdin', '-y', '-i', actual, '-vf', vf] + calidad + ['-c:a', 'copy', destino]
             comandos.append(('subtitulos (%s)' % estilo, args, {'necesita_srt': srt}))
 
         elif tipo == 'titulo':
@@ -279,7 +279,7 @@ def compilar(guion, raiz='.', salida_dir=None):
                   "boxcolor=black@0.5:boxborderw=12:x=(w-text_w)/2:y=h*0.78:enable='between(t,%s,%s)'"
                   % (_esc_filtro(fuente), _esc_filtro(tfile.replace('\\', '/')),
                      max(24, alto // 20), desde, desde + dura))
-            args = ['ffmpeg', '-y', '-i', actual, '-vf', vf] + calidad + ['-c:a', 'copy', destino]
+            args = ['ffmpeg', '-nostdin', '-y', '-i', actual, '-vf', vf] + calidad + ['-c:a', 'copy', destino]
             comandos.append(('titulo: %s' % p['texto'][:40], args, {'escribir': {tfile: p['texto']}}))
 
         elif tipo == 'musica':
@@ -293,7 +293,7 @@ def compilar(guion, raiz='.', salida_dir=None):
                       '[voz][mduck]amix=inputs=2:duration=first[a]' % vol)
             else:
                 fc = '[1:a]volume=%s[m];[0:a][m]amix=inputs=2:duration=first[a]' % vol
-            args = ['ffmpeg', '-y', '-i', actual, '-i', archivo, '-filter_complex', fc,
+            args = ['ffmpeg', '-nostdin', '-y', '-i', actual, '-i', archivo, '-filter_complex', fc,
                     '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', destino]
             comandos.append(('musica de fondo%s' % (' con ducking' if p.get('ducking', True) else ''), args,
                              {'necesita': archivo}))
@@ -305,11 +305,19 @@ def compilar(guion, raiz='.', salida_dir=None):
     if comandos:
         comandos[-1][1][-1] = final
     else:
-        comandos.append(('copiar sin cambios', ['ffmpeg', '-y', '-i', actual, '-c', 'copy', final], {}))
+        comandos.append(('copiar sin cambios', ['ffmpeg', '-nostdin', '-y', '-i', actual, '-c', 'copy', final], {}))
     return comandos, final
 
 
 def _main(argv):
+    # SALIDA CON \n Y NO \r\n. En Windows Python traduce los saltos al escribir, y estas lineas las
+    # ejecuta bash: el \r quedaba pegado al ULTIMO argumento, o sea al nombre del archivo de
+    # salida, y ffmpeg intentaba escribir en "salida.mp4\r". Peor todavia para diagnosticarlo: el
+    # \r hace que el mensaje de error se sobrescriba solo en la terminal y se lea otra cosa.
+    try:
+        sys.stdout.reconfigure(newline='')
+    except Exception:
+        pass
     if len(argv) < 3 or argv[1] not in ('validar', 'compilar'):
         sys.stderr.write(__doc__)
         return 64

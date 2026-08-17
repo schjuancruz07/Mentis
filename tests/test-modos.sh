@@ -48,7 +48,11 @@ MODOS_JSON="$JSON_WIN" node -e "JSON.parse(require('fs').readFileSync(process.en
   && _ok "modos.json es JSON valido" \
   || _mal "modos.json parsea" "si no parsea, nv_modo_actual cae al de por defecto y el reparto no existe"
 
-for m in mentis code designe cowork study science; do
+# LOS MODOS SE LEEN DE modos.json Y NO SE ESCRIBEN ACA (2026-08-16). Estaban a mano, asi que
+# al agregar Mentis Editor el modo nuevo no lo probaba nadie -- el unico caso que lo delato
+# fue el del catalogo, y por otro motivo. Un test que hay que acordarse de actualizar no
+# cubre lo que se agrega manana.
+for m in $(bash "$LIB" lista | cut -f1); do
   t="$(bash "$LIB" titulo "$m")"
   p="$(bash "$LIB" persona "$m")"
   [ -n "${t// }" ] && [ "$t" != "Mentis" -o "$m" = "mentis" ] \

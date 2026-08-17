@@ -42,6 +42,7 @@ if (!singleInstanceLock) {
 }
 
 const path = require('path');
+const { pathToFileURL } = require('url');
 const os = require('os');
 const fsSync = require('fs');
 const { execFile, spawn } = require('child_process');
@@ -1681,6 +1682,8 @@ const VISOR_TIPOS = {
   '.pdf': 'pdf',
   '.html': 'html', '.htm': 'html',
   '.txt': 'texto', '.md': 'texto', '.csv': 'texto', '.json': 'texto',
+  // VIDEO (2026-08-16, modo Editor). Ojo: estos NO viajan como dataUrl -- ver mas abajo.
+  '.mp4': 'video', '.webm': 'video', '.mov': 'video', '.mkv': 'video',
 };
 const VISOR_MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
@@ -1720,6 +1723,17 @@ ipcMain.handle('mentis:ver-artefacto', async (_event, artifact) => {
   // Un.docx o un.xlsx no se pueden dibujar acá y decir "no se pudo abrir" sería mentir: se
   // avisa que ese formato se abre afuera, que es la verdad y además es accionable.
   if (!tipo) return { ok: true, tipo: 'externo', nombre, ext };
+
+  // EL VIDEO NO SE MANDA EN BASE64, Y ESTA ES LA RAZON: todo lo demas en este visor viaja como
+  // dataUrl, o sea el archivo entero convertido a texto y cruzando el puente IPC. Para una imagen
+  // de 2 MB es invisible; para un video de 300 MB son ~400 MB de string y la ventana se congela.
+  // Ademas el <video> necesita poder SALTAR a un minuto cualquiera, y un dataUrl obliga a tener
+  // todo el archivo en memoria antes de mostrar el primer cuadro.
+  // Se manda la ruta y el renderer se la da al <video>, que la lee del disco como corresponde.
+  if (tipo === 'video') {
+    return { ok: true, tipo, nombre, ext, archivoUrl: pathToFileURL(r.abs).href,
+             bytes: (await fsSync.promises.stat(r.abs)).size };
+  }
 
   const st = await fsSync.promises.stat(r.abs);
   if (st.size > VISOR_TOPE_BYTES) {
@@ -1761,6 +1775,9 @@ function _modoPorNombre(n) {
   const b = n.toLowerCase();
   if (b.endsWith('.mol3d.json')) return 'science';
   if (/^(tarjetas|cuestionario|mapa|infografia|informe|presentacion|tabla|audio|video)-/.test(b)) return 'study';
+    // Un video lo hizo el Editor. Va ANTES que la regla de imagenes porque esa lista no los incluye,
+    // pero el dia que alguien agregue un formato la precedencia ya esta decidida.
+  if (/\.(mp4|webm|mov|mkv)$/.test(b)) return 'editor';
   if (/\.(png|jpg|jpeg|webp|gif|svg|glb|gltf)$/.test(b)) return 'designe';
   return null;
 }
