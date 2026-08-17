@@ -2688,6 +2688,23 @@ if [ "${NVA_SOLO_PROTOCOLO:-0}" = "1" ]; then
   exit 0
 fi
 
+# RELOJ DEL TURNO (2026-08-17). $EPOCHREALTIME es una variable de bash 5, no un proceso:
+# medir cada paso no cuesta nada. Existe porque la pregunta "por que Mentis tarda mas que
+# Goose" no se podia responder -- se sabia el total y nada mas. Ahora cada linea de iter
+# dice cuanto tardo, y la diferencia entre eso y la latencia del modelo es lo que tarda
+# Mentis por su cuenta.
+# Todo en aritmetica de bash y sin llamar a python: medir no puede costar lo que se esta
+# midiendo. En Windows arrancar un interprete cuesta ~75 ms, y con 10 pasos serian 750 ms
+# inventados encima de lo que se quiere medir.
+_nva_us() { local e="${EPOCHREALTIME:-0}"; e="${e/./}"; printf '%s' "${e:-0}"; }
+_nva_dt() {  # decimas de segundo entre dos marcas en microsegundos
+  local a="${1:-0}" b="${2:-0}"
+  [ "$a" = "0" ] || [ "$b" = "0" ] && { printf '?'; return; }
+  local d=$(( (b - a) / 100000 ))
+  printf '%d.%d' $(( d / 10 )) $(( d % 10 ))
+}
+NVA_T0="$(_nva_us)"
+NVA_TPREV="$NVA_T0"
 echo "[nv-agent] tarea: $TASK" >&2
 echo "[nv-agent] raíz: $ROOT | rol: $ROLE | presupuesto: $MAXIT iter" >&2
 
@@ -3380,23 +3397,36 @@ No alcanza con haber preparado el contenido: mientras no lo escribas con {\"tool
   # seria negarle algo que a veces necesita; lo que le falta es darse cuenta de que ya lo tiene.
   # Y si el archivo cambio desde que lo escribio -- por ejemplo, porque un comando lo modifico --
   # la huella no coincide y no se dice nada: releer eso es exactamente lo correcto.
-  # APAGADA POR DEFECTO DESDE EL 2026-08-15. Se midio (eval/relectura/VEREDICTO.md, 3 corridas
-  # prendida contra 3 apagada, alternadas, mismo modelo y mismo juez) y NO gana:
-  #   - No evita la relectura: en las dos corridas donde se activo, el modelo leyo igual 4
-  #     archivos. Recibe el aviso y lee lo mismo de todas formas.
-  #   - Mediana de 177 s prendida contra 150 s apagada. Si algo, va para el otro lado.
-  #   - La calidad no se mueve: 32/33 contra 32/33.
-  # El mecanismo se deja porque hace exactamente lo que dice y esta probado (15 casos), pero no
-  # entra por la misma regla que dejo afuera a la disputa cruzada: si no le gana a no tenerlo, no va.
-  # Se enciende con MENTIS_RELECTURA_ON=1. (MENTIS_RELECTURA_OFF=1 sigue ganandole, por si algun
-  # script viejo lo pasa.)
-  if [ "${MENTIS_RELECTURA_ON:-0}" = "1" ] && [ "${MENTIS_RELECTURA_OFF:-0}" != "1" ] \
-     && [ "$TOOL" = "read" ] && [ "${RELEE_PROPIO:-0}" = "1" ] \
-     && [[ "$OBS" != ERROR:* ]]; then
-    OBS="AVISO: este archivo ('${REL:-}') lo escribiste VOS en este mismo turno y no cambio desde entonces -- lo que sigue es exactamente lo que mandaste. Leerlo no te dice nada nuevo y cuesta un paso entero. Segui con lo que falta; si ya esta todo, respondé con done.
-
-$OBS"
-    echo "[nv-agent] iter $it: relectura de lo propio ($REL) -- avisado" >&2
+  # NO SE AVISA: NO SE DEVUELVE EL CONTENIDO (2026-08-17).
+  #
+  # LA HISTORIA, porque el cambio parece brusco y no lo es. Version 1 (2026-08-15): avisar. Se
+  # midio y NO gano -- el modelo leia el aviso y releia igual, 4 archivos en las dos corridas donde
+  # se activo. Quedo apagada.
+  #
+  # Version 2 (hoy): se instrumento el turno paso por paso y aparecio el numero que faltaba. De
+  # 149 segundos, los cuatro 'write' se llevan 96 s -- lo mismo que tarda Goose en total, que
+  # tambien escribe tres archivos -- y las CINCO lecturas de lo recien escrito se llevan 36,5 s.
+  # Esa es la diferencia con Goose, casi exacta. La relectura si era la causa; avisar no era la
+  # solucion.
+  #
+  # Por eso ahora no se le devuelve el contenido. No es censura: el contenido esta completo en sus
+  # observaciones anteriores, lo escribio el mismo hace tres pasos. Se le dice donde esta y se
+  # sigue.
+  #
+  # LA SALVAGUARDA ES LA HUELLA, y es la que hace que esto sea seguro: si el archivo cambio desde
+  # que lo escribio -- porque un comando lo modifico -- RELEE_PROPIO es 0 y esta guarda ni se
+  # entera. Releer algo que cambio es exactamente lo correcto y sigue funcionando.
+  #
+  # ENCENDIDA POR DEFECTO desde el 2026-08-17, medida con n=4 por lado (eval/relectura/):
+  #     con guarda : 104 s de mediana, 7,0 pasos, 1 lectura propia,  0 corridas malas
+  #     sin guarda : 112 s de mediana, 8,5 pasos, 2 lecturas,        2 corridas de 8/11
+  # Lo que la hace entrar NO es el tiempo -- 104 contra 112 esta dentro del ruido con n=4. Es que
+  # las DOS corridas de peor calidad fueron sin la guarda, y son justo las de 4 lecturas y 10
+  # pasos: cuando el modelo se pone a releer se enreda, y encima le sale peor.
+  # Apagado: MENTIS_RELECTURA_OFF=1.
+  if [ "${MENTIS_RELECTURA_OFF:-0}" != "1" ]      && [ "$TOOL" = "read" ] && [ "${RELEE_PROPIO:-0}" = "1" ]      && [[ "$OBS" != ERROR:* ]]; then
+    OBS="ERROR: '${REL:-ese archivo}' lo escribiste VOS en este mismo turno y no cambio ni una letra desde entonces. Su contenido completo esta mas arriba, en la observacion del 'write' que hiciste. No te lo devuelvo de nuevo porque no te dice nada nuevo y te cuesta un paso entero del presupuesto. Segui con lo que falta; si ya esta todo, respondé con done."
+    echo "[nv-agent] iter $it: relectura de lo propio ($REL) -- NO se devuelve el contenido" >&2
   fi
 
   # GENERALIZADO EL 2026-08-14. La version anterior de esta guarda miraba SOLO 'read'. El agujero
@@ -3471,6 +3501,14 @@ acción: $ACTLINE
 observación:
 $OBS
 "
+
+  # CUANTO TARDO ESTE PASO. Se emite en el punto por donde pasan todas las iteraciones, no en
+  # cada herramienta: una linea por paso, con el total del paso. Restandole la latencia del modelo
+  # (que ya esta en la telemetria) sale lo que tarda Mentis por su cuenta -- que era exactamente la
+  # pregunta sin responder del duelo contra Goose.
+  NVA_TAHORA="$(_nva_us)"
+  echo "[nv-agent] paso $it: $TOOL -- $(_nva_dt "$NVA_TPREV" "$NVA_TAHORA")s (acumulado $(_nva_dt "$NVA_T0" "$NVA_TAHORA")s)" >&2
+  NVA_TPREV="$NVA_TAHORA"
 
   # LA PROCEDENCIA DEL TEXTO (2026-08-16). Cada observacion que el motor le da al modelo se anota
   # tambien en un archivo aparte. Al cerrar, la respuesta final se compara contra ESTE registro:

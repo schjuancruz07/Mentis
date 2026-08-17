@@ -11,8 +11,14 @@
 # POR QUE NO LO ATRAPABA NADA: el detector de bucles de aciertos mira la MISMA accion repetida, y
 # aca cada lectura es de un archivo distinto y ninguna se repite.
 #
-# LO QUE NO HACE, Y ES DELIBERADO: no bloquea la lectura. Devuelve el contenido igual con un aviso
-# adelante. Y si el archivo cambio desde que se escribio, no dice nada -- releer eso es correcto.
+# LO QUE HACE HOY, Y POR QUE CAMBIO. Version 1 (2026-08-15): devolvia el contenido igual, con un
+# aviso adelante. Se midio y NO ganaba: el modelo leia el aviso y releia lo mismo, asi que el paso
+# se gastaba igual. Version 2 (2026-08-17): NO devuelve el contenido -- esta completo en la
+# observacion del write, tres pasos mas arriba. Medida con n=4 por lado: 7 pasos contra 8,5, una
+# lectura contra dos, y CERO corridas malas contra dos de 8/11.
+#
+# LA SALVAGUARDA: si el archivo cambio desde que se escribio (lo toco un comando), la huella no
+# coincide y esta guarda ni se entera. Releer eso es correcto y sigue funcionando.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 A="$HERE/engine/nv-agent.sh"
@@ -80,32 +86,40 @@ if [ "$(wc -l < "$BLOQUE")" -lt 10 ]; then
   _mal "se extrae la guarda" "no se encontro en $A"
 else
   _ok "la guarda se extrae de nv-agent.sh ($(wc -l < "$BLOQUE") lineas)"
-  # LA GUARDA ESTA APAGADA POR DEFECTO desde el 2026-08-15 (eval/relectura/VEREDICTO.md): se midio
-  # y no le gana a no tenerla -- el modelo recibe el aviso y relee igual. Por eso los casos que
-  # prueban el aviso la ENCIENDEN a proposito con MENTIS_RELECTURA_ON=1: lo que se sigue probando
-  # es que el mecanismo hace lo que dice, no que este activo.
+  # El cuarto argumento sigue siendo el apagado (MENTIS_RELECTURA_OFF), que es lo unico que la
+  # frena desde que quedo encendida por defecto.
   correr() { # $1=TOOL $2=RELEE_PROPIO $3=OBS $4=apagado
     ( set +e
-      TOOL="$1"; RELEE_PROPIO="$2"; OBS="$3"; MENTIS_RELECTURA_OFF="$4"; MENTIS_RELECTURA_ON=1
+      TOOL="$1"; RELEE_PROPIO="$2"; OBS="$3"; MENTIS_RELECTURA_OFF="$4"
       REL="a.txt"; it=2
       source "$BLOQUE"
       printf '%s' "${OBS:0:12}" ) 2>/dev/null
   }
-  # Y este caso es el veredicto hecho test: sin encenderla, no pasa nada.
-  apagada_por_defecto() {
+  # El veredicto hecho test: sin tocar ninguna variable, la guarda actua.
+  por_defecto() {
     ( set +e
       TOOL="read"; RELEE_PROPIO=1; OBS="hola mundo"; REL="a.txt"; it=2
       source "$BLOQUE"
       printf '%s' "${OBS:0:12}" ) 2>/dev/null
   }
-  case "$(apagada_por_defecto)" in
-    hola*) _ok "por defecto NO se activa (se midio y no gana: ver eval/relectura/VEREDICTO.md)" ;;
-    *)     _mal "apagada por defecto" "se activo sola: $(apagada_por_defecto)" ;;
+  # ENCENDIDA POR DEFECTO (2026-08-17). La version que AVISABA no ganaba -- el modelo leia el
+  # aviso y releia igual. La que entro no devuelve el contenido, y medida con n=4 baja los pasos
+  # (7 contra 8,5) y las lecturas (1 contra 2), sin ninguna corrida mala contra dos.
+  case "$(por_defecto)" in
+    ERROR*) _ok "por defecto SI corta la relectura (medido: ver eval/relectura/VEREDICTO.md)" ;;
+    *)      _mal "encendida por defecto" "no se activo: $(apagada_por_defecto)" ;;
   esac
+  # LO IMPORTANTE ES QUE EL CONTENIDO NO VUELVE. Avisar y devolverlo igual fue la version 1, y
+  # medida no cambiaba nada: el paso se gastaba lo mismo.
   case "$(correr read 1 'hola mundo' 0)" in
-    AVISO*) _ok "encendida a mano, el aviso va ADELANTE del contenido" ;;
-    *)      _mal "avisa" "obtuvo: $(correr read 1 'hola mundo' 0)" ;;
+    ERROR*) _ok "no devuelve el contenido de lo que el mismo escribio" ;;
+    *)      _mal "corta la relectura" "obtuvo: $(correr read 1 'hola mundo' 0)" ;;
   esac
+  if [ "$(correr read 1 'hola mundo' 0)" = "${_ignorar:-}hola mundo" ]; then
+    _mal "el contenido no vuelve" "devolvio el archivo igual"
+  else
+    _ok "el contenido viejo no viaja de nuevo (es el paso que se ahorra)"
+  fi
   case "$(correr read 0 'hola mundo' 0)" in
     hola*) _ok "si no es propio, el contenido sale intacto" ;;
     *)     _mal "no molesta" "obtuvo: $(correr read 0 'hola mundo' 0)" ;;
