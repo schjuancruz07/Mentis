@@ -14,6 +14,10 @@ const PRESUPUESTO_LOG_RE = /^\[nv-agent\] PRESUPUESTO: (\d+)$/;
 // cuál se cumplió. Se tacha SÓLO con estos avisos: el motor los emite cuando el archivo de la
 // tarea aparece de verdad, no cuando el modelo dice que la hizo.
 const PLAN_LOG_RE = /^\[nv-agent\] PLAN: (\d+)\|([^|]*)\|(.*)$/;
+// "esto va largo": el motor lo emite a los 60 s y a los 180 s de un turno. No corta nada --
+// avisa. Un turno puede tardar 40 segundos o 700 (medido), y mirar una pantalla quieta sin
+// saber en cual de los dos estas es la peor parte de esperar.
+const LARGO_LOG_RE = /^\[nv-agent\] LARGO: (\d+)\|(\d+)\|(.*)$/;
 const PLAN_HECHO_LOG_RE = /^\[nv-agent\] PLAN-HECHO: (\d+)$/;
 
 // Miniatura de adjuntos en el historial (pedido del usuario, 2026-07-14): antes el tag
@@ -756,6 +760,12 @@ function handleAgentLogLine(line) {
 
   const plan = line.match(PLAN_LOG_RE);
   if (plan) { tablero.agregar(parseInt(plan[1], 10), plan[2], plan[3]); abrirPanelSiHaceFalta(); return; }
+  const largo = line.match(LARGO_LOG_RE);
+  // El panel PRIMERO: avisarTurnoLargo escribe adentro de #live-steps, que no existe hasta que
+  // el panel se abre. Al reves, el aviso se perdia en silencio -- justo el aviso que existe
+  // para que no haya silencio.
+  if (largo) { abrirPanelSiHaceFalta(); avisarTurnoLargo(parseInt(largo[1], 10), parseInt(largo[2], 10), largo[3]); return; }
+
   const hecho = line.match(PLAN_HECHO_LOG_RE);
   if (hecho) { tablero.tachar(parseInt(hecho[1], 10)); return; }
 
@@ -817,6 +827,30 @@ function renderRawPreview(text) {
 
 // Narración en vivo: cada acción de nv-agent.sh aparece como un paso propio en la
 // conversación, arriba del spinner, mientras el turno todavía está en curso.
+// UNA sola linea que se actualiza, no una por aviso: dos mensajes de "esto va largo" apilados
+// en el panel se leen como que algo se rompio dos veces.
+function avisarTurnoLargo(segundos, pasos, ultimo) {
+  // #live-steps lo crea showThinkingIndicator() al arrancar el turno, asi que en un turno real
+  // siempre esta. El fallback a #messages es por si el aviso llega fuera de ese contexto: un
+  // aviso que existe para romper el silencio no puede desaparecer en silencio.
+  const steps = document.getElementById('live-steps') || document.getElementById('messages');
+  if (!steps) return;
+  let fila = document.getElementById('aviso-turno-largo');
+  if (!fila) {
+    fila = document.createElement('div');
+    fila.id = 'aviso-turno-largo';
+    fila.className = 'aviso-largo';
+    steps.appendChild(fila);
+  }
+  const min = Math.floor(segundos / 60);
+  const cuanto = min >= 1 ? `${min} min` : `${segundos} s`;
+  // Se dice QUE esta haciendo, no solo cuanto tarda: "va por read" explica la espera; un numero
+  // solo, no.
+  fila.textContent = `Esto va largo: ${cuanto}, ${pasos} pasos. Sigue trabajando (último: ${ultimo}).`;
+  const container = document.getElementById('messages');
+  if (container) container.scrollTop = container.scrollHeight;
+}
+
 function appendLiveStep(action) {
   const steps = document.getElementById('live-steps');
   if (!steps) return;

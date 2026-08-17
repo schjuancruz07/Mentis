@@ -48,6 +48,15 @@ else
   _ok "el cierre por bucle NO depende de que haya artefactos"
 fi
 
+# 3. Errores repetidos (el detector viejo). Aparecio en vivo DESPUES de tapar los otros dos:
+# Cowork repitio 'edit' sin 'old' siete veces, se corto, y salio mudo. Tres ramas distintas para
+# el mismo problema es la senal de que habia que buscarlas todas juntas.
+if grep -A 8 'LOOP_DETECTADO=1' "$A" | grep -q 'CIERRE_FORZADO=1'; then
+  _ok "cortar por errores repetidos pide igual la respuesta final"
+else
+  _mal "errores repetidos deja mudo" "el tercer camino de corte sigue saliendo sin decir nada"
+fi
+
 echo "== el texto del cierre no puede mentir =="
 # Con 0 acciones no se le puede decir al modelo "terminaste la tarea": lo empuja a inventar que
 # hizo algo, justo cuando lo que hace falta es que sea honesto.

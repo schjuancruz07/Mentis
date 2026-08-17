@@ -3424,6 +3424,14 @@ No alcanza con haber preparado el contenido: mientras no lo escribas con {\"tool
     FAIL_SIG_COUNT["$FAIL_SIG_KEY"]=$(( ${FAIL_SIG_COUNT["$FAIL_SIG_KEY"]:-0} + 1 ))
     if [ "${FAIL_SIG_COUNT["$FAIL_SIG_KEY"]}" -ge "$FAIL_SIG_MAX" ]; then
       LOOP_DETECTADO=1
+      # EL TERCER CAMINO QUE DEJABA EL TURNO MUDO (2026-08-17). Se taparon el del JSON invalido y
+      # el del bucle de aciertos, y este quedo afuera: aparecio en vivo con Mentis Cowork, que
+      # repitio siete veces 'edit' sin el campo 'old', se corto por error repetido... y salio sin
+      # decir una palabra.
+      # La leccion es la misma y por eso se anota: cada rama que corta un turno tiene que
+      # responder "¿que ve el usuario?". Buscar las ramas de a una, cuando aparecen, es como se llega a
+      # tres arreglos separados para el mismo problema.
+      CIERRE_FORZADO=1
       echo "[nv-agent] iter $it: LOOP DETECTADO -- '$TOOL' repitió el mismo error $FAIL_SIG_MAX veces (no consecutivas). Corto el turno para no seguir gastando." >&2
     fi
   fi
@@ -3567,6 +3575,24 @@ $OBS
   NVA_TAHORA="$(_nva_us)"
   echo "[nv-agent] paso $it: $TOOL -- $(_nva_dt "$NVA_TPREV" "$NVA_TAHORA")s (acumulado $(_nva_dt "$NVA_T0" "$NVA_TAHORA")s)" >&2
   NVA_TPREV="$NVA_TAHORA"
+
+  # "ESTO VA LARGO" (2026-08-17, decision del usuario: avisar, nunca cortar).
+  #
+  # POR QUE: un turno puede tardar 40 segundos o 700 -- medido hoy: 208 s en Editor, 712 s
+  # acumulados en Code -- y hasta que termina no hay forma de saber en cual de los dos estas.
+  # Mirar una pantalla quieta sin saber si faltan diez segundos o diez minutos es la peor parte
+  # de esperar.
+  #
+  # NO CORTA NADA, y eso es deliberado: un techo duro cortaria tareas largas legitimas justo antes
+  # de terminar. Esto solo cuenta lo que ya paso. La decision de seguir esperando es del usuario.
+  NVA_SEG=$(( (NVA_TAHORA - NVA_T0) / 1000000 ))
+  for _hito in 60 180; do
+    if [ "$NVA_SEG" -ge "$_hito" ] && [ "${NVA_AVISADO:-0}" -lt "$_hito" ]; then
+      NVA_AVISADO="$_hito"
+      echo "[nv-agent] LARGO: ${NVA_SEG}|${it}|${TOOL}" >&2
+      echo "[nv-agent] esto va largo: ${NVA_SEG}s, $it pasos, ultimo: $TOOL" >&2
+    fi
+  done
 
   # LA PROCEDENCIA DEL TEXTO (2026-08-16). Cada observacion que el motor le da al modelo se anota
   # tambien en un archivo aparte. Al cerrar, la respuesta final se compara contra ESTE registro:

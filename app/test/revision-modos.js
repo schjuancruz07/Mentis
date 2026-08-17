@@ -176,6 +176,32 @@ const PANEL_BOTON = { projects: 'btn-open-projects', schedule: 'btn-open-schedul
   else _mal('lista de modos vacia', errores.slice(antesVacio)[0]);
 
   console.log('');
+  // --- EL AVISO DE TURNO LARGO (2026-08-17) -------------------------------------------------
+  // Se manda la linea REAL que emite el motor, por la puerta real (onLog).
+  await pagina.evaluate(() => {
+    // Como en un turno real: el indicador de trabajo ya esta en pantalla cuando llega el aviso.
+    if (window.showThinkingIndicator) window.showThinkingIndicator();
+    window.__onLog('[nv-agent] LARGO: 65|4|read');
+  });
+  await pagina.waitForTimeout(200);
+  let aviso = await pagina.evaluate(() => {
+    const el = document.getElementById('aviso-turno-largo');
+    return el ? { hay: true, texto: el.textContent } : { hay: false };
+  });
+  if (aviso.hay && /65 s|1 min/.test(aviso.texto)) _ok(`el aviso de turno largo aparece: "${aviso.texto}"`);
+  else _mal('aviso de turno largo', JSON.stringify(aviso));
+
+  // El segundo aviso ACTUALIZA la misma linea, no apila otra: dos avisos apilados se leen como
+  // que algo se rompio dos veces.
+  await pagina.evaluate(() => { window.__onLog('[nv-agent] LARGO: 185|9|write'); });
+  await pagina.waitForTimeout(200);
+  const dos = await pagina.evaluate(() => ({
+    cuantos: document.querySelectorAll('#aviso-turno-largo,.aviso-largo').length,
+    texto: (document.getElementById('aviso-turno-largo') || {}).textContent || '',
+  }));
+  if (dos.cuantos === 1 && /3 min/.test(dos.texto)) _ok('el segundo aviso actualiza la misma linea (no apila)');
+  else _mal('el aviso se apila', JSON.stringify(dos));
+
   if (errores.length === 0) _ok('la app no tiro NINGUN error de JavaScript en toda la recorrida');
   else _mal(`${errores.length} errores en total`, errores.slice(0, 3).join(' | '));
 

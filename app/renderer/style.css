@@ -1861,3 +1861,16 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   #tablero-tareas,.tablero-tilde,.tablero-texto::after { transition: none; }
 .tablero-item.hecha.tablero-tilde { animation: none; }
 }
+
+/* "Esto va largo": un aviso de espera, NO un error. Por eso comparte el color de acento y no el
+   rojo -- que Mentis siga trabajando es lo normal en una tarea grande, y pintarlo de alarma haria
+   que el usuario cancele turnos que estan yendo bien. */
+.aviso-largo {
+  margin-top:.5rem;
+  padding:.5rem.7rem;
+  border-left: 3px solid var(--acento, #d2691e);
+  background: color-mix(in srgb, var(--acento, #d2691e) 8%, transparent);
+  border-radius: var(--radius, 6px);
+  font-size:.85rem;
+  opacity:.9;
+}
