@@ -178,8 +178,11 @@ else
     *)                 _mal "el corte esta cableado" "obtuvo: $r" ;;
   esac
 
-  # Sin trabajo real hecho no se fuerza el cierre: no hay nada que contar. Es el caso de los 15
-  # 'task create' -- ahi corta como loop y el chat ya tiene su mensaje honesto.
+  # CAMBIO DELIBERADO (2026-08-17): antes, sin trabajo real, NO se forzaba el cierre -- "no hay
+  # nada que contar". La revision del motor en vivo mostro que eso deja el turno MUDO: el modo
+  # Mentis se comio 117 segundos buscando en la web, la guarda corto bien, y el usuario no recibio una
+  # palabra. Ahora el cierre se pide siempre; lo que cambia es el PEDIDO, que le dice al modelo
+  # que no hubo trabajo y le exige honestidad (ver tests/test-turno-mudo.sh).
   r="$( (
       set +e
       declare -A OK_SIG_COUNT=(); OK_SIG_MAX=3; LOOP_DETECTADO=0; ACCIONES_N=0; CIERRE_FORZADO=0
@@ -190,7 +193,7 @@ else
       printf 'loop=%s cierre=%s' "$LOOP_DETECTADO" "$CIERRE_FORZADO"
     ) 2>/dev/null )"
   case "$r" in
-    "loop=1 cierre=0") _ok "15 'task create' sin trabajo real: corta y no finge un cierre" ;;
+    "loop=1 cierre=1") _ok "15 'task create' sin trabajo real: corta y AUN ASI le responde al usuario" ;;
     *)                 _mal "el caso de la captura del usuario" "obtuvo: $r" ;;
   esac
 

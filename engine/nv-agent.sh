@@ -1118,10 +1118,30 @@ $OBS_C"
         echo "[nv-agent] iter $it: search RECHAZADO" >&2
       fi ;;
     run)
+      # ¿ESTA SALIDA TRAE UN NUMERO QUE NO SIRVE? Ver _nva_marcar_numeros_rotos, mas abajo.
       CODE="$(_b64d "$CODE_B64")"; NVA_TMP="$(mktemp)"; printf '%s' "$CODE" > "$NVA_TMP"
       if OUT="$(nv_sandbox_run bash "$NVA_TMP" 2>&1)"; then RC=0; else RC=$?; fi
       rm -f "$NVA_TMP"
       OBS="$(printf 'exit=%s\n%s' "$RC" "$OUT" | _trunc)"
+      # 'run' NO VE TU CARPETA (2026-08-17). El sandbox corre aislado -- eso es a proposito y esta
+      # documentado en modos.json --, pero el modelo lo descubre a los golpes: escribe suma.sh con
+      # 'write' y despues hace run "./suma.sh", que falla con "No such file or directory". Caso
+      # real del modo Code: perdio siete pasos en ese baile, escribiendo y reescribiendo el archivo
+      # convencido de que el problema era el contenido.
+      # El motor SI sabe lo que se escribio este turno (ESCRITO_HUELLA), asi que puede decirlo.
+      if [ "$RC" != "0" ] && [ "${#ESCRITO_HUELLA[@]}" -gt 0 ] \
+         && printf '%s' "$OUT" | grep -qiE 'no such file or directory|command not found|not recognized'; then
+        OBS="OJO: 'run' corre en un sandbox AISLADO que NO ve tu carpeta de trabajo, asi que los archivos que escribiste con 'write' no existen ahi -- por eso este error. Para ejecutar algo que vos escribiste, usá 'exec', que corre DENTRO de tu carpeta. 'run' es solo para calculo suelto que no toca tus archivos.
+
+$OBS"
+        echo "[nv-agent] iter $it: run fallo sobre un archivo del turno -- avisado que use exec" >&2
+      fi
+      if _nva_marcar_numeros_rotos "$OUT"; then
+        OBS="OJO: esta salida trae un numero invalido (nan/inf) o un aviso del propio comando sobre el calculo. Ese resultado NO sirve y no se lo podes pasar al usuario como bueno: arreglá la cuenta y volvé a correrla, o decile que no te dio. Si mezclaste dos calculos en el mismo comando, corré solo el que importa.
+
+$OBS"
+        echo "[nv-agent] iter $it: run devolvio un numero invalido (nan/inf/warning) -- marcado" >&2
+      fi
       echo "[nv-agent] iter $it: run (exit $RC)" >&2 ;;
     write)
       WRITE_CNT="${WRITE_CNT:-0}"
@@ -2552,7 +2572,15 @@ $(nv_texto protocolo/vscode)"
 fi
 
 if [ "$ALLOW_VIDEO" = "1" ]; then
-  NVA_FICHA_VIDEO="
+  # VIAJA ENTERA, NO BAJO DEMANDA (corregido 2026-08-17). Estaba en el indice de capacidades como
+  # arduino o y el modo Editor fallo en vivo por eso: su persona le dice "mira el video con
+  # {"tool":"video","action":"inspeccionar"}", pero esa herramienta NO figuraba en el protocolo --
+  # solo una linea en el indice. El modelo le cree al protocolo, no a la persona: intento cinco
+  # veces con 'browse open' y termino diciendo que no podia.
+  #
+  # pedirse cuando haga falta; la herramienta central de un modo tiene que estar a la vista desde
+  # el primer paso, porque se usa en el primer paso.
+  PROTOCOL="$PROTOCOL
 $(nv_texto protocolo/video)"
 fi
 
@@ -2623,7 +2651,6 @@ _nva_indexar() {
 _nva_indexar "gen"      "${NVA_FICHA_GEN:-}"      "generar imagenes, modelos 3D y documentos (docx/pdf/pptx/xlsx) reales."
 _nva_indexar "arduino"  "${NVA_FICHA_ARDUINO:-}"  "programar y hablar con placas Arduino/ESP32 conectadas por USB."
 _nva_indexar "control"  "${NVA_FICHA_CONTROL:-}"  "mover el mouse y escribir con el teclado de la computadora del usuario."
-_nva_indexar "video"    "${NVA_FICHA_VIDEO:-}"    "editar videos: cortar, subtitular, poner musica y exportar (ffmpeg local)."
 _nva_indexar "datos"    "${NVA_FICHA_DATOS:-}"    "fuentes de datos reales: mapas, vuelos en vivo, Wikipedia, papers, NASA."
 _nva_indexar "webcam"   "${NVA_FICHA_WEBCAM:-}"   "mirar por la camara y ver que hay en la habitacion."
 _nva_indexar "${NVA_FICHA_CARBS:-}"    "estimar los gramos de carbohidratos de una comida (el usuario tiene )."
@@ -2746,6 +2773,28 @@ OK_SIG_CORTE="${MENTIS_BUCLE_CORTE:-6}"
 # LO QUE ESTE TURNO ESCRIBIO, con su huella (2026-08-15). Sirve para no releer lo propio: ver la
 # guarda "YA LO ESCRIBISTE VOS" mas abajo. La huella es del CONTENIDO, no de la ruta: si un
 # comando modifica el archivo despues, deja de coincidir y releerlo vuelve a ser legitimo.
+# ¿ESTA SALIDA TRAE UN NUMERO QUE NO SIRVE? (2026-08-17)
+#
+# CASO REAL, del modo Science. Se le pidio la media y el desvio de ocho numeros. Calculo con awk y
+# la salida decia TEXTUALMENTE:
+#     awk: warning: sqrt: received negative argument -25
+#     Media: 5   Desviacion Estandar: -nan
+#     Media: 5   Desviacion Estandar: 2.1213203435596424
+# y le reporto al usuario "Desviacion Estandar: 2.12" -- que no es la poblacional (2.0) ni la muestral
+# (2.14): habia sumado mal los cuadrados. Es exactamente lo que el modo Science promete NO hacer,
+# con el error a la vista en su propia salida.
+#
+# Un modelo lee "-nan" y sigue de largo; un grep no. Esto NO corrige la cuenta -- eso es del
+# modelo -- pero le pone el problema adelante para que no pueda ignorarlo, y queda en el historial
+# para las guardas del cierre.
+_nva_marcar_numeros_rotos() {
+  # 'nan' se busca como palabra suelta -- no existe en castellano y en una salida numerica siempre
+  # es un valor roto. 'inf' EN CAMBIO exige signo o la palabra completa (-inf, +inf, Infinity):
+  # sin eso marcaba "inf y mas alla", que es texto normal. Falso positivo encontrado probando la
+  # funcion antes de encenderla.
+  printf '%s' "${1:-}" | grep -qiE '(^|[^a-z])-?nan([^a-z]|$)|[-+]inf([^a-z]|$)|infinity|warning:.*(sqrt|log|divi|negative)|division by zero'
+}
+
 declare -A ESCRITO_HUELLA=()
 RELEE_PROPIO=0
 # CUANDO YA LO LOGRASTE, TERMINA (2026-08-08).
@@ -3102,6 +3151,11 @@ Respondé con el próximo objeto JSON de acción."
     if RESP="$(printf '%s\n\n%s' "$NVA_PROMPT" "$CORR" | bash "$NVDIR/ask-nvidia.sh" -r "${IMG_FLAGS[@]}" "$ITER_ROLE" 2>/dev/null)"; then :; else RESP=""; fi
     if ACT="$(_extract_action "$RESP" 2>/dev/null)"; then :; else
       echo "[nv-agent] iter $it: el modelo no devolvió JSON válido dos veces -> aborto honesto" >&2
+      # SE CORTA, PERO NO SE DEJA MUDO EL TURNO (2026-08-17). Caso real: Mentis Designe genero el
+      #.docx en 50 segundos y despues el modelo devolvio basura dos veces. El archivo EXISTIA y
+      # el usuario nunca se entero. Que el modelo no sepa cerrar no es motivo para tirar el trabajo:
+      # el cierre forzado le pide la respuesta final con el historial completo.
+      CIERRE_FORZADO=1
       STATUS="nojson"; break
     fi
   fi
@@ -3473,7 +3527,11 @@ No alcanza con haber preparado el contenido: mientras no lo escribas con {\"tool
     # mensaje honesto para eso. Las dos salidas son mejores que quince vueltas.
     if [ "$OK_SIG_VECES" -ge "${OK_SIG_CORTE:-6}" ]; then
       LOOP_DETECTADO=1
-      [ "${ACCIONES_N:-0}" -gt 0 ] && CIERRE_FORZADO=1
+      # SIEMPRE, no solo con acciones reales (2026-08-17). Un bucle de 'browse' o de 'task' no
+      # deja artefactos, pero el turno TIENE informacion: busco seis veces, leyo, exploro. Con la
+      # condicion vieja, el modo Mentis se comia 117 segundos buscando y terminaba sin decir una
+      # palabra. Peor experiencia imposible: se ve igual que un cuelgue.
+      CIERRE_FORZADO=1
       OBS="ERROR: repetiste '$TOOL' con los mismos argumentos $OK_SIG_VECES veces en este turno y te lo avisé $(( OK_SIG_VECES - OK_SIG_MAX + 1 )) veces. No estás avanzando, así que corto acá para no seguir gastando el presupuesto del usuario."
       echo "[nv-agent] iter $it: BUCLE DE ACIERTOS -- CORTO EL TURNO: '$TOOL' repetido $OK_SIG_VECES veces pese a $(( OK_SIG_VECES - OK_SIG_MAX + 1 )) avisos" >&2
     elif [ "$OK_SIG_VECES" -ge "$OK_SIG_MAX" ]; then
@@ -3542,16 +3600,46 @@ echo "" >&2
 # se reporta como fracaso algo que produjo resultados.
 if [ "$STATUS" != "done" ] && [ "${CIERRE_FORZADO:-0}" = "1" ]; then
   echo "[nv-agent] cierre forzado: habia $ACCIONES_N accion(es) real(es) sin reportar; pidiendo la respuesta final" >&2
-  _cierre_prompt="Terminaste la tarea. En este turno completaste $ACCIONES_N acción(es) real(es).
+  # EL PEDIDO CAMBIA SEGUN QUE PASO. Antes era uno solo, escrito para el caso "ya lograste el
+  # objetivo y seguias dando vueltas": empezaba con "Terminaste la tarea". Desde que este cierre
+  # tambien cubre los cortes por bucle y por JSON invalido (2026-08-17), ese texto seria mentira en
+  # dos de los tres casos -- y peor: le estaria diciendo al modelo que termino algo que no termino,
+  # justo cuando lo que hace falta es que sea honesto con el usuario.
+  if [ "${ACCIONES_N:-0}" -gt 0 ]; then
+    _cierre_cab="Terminaste la tarea. En este turno completaste $ACCIONES_N acción(es) real(es)."
+    _cierre_pie="Escribí AHORA la respuesta final para el usuario, en español y en pocas líneas: qué hiciste, qué generaste y dónde quedó guardado. Si generaste un archivo, nombralo con su ruta. NO listes directorios, NO cuentes lo que buscaste, NO ofrezcas seguir con otro enfoque."
+  else
+    _cierre_cab="Este turno se cortó sin que llegaras a terminar: no completaste ninguna acción real (no escribiste ni generaste nada)."
+    _cierre_pie="Escribí AHORA la respuesta final para el usuario, en español y en pocas líneas. SÉ HONESTO: contale qué averiguaste y qué NO llegaste a hacer. Si lo que sabés alcanza para responderle, RESPONDELE la pregunta -- eso es lo que él quería. Si no, decíselo derecho en una línea. NUNCA le hables del funcionamiento interno: el usuario no sabe qué es 'browse', ni una 'acción', ni una 'iteración', ni un 'turno' -- esas palabras no significan nada para él y leerlas es peor que no recibir nada. Escribí como le hablarías a una persona. NO inventes que hiciste algo, NO listes directorios, NO pongas títulos ni secciones."
+  fi
+  _cierre_prompt="$_cierre_cab
 
 $HIST
 
-Escribí AHORA la respuesta final para el usuario, en español y en pocas líneas: qué hiciste, qué generaste y dónde quedó guardado. Si generaste un archivo, nombralo con su ruta. NO listes directorios, NO cuentes lo que buscaste, NO ofrezcas seguir con otro enfoque."
+$_cierre_pie"
   FINAL="$(printf '%s' "$_cierre_prompt" | bash "$NVDIR/ask-nvidia.sh" -r "$ROLE" 2>/dev/null || true)"
   if [ -z "$FINAL" ]; then
     # Ultimo recurso: sin modelo, se dice lo unico que sabemos con certeza -- que hubo acciones
     # reales -- en vez de mentir en cualquiera de las dos direcciones.
-    FINAL="Terminé la tarea: completé $ACCIONES_N acción(es) en este turno. Revisá el panel de previsualización para ver los archivos generados."
+    # Sin modelo tampoco se miente: se dice lo unico que sabemos con certeza, y cambia segun si
+    # hubo trabajo o no.
+    if [ "${ACCIONES_N:-0}" -gt 0 ]; then
+      FINAL="Terminé la tarea: completé $ACCIONES_N acción(es) en este turno. Revisá el panel de previsualización para ver los archivos generados."
+    else
+      FINAL="Me quedé sin poder cerrar este turno como corresponde y no llegué a hacer nada concreto. Contame de nuevo qué necesitás y lo encaro con otro enfoque."
+    fi
+  fi
+  # LA MISMA ADUANA QUE EL RESTO (2026-08-17). Esta respuesta se arma DESPUES del loop, asi que
+  # no pasaba por la guarda de eco -- y por ahi salio a pantalla "no se obtuvo informacion nueva
+  # debido a la repeticion de la accion 'browse'", que es jerga del motor hablandole al usuario.
+  # Si el cierre tambien es eco, se reemplaza por algo que una persona pueda leer.
+  if nv_eco_procedencia "$FINAL" || nv_eco_interno "$FINAL"; then
+    echo "[nv-agent] el cierre forzado vino en jerga interna -- reemplazado" >&2
+    if [ "${ACCIONES_N:-0}" -gt 0 ]; then
+      FINAL="Hice $ACCIONES_N cosa(s) en este turno pero no llegué a contártelas bien. Fijate en el panel de creaciones, y si querés te lo explico de nuevo."
+    else
+      FINAL="No llegué a resolver esto y no quiero devolverte un texto que no te sirve. Contame de nuevo qué necesitás."
+    fi
   fi
   STATUS="done"
 fi

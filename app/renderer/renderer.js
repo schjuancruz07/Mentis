@@ -3338,6 +3338,16 @@ function estadoPonerTiempo(txt) {
     fichas.textContent = '';
     const corto = (m) => m.titulo.replace(/^Mentis\s*/, '') || m.titulo;
     const elegido = modos.find((m) => m.id === actual) || modos[0];
+    // SIN MODOS NO SE PINTA NADA, PERO TAMPOCO SE ROMPE (2026-08-17). Si la lista viene vacia
+    // -- modos.json corrupto, o el motor que no pudo leerlo -- esto seguia derecho a
+    // elegido.descripcion y tiraba "Cannot read properties of undefined". Un error de JavaScript
+    // acá no se ve como un error: deja media barra sin dibujar y la app parece "rara".
+    // Degradar es quedarse sin el selector de modos, que es MUCHO menos que quedarse sin app.
+    if (!elegido) {
+      fichas.textContent = '';
+      console.warn('[modos] la lista vino vacia: no se pinta el selector');
+      return;
+    }
 
     const actualBtn = document.createElement('button');
     actualBtn.type = 'button';
