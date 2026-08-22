@@ -33,10 +33,20 @@ _matar_puerto() {
     taskkill //PID "$p" //F >/dev/null 2>&1 || true
   done
 }
-trap 'rm -rf "$SB" "${SB2:-}"; _matar_puerto "${PUERTO:-8791}"; _matar_puerto 8792' EXIT
+trap 'rm -rf "$SB" "${SB2:-}"; _matar_puerto "${PUERTO:-8791}"; _matar_puerto "${PUERTO2:-0}"' EXIT
 mkdir -p "$SB/engine"
 cp "$DIR/mentis-chat.sh" "$SB/"
-cp "$DIR/engine/nv-lib.sh" "$DIR/engine/nv-classify-lib.sh" "$SB/engine/"
+# TODAS las librerias y la declaracion de modos, no una lista escrita a mano (2026-08-20). El
+# sandbox copiaba nv-lib.sh y nv-classify-lib.sh por nombre; cuando aparecio nv-modos-lib.sh,
+# mentis-chat.sh empezo a morir en su `source` y TODAS las funciones nv_modo_* quedaban sin
+# definir. Consecuencia: las banderas del modo salian vacias, la interseccion se comia hasta -w, y
+# el test reportaba "el modo normal perdio el permiso de escritura" -- un bug que no existia.
+# Es la segunda vez en el dia que un sandbox de test se rompe por copiar por nombre (la otra fue
+# tests/test-skills-autonomas.sh). Se copia por patron y se agrega lo que el chat necesita leer.
+cp "$DIR"/engine/nv-*lib*.sh "$SB/engine/" 2>/dev/null || true
+cp "$DIR/engine/nv-lib.sh" "$DIR/engine/nv-classify-lib.sh" "$SB/engine/" 2>/dev/null || true
+cp -r "$DIR/engine/textos" "$SB/engine/" 2>/dev/null || true
+cp "$DIR/modos.json" "$DIR/skills-autonomas.json" "$SB/" 2>/dev/null || true
 
 cat > "$SB/engine/nv-agent.sh" <<'STUB'
 #!/usr/bin/env bash
@@ -117,7 +127,17 @@ esac
 # ============ PARTE 2: el servidor ============================================================
 echo "== 5. el servidor exige token en TODO menos en /salud =="
 PY_EXE="$(python3 -c 'import sys; print(sys.executable)' 2>/dev/null)"
-PUERTO=8791
+# EL PUERTO SALE DEL PID, NO ES FIJO (2026-08-21). Con 8791 escrito a mano, DOS corridas de
+# este test a la vez se destruyen entre si: cada una arranca matando lo que escuche en ese
+# puerto -- incluido el servidor de la otra. Paso de verdad, y el resultado fue peor que un
+# fallo: la segunda corrida reporto 14 FALLOS de un codigo que estaba perfecto, y se fueron
+# minutos en buscar un bug que no existia.
+#
+# Es la vuelta de tuerca del incidente que este mismo archivo ya documenta arriba (los cinco
+# servidores apilados en el 8791). Aquella vez se agrego _matar_puerto para limpiar los zombis;
+# lo que no se vio es que esa misma limpieza convierte a dos corridas simultaneas en un
+# problema nuevo. Con el puerto derivado del PID, cada corrida tiene el suyo y no se tocan.
+PUERTO=$(( 8700 + ($$ % 80) ))
 TOKEN_PRUEBA="token-de-prueba-1234"
 if [ -z "$PY_EXE" ]; then
   _bad "no encontré el intérprete de python: no se pudo probar el servidor"
@@ -185,20 +205,97 @@ else
       _bad "--$VAR vale '$VALOR' en la app y no aparece en la página del celular"
     fi
   done
-  # El cuerpo digital es la cara de Mentis: tiene que ser el MISMO módulo, no un dibujo aparte.
+  # El cuerpo digital se saco (2026-08-20): el usuario lo habia quitado de la app hace tiempo y en la
+  # pagina quedaba el import de un modulo inexistente. Lo que se prueba ahora es que NO vuelva a
+  # aparecer una referencia colgada.
   case "$PAG" in
-    *"/estatico/renderer/cuerpo-digital.js"*) _ok "la página monta el cuerpo digital de la app" ;;
-    *) _bad "la página no carga el cuerpo digital" ;;
+    *"cuerpo-digital.js"*) _bad "volvio la referencia al cuerpo digital, que no existe en el repo" ;;
+    *) _ok "sin referencias al cuerpo digital (se saco a proposito)" ;;
   esac
   # Y los estáticos que necesita ese módulo tienen que servirse SIN token (un import relativo no
   # lo lleva) pero sólo los de la lista: nada de subir por el árbol de directorios.
-  chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/renderer/cuerpo-digital.js")" "200" "el cuerpo digital se sirve sin token"
+  # La politica se prueba con un estatico que EXISTE (2026-08-20). Antes se probaba con
+  # cuerpo-digital.js y daba 404 -- pero no por un problema de permisos: ESE ARCHIVO NO EXISTE EN
+  # EL REPO. Nadie lo tiene, ni la app lo usa; queda su nombre en la lista blanca del servidor y
+  # en el import de la pagina. Un test que dice "se sirve sin token: 404" manda a buscar un
+  # problema de tokens que no existe, y el de verdad -- falta una funcion entera -- queda tapado.
+  chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/renderer/formato.js")" "200" "los estaticos de la lista se sirven sin token"
+  chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/renderer/temas.js")" "200" "y las paletas tambien"
+  # Y lo que falta se dice como lo que es, no como un 404 suelto.
+  # Y que la lista blanca no deje pasar nada fuera de ella. Responde 401 y no 404, que es lo
+  # correcto: un 404 le contaria a cualquiera que pase por la WiFi que ese archivo NO existe, y un
+  # 200/404 distinto por ruta deja mapear el disco desde afuera. Sin token, todo lo que no esta en
+  # la lista es igual de inaccesible.
+  chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/renderer/cuerpo-digital.js")" "401" "lo que no esta en la lista blanca pide token (401, sin decir si existe)"
   chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/node_modules/three/build/three.module.min.js")" "200" "Three.js se sirve sin token"
   # three.module.min.js importa a three.core.min.js: si sólo se sirviera el primero, el import
   # anidado daba 401 y el cuerpo no aparecía nunca (pasó, 2026-07-30).
   chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/node_modules/three/build/three.core.min.js")" "200" "el import anidado de Three.js también se sirve"
   chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/node_modules/three/build/../../../../engine/.nv-secrets")" "401" "no se puede salir de la carpeta permitida"
   chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/renderer/renderer.js")" "401" "un archivo fuera de la lista no se sirve"
+
+  # --- app instalable sin tiendas (2026-08-22) --------------------------------------------------
+  # Lo que se prueba es lo que Chrome exige para ofrecer "Instalar aplicacion": un manifest con
+  # display standalone y los dos tamanios de icono, y un service worker que atienda 'fetch'.
+  # Si algo de esto se rompe, la pagina sigue andando -- por eso hace falta un test: el sintoma
+  # seria que el boton de instalar deja de aparecer, y eso no se nota mirando la pantalla.
+  # La cookie es el mecanismo: entrar una vez con el token la deja puesta, y desde ahi el manifest
+  # y el service worker se autentican sin llevar la llave escrita en ningun lado.
+  GALLETAS="$SB/cookies.txt"; rm -f "$GALLETAS"
+  chk "$(_codigo -c "$GALLETAS" "http://127.0.0.1:$PUERTO/?t=$TOKEN_PRUEBA")" "200" "entrar con token deja la cookie puesta"
+  if grep -q "mentis_token" "$GALLETAS" 2>/dev/null; then
+    _ok "la cookie de sesion se guardo"
+  else
+    _bad "no se guardo la cookie: la app instalada no podria abrir sin token en la URL"
+  fi
+  # LO QUE DE VERDAD IMPORTA DE LA APP INSTALADA: abre en "/" a secas. Si esto fallara, el icono
+  # del telefono llevaria a un 401 y no habria forma de saber por que.
+  chk "$(_codigo -b "$GALLETAS" "http://127.0.0.1:$PUERTO/")" "200" "la raiz abre solo con la cookie (asi entra la app instalada)"
+  chk "$(_codigo -b "$GALLETAS" "http://127.0.0.1:$PUERTO/manifest.webmanifest")" "200" "el manifest se sirve con la cookie"
+  chk "$(_codigo "http://127.0.0.1:$PUERTO/manifest.webmanifest")" "401" "sin cookie NI token, el manifest no sale"
+  chk "$(_codigo -b "$GALLETAS" "http://127.0.0.1:$PUERTO/sw.js")" "200" "el service worker se sirve con la cookie"
+  chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/pwa/icono-192.png")" "200" "el icono de 192 esta"
+  chk "$(_codigo "http://127.0.0.1:$PUERTO/estatico/pwa/icono-512.png")" "200" "el icono de 512 esta"
+
+  MANI="$(curl -s -b "$GALLETAS" "http://127.0.0.1:$PUERTO/manifest.webmanifest" 2>/dev/null)"
+  case "$MANI" in
+    *'"display": "standalone"'*|*'"display":"standalone"'*)
+      _ok "el manifest pide standalone (sin barra de direcciones)" ;;
+    *) _bad "el manifest perdio display standalone: se instalaria como una pestaña" ;;
+  esac
+  # El start_url tiene que ser "/" a secas. Si alguna vez volviera a llevar el token, se estaria
+  # reintroduciendo la llave en un archivo que el navegador guarda en el telefono.
+  case "$MANI" in
+    *'"start_url": "/"'*) _ok "el start_url es / (sin la llave colgando)" ;;
+    *) _bad "el start_url del manifest cambio: revisar que no lleve el token" ;;
+  esac
+  case "$MANI" in
+    *"$TOKEN_PRUEBA"*) _bad "el manifest trae el token adentro" ;;
+    *) _ok "el manifest no trae el token" ;;
+  esac
+  SW="$(curl -s -b "$GALLETAS" "http://127.0.0.1:$PUERTO/sw.js" 2>/dev/null)"
+  case "$SW" in
+    *"addEventListener('fetch'"*) _ok "el service worker atiende fetch (es lo que Chrome exige)" ;;
+    *) _bad "el service worker no atiende fetch: Chrome no ofreceria instalar la app" ;;
+  esac
+  # Y que NO cachee la API: una conversacion vieja servida del cache parece fresca, y eso es peor
+  # que un error de red.
+  case "$SW" in
+    *"startsWith('/api/')"*) _ok "el service worker no cachea la API" ;;
+    *) _bad "el service worker podria cachear respuestas de la API" ;;
+  esac
+  # La pagina tiene que enlazar el manifest, si no nada de lo de arriba se usa.
+  PAG_PWA="$(curl -s -b "$GALLETAS" "http://127.0.0.1:$PUERTO/" 2>/dev/null)"
+  case "$PAG_PWA" in
+    *'rel="manifest"'*) _ok "la pagina enlaza el manifest" ;;
+    *) _bad "la pagina no enlaza el manifest: no se puede instalar" ;;
+  esac
+  # El registro del service worker va detras de isSecureContext a proposito: la direccion de
+  # Tailscale es HTTP y registrar a ciegas llena la consola del celular de un error inutil.
+  case "$PAG_PWA" in
+    *"window.isSecureContext"*) _ok "el service worker solo se registra en contexto seguro" ;;
+    *) _bad "se registra el service worker sin comprobar el contexto seguro" ;;
+  esac
 fi
 
 # ============ PARTE 3: el turno en vivo =======================================================
@@ -207,7 +304,7 @@ fi
 # prueba es MI código -- que los pasos lleguen mientras el turno corre, que el turno cierre, y que
 # Detener corte de verdad -- no la inteligencia de Mentis.
 echo "== 9. turno en vivo: los pasos llegan mientras trabaja, y el turno cierra =="
-PUERTO2=8792
+PUERTO2=$(( PUERTO + 1 ))   # el segundo servidor, pegado al primero y tambien propio
 _matar_puerto "$PUERTO2"
 SB2="$(mktemp -d)"
 cat > "$SB2/mentis-chat.sh" <<'CHATSTUB'

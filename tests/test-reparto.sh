@@ -46,8 +46,9 @@ import json,sys,io
 d=json.load(io.open(sys.argv[1],encoding='utf-8'))
 m=d.get('modos',d)
 print(','.join(sorted(k for k,v in m.items() if v.get('reparto'))))
-" "$(cygpath -w "$HERE/modos.json" 2>/dev/null || printf '%s' "$HERE/modos.json")" | tr -d '
-')"
+" "$(cygpath -w "$HERE/modos.json" 2>/dev/null || printf '%s' "$HERE/modos.json")" | tr -d '[:space:]')"
+# El tr borra [:space:] y no un salto suelto: el python de Windows devuelve CR+LF, y borrando solo
+# el LF quedaba un CR que hacia la variable NO vacia -- el test daba FALLA con una lista vacia.
 if [ -z "$_CON" ]; then
   _ok "hoy ningun modo reparte (apagado por medicion, no por olvido)"
 elif [ "$_CON" = "cowork" ]; then
@@ -109,6 +110,25 @@ if grep -q 'NO las vuelvas a generar' "$A"; then
   _ok "al modelo se le dice que el material ya esta hecho"
 else
   _mal "nota del reparto" "sin eso vuelve a generar todo y el reparto no sirvio de nada"
+fi
+
+echo ""
+echo "== la nota del reparto dice la verdad segun quien haya hecho el trabajo =="
+# POR QUE (2026-08-20): habia UNA sola nota para los dos caminos. Con MENTIS_REPARTO_AGENTES=1
+# cada parte corre como agente CON -w y ya escribio sus archivos, pero la nota le seguia diciendo
+# al coordinador que "este material NO esta guardado en ningun archivo" y que los escribiera el.
+# Resultado: rehacia el trabajo de las partes y se quedaba sin iteraciones -- el `rc=4` que quedo
+# anotado como pendiente sin explicacion (`exit 4` en este motor es "no llegue a una respuesta
+# final", no un crash).
+if awk '/MENTIS_REPARTO_AGENTES:-0/,/^    fi$/' "$A" | grep -q "CON MANOS"; then
+  _ok "con agentes se le dice que los archivos YA estan escritos"
+else
+  _mal "la nota no distingue los dos caminos" "con agentes se le pide reescribir lo que ya existe, y por eso agota las iteraciones"
+fi
+if grep -q "NO esta guardado en ningun archivo\|NO está guardado en ningún archivo" "$A"; then
+  _ok "sin agentes sigue la nota vieja (el material vive solo en la conversacion)"
+else
+  _mal "se perdio la nota del camino por defecto" "sin ella el turno no escribe los archivos: medido el 2026-08-14"
 fi
 
 echo ""

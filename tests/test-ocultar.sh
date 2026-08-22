@@ -104,5 +104,21 @@ else
 fi
 
 echo ""
+
+# --- LA CASCADA, CALCULADA (2026-08-18) ---------------------------------------------------------
+# Las aserciones de arriba comprueban que las reglas ESTEN escritas. Pero el bug que motivo este
+# archivo no es una regla que falte: es una que PIERDE. `#admin-panel{display:flex}` tiene
+# especificidad 100 y `.hidden` tiene 10, asi que el panel se mostraba con las dos reglas
+# presentes y un grep dando verde. ocultar-cascada.py calcula quien gana. Verificado inyectando
+# las dos formas reales del bug: las encuentra.
+if python3 "$(dirname "${BASH_SOURCE[0]}")/ocultar-cascada.py" > /tmp/oc-casc.$$ 2>&1; then
+  _ok "CASCADA: $(cat /tmp/oc-casc.$$ | tr -d '
+')"
+else
+  _mal "CASCADA: algo le gana a.hidden" "$(head -3 /tmp/oc-casc.$$ | tr '
+' ' ')"
+fi
+rm -f /tmp/oc-casc.$$
+
 echo "== $ok ok, $fallo fallan =="
 [ "$fallo" -eq 0 ]

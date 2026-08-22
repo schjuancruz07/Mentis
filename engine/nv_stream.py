@@ -83,6 +83,18 @@ THINK_STDERR = os.environ.get("NV_THINK_STDERR") == "1"
 # NV_ANSWER_STDERR=1 -> ir escupiendo por stderr la RESPUESTA FINAL a medida que se escribe, en
 # lineas "NVANSWER <trozo>". Ver answer_incremental para el por que y el como.
 ANSWER_STDERR = os.environ.get("NV_ANSWER_STDERR") == "1"
+# NV_ANSWER_RAW=1 -> la respuesta NO es un JSON de accion sino prosa suelta: emitir los trozos
+# tal cual, sin buscarles el campo "answer".
+#
+# POR QUE HIZO FALTA (2026-08-18): answer_incremental extrae el texto de un JSON de accion, que
+# es lo que devuelve el agente en sus iteraciones. Pero los DOS caminos que producen la respuesta
+# que el usuario lee mas seguido NO son JSON: el cierre forzado de nv-agent.sh (le pide al modelo
+# "escribi AHORA la respuesta final", en prosa) y la charla directa de mentis-chat.sh (el turno
+# sin herramientas). En los dos, la regex no encontraba nada y el streaming quedaba mudo. Medido
+# antes del arreglo: 0 chunks en un turno real completo, con el modelo emitiendo bien token a
+# token un eslabon mas arriba. O sea que el streaming andaba solo en los turnos donde menos se
+# nota, y fallaba justo en los dos mas frecuentes.
+ANSWER_RAW = os.environ.get("NV_ANSWER_RAW") == "1"
 
 _ANSWER_INICIO = re.compile(r'"answer"\s*:\s*"')
 
@@ -142,6 +154,24 @@ def answer_incremental(bruto, ya_emitido):
         return texto[ya_emitido:], len(texto)
     return "", ya_emitido
 
+
+def trozo_para_juan(acumulado, trozo, ya_emitido, raw):
+    """Decide QUE texto de este chunk se le muestra al usuario, y cuanto se lleva emitido.
+
+    Dos formas llegan por el mismo canal y hay que distinguirlas MIRANDO lo que llega, no
+    confiando en lo que se pidio:
+      - JSON de accion ({"tool":..,"answer":".."}): hay que sacarle el campo answer y
+        des-escaparlo, si no se le pinta el JSON en la cara.
+      - prosa suelta: el chunk YA es texto y va tal cual.
+
+    'raw' dice cual se ESPERA (lo prende quien llama: el cierre forzado y la charla directa
+    esperan prosa). Pero no alcanza con eso: al cierre se le pide prosa y el modelo contesta
+    JSON igual bastante seguido -- medido en turnos reales. Por eso, aun con raw, si el
+    acumulado arranca con '{' se trata como JSON. La decision es estable desde el primer chunk.
+    """
+    if raw and acumulado.lstrip()[:1] != "{":
+        return trozo, ya_emitido
+    return answer_incremental(acumulado, ya_emitido)
 
 # --- GUARDA DE PRIVACIDAD ------------------------------------------------------------------------
 # Misma lista de patrones que nv_redact en nv-lib.sh, movida aca por una razon medida: la llamada
@@ -393,7 +423,8 @@ def main():
             if trozo:
                 texto.append(trozo)
                 if ANSWER_STDERR:
-                    nuevo, answer_emitido = answer_incremental("".join(texto), answer_emitido)
+                    nuevo, answer_emitido = trozo_para_juan(
+                        "".join(texto), trozo, answer_emitido, ANSWER_RAW)
                     if nuevo:
                         sys.stderr.write("NVANSWER " + nuevo.replace("\n", "\\n") + "\n")
                         sys.stderr.flush()

@@ -23,6 +23,25 @@ cortaria una busqueda que igual podria resolverse por el camino viejo.
 """
 import json
 import os
+import sys as _sys
+
+# LA SALIDA VA EN UTF-8, SIEMPRE (2026-08-20). Sin esto, el archivo funcionaba y moria al final:
+# la busqueda salia bien, y al IMPRIMIR el resultado, python en Windows usa cp1252 por defecto y
+# tiraba UnicodeEncodeError con cualquier acento, comilla curva o emoji -- o sea, con casi todo
+# resultado real, en español mas todavia.
+#
+# Y no se veia: nv-agent.sh llama a este archivo con 2>/dev/null, asi que el error se perdia y el
+# motor recibia una salida VACIA, indistinguible de "no encontre nada". Medido en una tarea real:
+# el modelo pidio buscar 25 VECES SEGUIDAS -- gasto el presupuesto entero del turno y no entrego
+# nada -- porque cada busqueda le devolvia el vacio y volvia a intentar.
+#
+# Es la misma clase de error que el comentario de arriba ya documenta para el `python3 -c`: el
+# archivo propio arreglo aquella causa, y esta entro por la puerta de al lado.
+for _f in (_sys.stdout, _sys.stderr):
+    try:
+        _f.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 import sys
 import urllib.error
 import urllib.request

@@ -24,10 +24,66 @@ export PYTHONIOENCODING=utf-8
 TF_TMP="$(mktemp -d)"
 trap 'rm -rf "$TF_TMP"' EXIT
 
-TF_OK=0; TF_MAL=0
+TF_OK=0; TF_MAL=0; TF_SIN=0
 _ok()  { TF_OK=$((TF_OK+1));  echo "  OK   $1"; }
 _mal() { TF_MAL=$((TF_MAL+1)); echo "  MAL  $1"; }
+_sin() { TF_SIN=$((TF_SIN+1)); echo "  ??   SIN VERIFICAR -- $1"; }
 _nota(){ echo "  --   $1"; }
+
+# --- el entorno tambien puede fallar, y eso NO es un fallo del codigo (2026-08-22) --------------
+# EL PROBLEMA MEDIDO: el 2026-08-20 este test dio rojo al final de una tanda larga de trabajo y a
+# la manana siguiente, con la maquina fresca, dio 5/5 sin tocar una linea. La causa no era el
+# codigo: MSYS se queda sin poder crear procesos ("CreateProcessW failed, errno 11") despues de
+# horas de forks, y este test lanza muchos (TTS, transcripcion y tres turnos de chat completos).
+#
+# Un test que NO PUDO CORRER no puede reportar rojo: manda a buscar un bug que no existe, y peor,
+# entrena a no creerle cuando de verdad falle. Es la misma regla que V3 ya aplicaba con "sin turno
+# no hay prueba", extendida al entorno entero.
+#
+# Se hacen tres cosas: mirar antes de empezar si la maquina puede forkear, reintentar UNA vez tras
+# una pausa cuando aparece el sintoma, y si vuelve a aparecer, contarlo como SIN VERIFICAR.
+_tf_entorno_saturado() {
+  grep -qiE "CreateProcessW failed|errno 11|fork: retry|Resource temporarily unavailable|cannot allocate memory" "$1" 2>/dev/null
+}
+
+# Prueba barata: 25 subprocesos de verdad. Si la maquina ya no puede con eso, tampoco va a poder
+# con un turno de chat, y conviene saberlo ANTES de gastar cinco minutos para terminar en rojo.
+_tf_forks_ok() {
+  local salida i
+  salida="$(for i in $(seq 1 25); do /usr/bin/printf '.'; done 2>&1)"
+  case "$salida" in
+    *CreateProcess*|*"fork: retry"*|*"Resource temporarily"*) return 1 ;;
+  esac
+  [ "${#salida}" -ge 25 ]
+}
+
+# _tf_chat <salida> <stderr> <timeout_s> <frase> [args de mentis-chat.sh...]
+# Devuelve 0 si el turno corrio, 1 si el entorno no dio para correrlo ni con un reintento.
+_tf_chat() {
+  local out="$1" err="$2" to="$3" frase="$4"; shift 4
+  local intento=0
+  while : ; do
+    printf '%s\n' "$frase" | timeout "$to" bash "$TF_ROOT/mentis-chat.sh" "$@" > "$out" 2> "$err"
+    _tf_entorno_saturado "$err" || return 0
+    intento=$((intento + 1))
+    if [ "$intento" -ge 2 ]; then
+      _nota "el entorno volvio a fallar al crear procesos; no es el codigo"
+      return 1
+    fi
+    _nota "MSYS no pudo crear procesos (errno 11). Espero 25 s y reintento una sola vez."
+    sleep 25
+  done
+}
+
+if _tf_forks_ok; then
+  _nota "el entorno puede crear procesos: el test corre en condiciones"
+else
+  echo
+  echo "  ??   SIN VERIFICAR -- esta maquina ya no puede crear procesos nuevos (MSYS saturado)."
+  echo "       No es un fallo de Mentis. Cerra las terminales abiertas o reinicia, y repeti este"
+  echo "       test aislado. Correrlo ahora daria un rojo falso."
+  exit 3
+fi
 
 # ================================================================================================
 echo "== V1: dictado largo =="
@@ -88,10 +144,13 @@ echo "== V2: contexto automático (que traiga solo lo ya hablado) =="
 # Lo que se comprueba NO es que la respuesta suene informada, sino que el proceso haya corrido la
 # búsqueda: el marcador 'iter 0: recordar' lo emite mentis-chat.sh antes de llamar a ningún modelo.
 T0=$(date +%s%N)
-printf '%s\n' "Acordate de lo que hablamos sobre la camara: ¿que habiamos decidido?" \
-  | timeout 300 bash "$TF_ROOT/mentis-chat.sh" -R -H "$TF_TMP/h1.jsonl" > "$TF_TMP/o1.txt" 2> "$TF_TMP/e1.txt"
+_tf_chat "$TF_TMP/o1.txt" "$TF_TMP/e1.txt" 300 \
+  "Acordate de lo que hablamos sobre la camara: ¿que habiamos decidido?" -R -H "$TF_TMP/h1.jsonl"
+TF_RC1=$?
 T1=$(date +%s%N)
-if grep -q "iter 0: recordar" "$TF_TMP/e1.txt"; then
+if [ "$TF_RC1" != "0" ]; then
+  _sin "el entorno no pudo correr el turno (MSYS sin procesos). No dice nada sobre el contexto automático."
+elif grep -q "iter 0: recordar" "$TF_TMP/e1.txt"; then
   _ok "el contexto automático se disparó solo ($(( (T1-T0)/1000000 )) ms)"
 else
   _mal "NO se disparó la búsqueda en el pasado con una frase que la debería disparar"
@@ -100,9 +159,11 @@ _nota "respuesta: $(tr -d '\r' < "$TF_TMP/o1.txt" | tail -3 | head -c 300)"
 
 # Y el control negativo: una frase sin ninguna pista NO tiene que disparar la búsqueda. Sin esto,
 # un disparador que se activa siempre pasaría el test de arriba pareciendo que funciona.
-printf '%s\n' "Cuanto es 12 mas 30?" \
-  | timeout 240 bash "$TF_ROOT/mentis-chat.sh" -R -H "$TF_TMP/h2.jsonl" > "$TF_TMP/o2.txt" 2> "$TF_TMP/e2.txt"
-if grep -q "iter 0: recordar" "$TF_TMP/e2.txt"; then
+_tf_chat "$TF_TMP/o2.txt" "$TF_TMP/e2.txt" 240 "Cuanto es 12 mas 30?" -R -H "$TF_TMP/h2.jsonl"
+TF_RC2=$?
+if [ "$TF_RC2" != "0" ]; then
+  _sin "el entorno no pudo correr el control negativo"
+elif grep -q "iter 0: recordar" "$TF_TMP/e2.txt"; then
   _mal "se disparó la búsqueda en el pasado con una frase que no la pedía (falso positivo)"
 else
   _ok "no se disparó donde no correspondía (control negativo)"
@@ -113,10 +174,14 @@ echo "== V3: skill autónoma (que la use sola, sin que el usuario escriba el com
 # Se le da un pedido que calza con /where, que está en 'libre' en skills-autonomas.json. NO se
 # escribe "/where": si Mentis la usa, la usó sola. Modo NO remoto, porque -R apaga -K a propósito.
 T0=$(date +%s%N)
-printf '%s\n' "Necesito ubicar en que carpeta del ecosistema vive graphify. Usa tus habilidades si te sirven." \
-  | timeout 400 bash "$TF_ROOT/mentis-chat.sh" -H "$TF_TMP/h3.jsonl" > "$TF_TMP/o3.txt" 2> "$TF_TMP/e3.txt"
+_tf_chat "$TF_TMP/o3.txt" "$TF_TMP/e3.txt" 400 \
+  "Necesito ubicar en que carpeta del ecosistema vive graphify. Usa tus habilidades si te sirven." \
+  -H "$TF_TMP/h3.jsonl"
+TF_RC3=$?
 T1=$(date +%s%N)
-if grep -qE "iter [0-9]+: skill [a-z-]+" "$TF_TMP/e3.txt"; then
+if [ "$TF_RC3" != "0" ]; then
+  _sin "el entorno no pudo correr el turno de skills"
+elif grep -qE "iter [0-9]+: skill [a-z-]+" "$TF_TMP/e3.txt"; then
   _ok "usó una skill por su cuenta: $(grep -oE 'iter [0-9]+: skill [a-z-]+' "$TF_TMP/e3.txt" | head -1) ($(( (T1-T0)/1000000 )) ms)"
 elif grep -q "skill RECHAZADO" "$TF_TMP/e3.txt"; then
   _mal "intentó usar una skill y fue RECHAZADA: $(grep -m1 'skill RECHAZADO' "$TF_TMP/e3.txt")"
@@ -125,7 +190,7 @@ elif ! grep -qE "iter [0-9]+:" "$TF_TMP/e3.txt"; then
   # tier estaba agotado, que es lo que pasó el 2026-08-02 -- entonces "no usó ninguna skill" no
   # dice nada sobre las skills: dice que no hubo turno. Declararlo fallo sería culpar al
   # mecanismo por una caída de cuota; declararlo OK sería peor. Es SIN VERIFICAR.
-  _mal "SIN VERIFICAR: el turno no llegó a correr (ninguna iteración del agente). No es un veredicto sobre las skills."
+  _sin "el turno no llegó a correr (ninguna iteración del agente). No es un veredicto sobre las skills."
 else
   # Que el modelo elija no usarla habiendo corrido el turno SÍ es un resultado: el mecanismo
   # estaba disponible y no lo tomó. Se distingue del rechazo y de la caída a propósito: son tres
@@ -135,5 +200,16 @@ fi
 _nota "respuesta: $(tr -d '\r' < "$TF_TMP/o3.txt" | tail -4 | head -c 400)"
 
 echo
-echo "== RESULTADO: $TF_OK bien, $TF_MAL mal =="
-[ "$TF_MAL" -eq 0 ]
+echo "== RESULTADO: $TF_OK bien, $TF_MAL mal, $TF_SIN sin verificar =="
+# TRES DESENLACES, NO DOS (2026-08-22):
+#   0 = todo lo que se pudo probar, paso
+#   1 = algo FALLO de verdad: hay un bug que arreglar
+#   3 = el entorno no dejo probar parte de esto. No es verde ni rojo: es "repetilo aislado".
+# Meter el caso 3 dentro del rojo fue lo que el 20/08 mando a buscar un bug inexistente.
+if [ "$TF_MAL" -gt 0 ]; then
+  exit 1
+elif [ "$TF_SIN" -gt 0 ]; then
+  echo "   (nada fallo, pero $TF_SIN comprobacion(es) no se pudieron correr: repetilas con la maquina fresca)"
+  exit 3
+fi
+exit 0

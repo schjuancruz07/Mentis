@@ -22,6 +22,9 @@ class MentisProcess extends EventEmitter {
     this._pid = null;
     this.exited = false;
     this._outBuf = '';
+    // Buffer del stderr. Ver _emitLines: sin esto, un chunk que corta una linea al medio
+    // se emitia como dos eventos y el segundo dejaba de ser reconocible.
+    this._errBuf = '';
     // Bug real (2026-07-15): mentis-chat.sh imprime su PRIMER "Vos: " apenas termina de
     // bootear (sourcing de libs, carga de capabilities), antes de que se haya leido ningun
     // mensaje real -- ese primer sentinel NO es un turno completado. Sin esto, el primer
@@ -46,6 +49,7 @@ class MentisProcess extends EventEmitter {
     this.child.stderr.on('data', (chunk) => this._emitLines(chunk.toString('utf-8')));
     this.child.on('exit', (code) => {
       this.exited = true;
+      this._flushErrBuf();
       this.emit('exit', code);
     });
   }
@@ -72,10 +76,28 @@ class MentisProcess extends EventEmitter {
   }
 
   _emitLines(text) {
-    text
-.split('\n')
-.filter((l) => l.length > 0)
-.forEach((l) => this.emit('log', l));
+    // BUFFER DE LINEA (2026-08-18). Antes esto partia por '\n' y emitia lo que hubiera, sin
+    // guardar el resto. Un chunk de stderr que corta una linea al medio ("NVANSWER hol" en un
+    // chunk y "a mundo\n" en el siguiente) salia como DOS eventos: el primero perdia su cola y el
+    // segundo ya no matchea el ANSWER_MARKER de main.js, asi que se iba al panel de progreso como
+    // ruido. Reproducido con esta misma clase antes de tocarla.
+    // _onStdoutChunk buffereaba asi desde siempre; este camino nunca lo hizo.
+    this._errBuf += text;
+    let idx;
+    while ((idx = this._errBuf.indexOf('\n')) !== -1) {
+      const line = this._errBuf.slice(0, idx);
+      this._errBuf = this._errBuf.slice(idx + 1);
+      if (line.length > 0) this.emit('log', line);
+    }
+  }
+
+  // Lo que quedo en el buffer sin salto final se emite al cerrar: si no, la ultima linea del
+  // proceso -- que puede ser justo el motivo por el que murio -- se perderia en silencio.
+  _flushErrBuf() {
+    if (this._errBuf && this._errBuf.length > 0) {
+      this.emit('log', this._errBuf);
+      this._errBuf = '';
+    }
   }
 
   send(message) {

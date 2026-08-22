@@ -62,7 +62,7 @@ function loadSettings(mentisEnvDir) {
   try {
     return JSON.parse(fs.readFileSync(settingsPath(mentisEnvDir), 'utf-8'));
   } catch {
-    return { customModels: {}, theme: 'bitacora-de-campo', profile: {} };
+    return { customModels: {}, profile: {} };
   }
 }
 
@@ -109,7 +109,11 @@ function getPublicSettings(mentisEnvDir) {
   }
   return {
     customModels,
-    theme: data.theme || 'bitacora-de-campo',
+    // `theme` NO se devuelve mas (2026-08-20). Era una clave muerta: viajaba hasta el
+    // renderer y nadie la leia -- la apariencia la gobierna `apariencia.paleta` desde el
+    // 2026-08-06. Se comprobo con grep en renderer.js, main.js, preload.js y temas.js: cero
+    // usos. Si esta en el mentis-settings.json de alguien queda ahi, inofensiva; lo que se
+    // corta es seguir propagando una configuracion que no configura nada.
     apariencia: getApariencia(mentisEnvDir, data),
     profile: getProfile(mentisEnvDir, data),
     voz: getVoz(mentisEnvDir, data)

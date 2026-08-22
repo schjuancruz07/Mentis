@@ -278,6 +278,20 @@
                  queda oculto porque parte del codigo lo consulta, pero nadie lo puede apagar. -->
             <input type="checkbox" id="flag-voice" class="sr-only" checked hidden />
             
+            <!-- EL EQUIPO (2026-08-20). Enciende los departamentos de Cowork: cuando el pedido cae en
+                 uno (cobranzas, presupuestos), lo atiende ese departamento con su jefe, sus datos y
+                 sus limites. Arranca APAGADO porque cambia quien atiende el turno. Si ningun
+                 departamento cubre el pedido, la conversacion sigue normal. -->
+            <label class="flag-toggle" title="El equipo: cobranzas, presupuestos y demas departamentos">
+              <input type="checkbox" id="flag-equipo" class="sr-only" />
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+              <span class="etiqueta">El equipo</span>
+            </label>
             <label class="flag-toggle" title="Navegar la web">
               <input type="checkbox" id="flag-b" class="sr-only" checked />
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">

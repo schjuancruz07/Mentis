@@ -355,6 +355,37 @@ grep -q "mentis:answer-chunk" "$TS_ROOT/app/main.js" && grep -q "onAnswerChunk" 
   && _ok "I5 main -> preload -> renderer: el canal llega a la pantalla" \
   || _mal "I5 el canal se corta antes de la pantalla" "revisar main.js/preload.js/renderer.js"
 
+# --- K. el canal EMITE de verdad (2026-08-18) ------------------------------------------------
+#
+# I2..I5 de arriba verifican el cableado con grep sobre el fuente. Estuvieron los cuatro en verde
+# mientras el streaming NO mostraba nada en pantalla, y no es culpa de como estan escritos: un
+# grep no puede ver que el cierre forzado mandaba su stderr a /dev/null, ni que el unico extractor
+# que habia buscaba el campo "answer" de un JSON cuando los dos caminos mas frecuentes -- el
+# cierre forzado y la charla directa -- devuelven prosa. Los de abajo EJECUTAN.
+if python3 "$TS_HERE/stream_modo_auto_casos.py" > "$TS_TMP/modoauto.out" 2>&1; then
+  _ok "K1 elige bien entre JSON y prosa ($(grep -o 'casos: [0-9]*' "$TS_TMP/modoauto.out"))"
+else
+  _mal "K1 la decision JSON/prosa" "$(head -3 "$TS_TMP/modoauto.out" | tr '
+' ' ')"
+fi
+if node "$TS_HERE/stream-app-chunks.js" > "$TS_TMP/appchunks.out" 2>&1; then
+  _ok "K2 la app arma las lineas aunque el chunk corte al medio ($(grep -o 'casos: [0-9]*' "$TS_TMP/appchunks.out"))"
+else
+  _mal "K2 la app pierde texto con chunks partidos" "$(head -3 "$TS_TMP/appchunks.out" | tr '
+' ' ')"
+fi
+# Los dos caminos de prosa tienen que PEDIR el modo crudo. Esto si es cableado, pero es cableado
+# que los tests de ejecucion de arriba no pueden alcanzar (dependen de que conteste el modelo).
+grep -q 'NV_ANSWER_RAW=1 bash' "$TS_ROOT/engine/nv-agent.sh" \
+  && _ok "K3 el cierre forzado pide modo crudo" \
+  || _mal "K3 el cierre forzado no pide modo crudo" "vuelve a quedar mudo cuando contesta en prosa"
+grep -q 'NV_ANSWER_RAW=1 bash' "$TS_ROOT/mentis-chat.sh" \
+  && _ok "K4 la charla directa pide modo crudo" \
+  || _mal "K4 la charla directa no pide modo crudo" "el turno mas comun vuelve a quedar mudo"
+grep -q 'NV_ANSWER_RAW' "$TS_ROOT/engine/ask-nvidia.sh" \
+  && _ok "K5 ask-nvidia.sh propaga el modo crudo al helper" \
+  || _mal "K5 ask-nvidia.sh no propaga NV_ANSWER_RAW" "el helper nunca lo ve"
+
 # --- J. Los presupuestos alcanzan para los modelos que estan cableados (2026-08-06) -----------
 # Los valores viejos (12 s interactivo) salieron de medir el peor primer token de los modelos de un
 # el mejor de todos -- quedaba descartado por TRES SEGUNDOS, y el rol caia al fallback en el 100%

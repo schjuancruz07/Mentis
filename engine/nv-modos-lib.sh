@@ -191,10 +191,16 @@ nv_modo_paneles() {
 
 # nv_modo_lista -> "id<TAB>titulo<TAB>descripcion" por linea. Lo consume el selector de la app y
 # la pagina del celular, para que no haya dos listas de modos que puedan quedar distintas.
+# La quinta columna era `m.acento || "medio"`. El campo 'acento' se borro el 2026-08-20 despues de
+# comprobar que nadie lo leia -- se habia medido el 2026-08-10 y NO habia entrado (el terracota
+# claro da 2.29 de contraste sobre el tema claro, debajo del minimo de 3.0). Esta linea era su
+# unico "lector": emitia una columna que ningun consumidor miraba, y con el campo borrado emitia
+# "medio" para todos. Sacarla es parte de borrar el campo: un lector huerfano hace que el campo
+# parezca vivo cuando alguien lo busca.
 nv_modo_lista() {
   _nvmodos_node '
     const out = Object.entries(d.modos).map(([id, m]) =>
-      [id, m.titulo || id, m.descripcion || "", m.letra || "", m.acento || "medio"].join("\t"));
+      [id, m.titulo || id, m.descripcion || "", m.letra || ""].join("\t"));
     process.stdout.write(out.join("\n"))'
 }
 

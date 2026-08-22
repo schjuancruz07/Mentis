@@ -55,14 +55,29 @@ _vacio_o_ausente "avatar"               "la foto de perfil"
   || _mal "viajo el token de la web" "engine/.web-token"
 
 # Claves de API. tests/ queda afuera porque test-guardas.sh usa claves de juguete a proposito.
-TI_CLAVES="$(grep -rlE "nvapi-[A-Za-z0-9_-]{20,}" "$TI_COPIA" 2>/dev/null | grep -v "/tests/" | head -3)"
+# Se excluye el placeholder que el propio limpiador DEJA en su lugar
+# ("nvapi-CLAVE-DE-EJEMPLO-NO-REAL"): tiene la forma de una clave a proposito, y hacia saltar
+# esta alarma sobre mentis-repo-publico.sh, que es justamente el archivo que borra las claves.
+# El propio limpiador ya documenta el mismo tropiezo en su verificacion interna (2026-08-18).
+TI_CLAVES="$(grep -rlE "nvapi-[A-Za-z0-9_-]{20,}" "$TI_COPIA" 2>/dev/null \n  | grep -v "/tests/" \n  | while IFS= read -r _f; do
+      grep -E "nvapi-[A-Za-z0-9_-]{20,}" "$_f" | grep -qv "CLAVE-DE-EJEMPLO" && printf '%s
+' "$_f"
+    done | head -3)"
 [ -z "$TI_CLAVES" ] \
   && _ok "no viajo ninguna clave de NVIDIA" \
   || _mal "VIAJARON CLAVES" "$(printf '%s' "$TI_CLAVES" | tr '\n' ' ')"
 
 # El mail se arma en dos pedazos para que este archivo no lo contenga entero y no se detecte solo.
 TI_U="usuario"; TI_U="${TI_U}07"
-TI_MAIL="$(grep -rli "$TI_U" "$TI_COPIA" 2>/dev/null | grep -v "/docs/" | head -3)"
+# El usuario de GitHub del usuario es el mismo string que la parte local de su mail, y aparece
+# legitimamente en la URL PUBLICA del repositorio (github.com/<usuario>/Mentis) -- que tiene
+# que estar, si no nadie puede clonarlo. Buscar el string suelto marcaba esas URLs como fuga
+# de PII. Se siguen mirando TODAS las apariciones; solo se descuentan las que son la URL del
+# repo. Una aparicion en cualquier otro contexto sigue siendo un fallo (2026-08-18).
+TI_MAIL="$(grep -rli "$TI_U" "$TI_COPIA" 2>/dev/null | grep -v "/docs/" \n  | while IFS= read -r _f; do
+      grep -i "$TI_U" "$_f" | grep -qvi "github.com/$TI_U" && printf '%s
+' "$_f"
+    done | head -3)"
 [ -z "$TI_MAIL" ] \
   && _ok "no quedo el mail del usuario en ningun lado" \
   || _mal "quedo el mail del usuario" "$(printf '%s' "$TI_MAIL" | tr '\n' ' ')"

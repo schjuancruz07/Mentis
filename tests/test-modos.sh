@@ -394,6 +394,92 @@ bash "$HERE/capabilities/estudiar.sh" materias >/dev/null 2>&1 \
   && _ok "/estudiar corre sin explotar con el corpus vacio" \
   || _mal "/estudiar falla en vacio" "el primer uso del usuario es siempre con el corpus vacio"
 
+echo "== la letra de cada modo: el JSON y la pantalla dicen lo mismo =="
+# POR QUE (2026-08-20): `letra` viaja del JSON al renderer y NO PINTA NADA -- la tipografia la
+# resuelve el CSS por data-modo. Al no leerse, se fue separando en silencio: designe decia
+# "playfair" cuando el logotipo usa Syne, y editor decia "plus-jakarta" sin tener regla CSS, o sea
+# que salia en la generica. Ocho dias asi y nadie lo vio, porque un campo que nadie lee no puede
+# fallar de forma visible.
+#
+# La decision (el usuario, 2026-08-20) fue SINCRONIZAR Y COMPLETAR en vez de borrar el campo. Eso solo
+# se sostiene con un test que los compare: si no, vuelven a separarse la primera semana. Se mira
+# el CSS de verdad, no una lista copiada acá -- una tercera copia del mismo dato tendria el mismo
+# problema que las dos que ya hay.
+CSS="$HERE/app/renderer/style.css"
+# De 'letra' (el JSON) a la familia que el CSS declara en --font-marca.
+_familia_css() { # <modo> -> la primera familia de --font-marca, sin comillas
+  # Se busca con index() y no con `$0 ~ m`: el selector trae corchetes, y como regex
+  # "[data-modo=..]" es una clase de caracteres, asi que matcheaba cualquier linea con una letra
+  # de adentro. Daba "el CSS no tiene regla" para modos que si la tenian.
+  awk -v m=":root[data-modo=\"$1\"]" '
+    index($0, m) > 0 {dentro=1}
+    dentro && index($0, "--font-marca:") > 0 {
+      sub(/.*--font-marca:[ ]*/, ""); sub(/,.*/, ""); gsub(/["\x27;]/, "");
+      gsub(/^[ \t]+|[ \t]+$/, "");
+      print; exit
+    }
+    dentro && $0 == "}" {dentro=0}
+  ' "$CSS"
+}
+# El JSON usa un id corto ("plus-jakarta"), el CSS el nombre real ("Plus Jakarta Sans"): se
+# normalizan los dos a minusculas sin espacios y se compara por prefijo.
+_norm() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -d ' -'; }
+while IFS=$'\t' read -r _m _letra; do
+  [ -n "$_m" ] || continue
+  _css="$(_familia_css "$_m")"
+  if [ -z "$_css" ]; then
+    # Sin regla propia, el modo hereda la letra de la interfaz. Eso es valido, pero entonces el
+    # JSON tiene que decir 'google-sans' y no otra cosa -- que era el bug de editor.
+    if [ "$(_norm "$_letra")" = "googlesans" ]; then
+      _ok "'$_m': sin regla propia en el CSS y el JSON dice google-sans"
+    else
+      _mal "'$_m': el JSON dice '$_letra' pero el CSS no tiene regla" "el logotipo sale en la letra generica: el JSON promete un cambio que no pasa"
+    fi
+  else
+    case "$(_norm "$_css")" in
+      "$(_norm "$_letra")"*) _ok "'$_m': JSON '$_letra' = CSS '$_css'" ;;
+      *) _mal "'$_m': JSON dice '$_letra' y el CSS pinta '$_css'" "el archivo y la pantalla cuentan cosas distintas" ;;
+    esac
+  fi
+done < <(node -e "
+  const d = require('$HERE_WIN/modos.json');
+  for (const [id, m] of Object.entries(d.modos)) console.log(id + '\t' + (m.letra || ''));
+" 2>/dev/null)
+
+# Y que la fuente que el CSS pide exista como archivo: si el.woff2 no esta, el navegador cae al
+# respaldo sin avisar y el modo se ve igual que los demas -- el mismo sintoma, otra causa.
+for _m in $(node -e "const d=require('$HERE_WIN/modos.json'); console.log(Object.keys(d.modos).join(' '))" 2>/dev/null); do
+  _css="$(_familia_css "$_m")"
+  [ -n "$_css" ] || continue
+  _slug="$(_norm "$_css")"
+  if ls "$HERE/app/renderer/assets/fonts/" 2>/dev/null | tr -d '-' | grep -qi "^$_slug"; then
+    _ok "'$_m': la fuente '$_css' esta empaquetada"
+  else
+    _mal "'$_m': falta el.woff2 de '$_css'" "sin el archivo el navegador usa el respaldo y el modo no se distingue"
+  fi
+done
+
+echo "== los campos decorativos no vuelven =="
+# acento, motor_externo y recordar_ultimo se borraron el 2026-08-20 despues de comprobar que NADIE
+# los leia. Un campo declarado y sin cablear no es inofensivo: los tests lo daban por bueno porque
+# miraban el JSON y no el uso, y quien lee el archivo cree que ahi se configura algo.
+for _muerto in acento motor_externo; do
+  if node -e "
+    const d = require('$HERE_WIN/modos.json');
+    const con = Object.entries(d.modos).filter(([k,m]) => '$_muerto' in m).map(([k]) => k);
+    if (con.length) { console.log(con.join(',')); process.exit(1); }
+  " >/dev/null 2>&1; then
+    _ok "ningun modo declara '$_muerto'"
+  else
+    _mal "volvio '$_muerto' a modos.json" "si de verdad hace falta, hay que CABLEARLO; declarado y sin leer es peor que no tenerlo"
+  fi
+done
+if node -e "const d=require('$HERE_WIN/modos.json'); if ('recordar_ultimo' in d) process.exit(1);" >/dev/null 2>&1; then
+  _ok "no volvio 'recordar_ultimo'"
+else
+  _mal "volvio 'recordar_ultimo'" "nadie lo lee: ponerlo en false no apaga nada"
+fi
+
 echo
 echo "== $ok ok, $fallo fallan =="
 [ "$fallo" -eq 0 ]

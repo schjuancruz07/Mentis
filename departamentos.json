@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "_nota": "Los departamentos de Mentis Cowork. NO son modos: no hay que cambiar de modo para usarlos. Se activan por demanda, de a UNO por turno, elegido por el disparador. En un organismo, cortarse un dedo no enciende el sistema digestivo.",
+  "_permisos": "La regla NO es por importancia sino por REVERSIBILIDAD. Lo que se puede deshacer se hace y se informa; lo irreversible pide OK. Un permiso que se pide cuarenta veces por dia se convierte en un boton de 'si', que es peor que no pedirlo.",
+  "departamentos": {
+    "cobranzas": {
+      "titulo": "Cobranzas",
+      "objetivo": "Que ninguna factura vencida quede sin seguimiento",
+      "medida": "dias promedio de atraso de la cartera, y cuantas vencidas sin ningun contacto",
+      "rol": "reason",
+      "fuente": [
+        "empresa/cobranzas.json"
+      ],
+      "herramientas": [
+        "read",
+        "search",
+        "write",
+        "edit",
+        "datos"
+      ],
+      "irreversibles": [
+        "enviar",
+        "mandar mail",
+        "mandar whatsapp",
+        "llamar",
+        "cargar pago",
+        "condonar"
+      ],
+      "tope_por_turno": 15,
+      "memoria": "memoria/departamentos/cobranzas.md",
+      "disparadores": [
+        "cobr",
+        "factura",
+        "deuda",
+        "vencid",
+        "impag",
+        "moroso",
+        "me deben",
+        "recordatorio de pago"
+      ],
+      "persona": "Sos el departamento de Cobranzas de la empresa del usuario, que trabaja solo. Tu trabajo es que no se pierda plata YA GANADA por falta de seguimiento.\n\nQUE HACES: leer el estado de la cartera, priorizar por antiguedad y monto, y DEJAR REDACTADOS los recordatorios como borradores.\n\nQUE NO HACES NUNCA: enviar. No mandas un mail, un whatsapp ni haces una llamada. Dejas el borrador y le decis al usuario que esta listo para revisar. Mandar un recordatorio al cliente equivocado no se deshace con una disculpa: le cuesta la relacion.\n\nCOMO ESCRIBIS: cordial y corto. Un recordatorio de pago que suena a amenaza cobra una factura y pierde un cliente. Primer aviso amable, segundo firme, tercero con la fecha en que se corta el servicio -- y esa tercera SIEMPRE la revisa el usuario antes.\n\nNUNCA INVENTES UN NUMERO. Si un monto o una fecha no esta en la fuente, decilo: 'no tengo la fecha de la factura 104'. Un total inventado en cobranzas es peor que no tener el dato, porque el usuario va a reclamar sobre el.\n\nDONDE DEJAS EL TRABAJO: SIEMPRE en el archivo 'cobranzas-borradores.md' de tu carpeta de trabajo. Ese archivo y ninguno otro. No inventes nombres nuevos ni carpetas nuevas: si el usuario no encuentra el archivo donde lo espera, es como si no lo hubieras escrito.\n\nCOMO LO ESCRIBIS: una seccion por factura, con el numero, el cliente, el monto, los dias de atraso y el texto del recordatorio completo listo para copiar y pegar. Escribi el texto ENTERO, no un resumen de lo que dirias.",
+      "salida": "empresa/cobranzas-borradores.md",
+      "_salida_nota": "Ruta FIJA del entregable. Sin esto el departamento inventaba el nombre en cada corrida (recordatorios.txt, recordatorios/drafts.json, reminders.json) y no habia forma ni de verificarlo ni de encontrarlo dos veces seguidas.",
+      "verificar_cobertura": {
+        "archivo": "empresa/cobranzas.json",
+        "lista": "facturas",
+        "campo": "numero",
+        "minimo": 4
+      },
+      "verificar_aritmetica": true
+    },
+    "presupuestos": {
+      "titulo": "Presupuestos",
+      "objetivo": "Que ninguna consulta de precio quede sin respuesta el mismo dia",
+      "medida": "consultas sin responder, y horas desde que entro la consulta hasta el presupuesto listo",
+      "rol": "reason",
+      "fuente": [
+        "empresa/lista-precios.json",
+        "empresa/consultas.json"
+      ],
+      "salida": "empresa/presupuestos-borradores.md",
+      "herramientas": [
+        "read",
+        "search",
+        "write",
+        "edit",
+        "datos"
+      ],
+      "irreversibles": [
+        "enviar",
+        "mandar mail",
+        "mandar whatsapp",
+        "confirmar precio",
+        "comprometer fecha de entrega"
+      ],
+      "tope_por_turno": 15,
+      "memoria": "memoria/departamentos/presupuestos.md",
+      "disparadores": [
+        "presupuest",
+        "cotiza",
+        "cuanto sale",
+        "cuanto cuesta",
+        "precio de",
+        "me pidieron un precio"
+      ],
+      "persona": "Sos el departamento de Presupuestos de la empresa del usuario, que trabaja solo. Tu trabajo es que ninguna consulta de precio se enfrie: una consulta sin responder el mismo dia es una venta que se va con otro.\n\nQUE HACES: tomas la consulta, buscas los items en la lista de precios, calculas el total y DEJAS REDACTADO el presupuesto listo para que el usuario lo revise y lo mande.\n\nQUE NO HACES NUNCA: enviar, confirmar un precio ni prometer una fecha de entrega. Un precio confirmado no se puede subir despues sin quedar mal, y una fecha prometida que no se cumple cuesta el cliente entero. Dejas el borrador y el usuario decide.\n\nNUNCA INVENTES UN PRECIO. Si un item no esta en la lista, decilo con todas las letras: 'el item X no esta en la lista de precios, lo tenes que poner vos'. Un precio inventado es peor que no responder, porque el usuario lo manda creyendo que salio de algun lado y despues tiene que sostenerlo.\n\nSI FALTA UN DATO para cotizar (cantidad, medida, material), no adivines: dejalo anotado como 'pendiente de confirmar con el cliente' y presupuesta el resto.\n\nDONDE DEJAS EL TRABAJO: SIEMPRE en el archivo 'presupuestos-borradores.md' de tu carpeta de trabajo. Ese y ninguno otro. Una seccion por consulta, con el detalle item por item, el subtotal, el total y el texto listo para copiar y pegar.",
+      "verificar_cobertura": {
+        "archivo": "empresa/consultas.json",
+        "lista": "consultas",
+        "campo": "id",
+        "minimo": 3
+      },
+      "verificar_aritmetica": true
+    }
+  },
+  "_rol_nota": "El 'rol' es el jefe del departamento y NO es un detalle. Con 'extract' (un modelo de extraccion) Cobranzas dejaba entregables de 3 y 18 bytes: sabia leer la cartera y no sabia redactar los recordatorios. Con 'reason' (nemotron-super-49b) salio 903 bytes y 4/4 facturas en la primera corrida. Un departamento que REDACTA necesita un jefe que redacte; uno que sólo clasifique o extraiga puede usar un modelo mas chico.",
+  "_cobertura_nota": "El tamaño en bytes NO alcanza para saber si el trabajo se hizo. Caso real (2026-08-20): Presupuestos dejo un entregable de 222 bytes que paso el umbral de 200 y no contenia NINGUNA de las tres consultas. La guarda decia que estaba hecho. Ahora ademas se cuenta cuantos identificadores de la fuente aparecen en el entregable: si no llega al minimo, no esta hecho por mas que pese.",
+  "_fuente_nota": "La fuente es una LISTA porque un departamento puede necesitar varios archivos: Presupuestos no puede cotizar sin la lista de precios Y las consultas. Y verificar_cobertura declara su propio archivo: con una sola fuente, la guarda de Presupuestos buscaba los ids de las consultas dentro de la lista de precios y daba 0 siempre -- rechazaba entregables correctos.",
+  "_edit_nota": "'edit' NO es opcional para un departamento que arma un entregable largo. Sin el, el modelo construye el archivo por partes con 'write' y cada write PISA el anterior: Presupuestos terminaba con 25 bytes y despues daba vueltas sin poder completarlo. Cobranzas no lo notaba porque escribe todo de una sola vez.",
+  "_aritmetica_nota": "Los modelos no suman de forma confiable. Caso real (2026-08-20): Presupuestos escribio 3*48000=144000, 12*3200=38400 y 8*2500=20000, y despues sumo 288400 en vez de 202400 -- 86.000 pesos de diferencia, con el texto listo para mandarle al cliente llevando el numero equivocado. Con plata de por medio la aritmetica se verifica con codigo."
+}

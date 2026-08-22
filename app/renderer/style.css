@@ -307,6 +307,23 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   --font-marca: "Michroma", "Google Sans Flex", sans-serif;
   --marca-tamano: 11px; --marca-espaciado: 0.30em; --marca-peso: 400;
 }
+/* Study y Editor (2026-08-20). Eran los dos unicos modos sin letra propia: su logotipo salia
+   identico al del modo Mentis a secas, asi que entrar a Study no se notaba -- justo lo contrario
+   de lo que se pidio cuando se hicieron los modos ("estaria mal si fuese solo por atras").
+
+   Bitter es una slab serif: los remates rectos le dan aire de libro de texto, que es de lo que
+   trata el modo. Va en 700 y a 13px porque dibuja mas angosto que Plus Jakarta.
+   Oswald es una condensada de titulos -- la letra de las placas de video. Va en 500 y no en 700:
+   una condensada en negrita a este tamano se empasta. El interletrado sube a 0.06em porque
+   condensada + apretada se lee como una sola palabra larga. */
+:root[data-modo="study"] {
+  --font-marca: "Bitter", Georgia, serif;
+  --marca-tamano: 13px; --marca-espaciado: 0.02em; --marca-peso: 700;
+}
+:root[data-modo="editor"] {
+  --font-marca: "Oswald", "Google Sans Flex", sans-serif;
+  --marca-tamano: 15px; --marca-espaciado: 0.06em; --marca-peso: 500;
+}
 
 
 /* La marca del cambio de modo dentro de la conversación. Es una línea del sistema, no un mensaje

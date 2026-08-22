@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
-# test-actualizar.sh -- el canal de actualizaciones (2026-08-07).
+# El canal de actualizaciones.
 #
-# QUE SE PRUEBA Y POR QUE:
-#   Esto ejecuta codigo que viene de otra computadora, en la maquina de cinco personas. Es la parte
-#   de Mentis donde un error no se paga con una funcion rota sino con la maquina de otro.
+# REESCRITO EL 2026-08-18. La version anterior probaba un mecanismo que ya no existe: manifiesto
+# JSON firmado + tarball bajado de MENTIS_ORIGEN_ACTUALIZACIONES. mentis-actualizar.sh hace hoy
+# `git pull --ff-only origin main`, asi que sus 11 aserciones fallaban contra codigo correcto.
+# Una de ellas gritaba "ACEPTO UNA FIRMA INVALIDA -- cualquiera podria ejecutar codigo en esta
+# maquina": alarma falsa, porque el script cortaba mucho antes y no instalaba nada. Un test que
+# da una alarma de seguridad falsa es peor que no tener test, porque entrena a ignorarlo.
 #
-#   El chequeo que sostiene todo es el 3: UNA ACTUALIZACION CON FIRMA INVALIDA TIENE QUE SER
-#   RECHAZADA. Si eso fallara, cualquiera que se meta en el medio del canal ejecuta lo que quiera.
-#   Los demas chequeos son importantes; ese es innegociable.
-#
-#   Se prueba sobre una copia DE MENTIRA, nunca sobre la instalacion real: un test que actualiza el
-#   Mentis del usuario es un test que un dia se lo rompe.
-set -uo pipefail
+# Se monta un repositorio git DE VERDAD (bare + clon) y se prueba el flujo real.
 TA_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TA_ROOT="$(cd "$TA_HERE/.." && pwd)"
 TA_OK=0; TA_MAL=0
@@ -19,126 +16,117 @@ _ok()  { TA_OK=$((TA_OK+1));  echo "  OK   $1"; }
 _mal() { TA_MAL=$((TA_MAL+1)); echo "  MAL  $1  ($2)"; }
 
 TA_TMP="$(mktemp -d)"
-case "$TA_TMP" in "$TA_ROOT"|"$TA_ROOT"/*) echo "ABORTA: temporal dentro de Mentis" >&2; exit 1 ;; esac
-trap 'rm -rf "$TA_TMP" 2>/dev/null' EXIT
-
-source "$TA_ROOT/engine/nv-firma-lib.sh" 2>/dev/null || { echo "ABORTA: falta nv-firma-lib.sh" >&2; exit 1; }
+trap 'rm -rf "$TA_TMP"' EXIT
+GIT() { git -c user.email=t@t -c user.name=t -c commit.gpgsign=false -c init.defaultBranch=main "$@"; }
 
 echo "== el canal de actualizaciones =="
 
-# --- montar un Mentis de mentira, version 0.1.0 ------------------------------------------------
+# --- el repositorio "publico" ------------------------------------------------------------------
+TA_ORIGEN="$TA_TMP/origen.git"
+TA_SIEMBRA="$TA_TMP/siembra"
+GIT init --quiet --bare "$TA_ORIGEN"
+GIT init --quiet "$TA_SIEMBRA" 2>/dev/null
+mkdir -p "$TA_SIEMBRA/engine" "$TA_SIEMBRA/app"
+cp "$TA_ROOT/mentis-actualizar.sh" "$TA_SIEMBRA/"
+printf '0.1.0\n' > "$TA_SIEMBRA/VERSION"
+printf 'codigo viejo\n' > "$TA_SIEMBRA/archivo-de-codigo.sh"
+printf 'conversations/\nmemoria/\nmentis-settings.json\n' > "$TA_SIEMBRA/.gitignore"
+( cd "$TA_SIEMBRA" && GIT add -A && GIT commit --quiet -m "version 0.1.0" \
+  && GIT remote add origin "$TA_ORIGEN" && GIT push --quiet -u origin main ) 2>/dev/null
+
+# --- la instalacion de la persona, que vino de git clone ---------------------------------------
 TA_COPIA="$TA_TMP/mentis"
-mkdir -p "$TA_COPIA/engine" "$TA_COPIA/conversations" "$TA_COPIA/memoria"
-cp "$TA_ROOT/mentis-actualizar.sh" "$TA_COPIA/"
-cp "$TA_ROOT/engine/nv-firma-lib.sh" "$TA_COPIA/engine/"
-cp "$TA_ROOT/engine/nv-lib.sh" "$TA_COPIA/engine/" 2>/dev/null || true
-printf '0.1.0\n' > "$TA_COPIA/VERSION"
-printf 'codigo viejo\n' > "$TA_COPIA/archivo-de-codigo.sh"
-# Datos de la persona: NO se pueden tocar pase lo que pase.
+GIT clone --quiet "$TA_ORIGEN" "$TA_COPIA" 2>/dev/null
+mkdir -p "$TA_COPIA/conversations" "$TA_COPIA/memoria"
 printf 'mi conversacion privada\n' > "$TA_COPIA/conversations/charla.jsonl"
-printf 'mi memoria\n' > "$TA_COPIA/memoria/recuerdo.md"
+printf 'mi memoria\n'              > "$TA_COPIA/memoria/recuerdo.md"
 printf '{"apariencia":{"nombre":"Nina"}}' > "$TA_COPIA/mentis-settings.json"
 
+_correr() { ( cd "$TA_COPIA" && GIT config pull.ff only >/dev/null 2>&1; bash./mentis-actualizar.sh "$@" 2>&1 ); }
+
 # --- el administrador publica la 0.2.0 ---------------------------------------------------------
-TA_CLAVES="$TA_TMP/claves"
-nv_firma_generar_par "$TA_CLAVES" >/dev/null 2>&1
-cp "$TA_CLAVES/mentis-firma-publica.pem" "$TA_COPIA/mentis-firma-publica.pem"
-
-TA_ORIGEN="$TA_TMP/origen"
-mkdir -p "$TA_ORIGEN/paquetes" "$TA_TMP/nuevo"
-printf 'codigo NUEVO y mejor\n' > "$TA_TMP/nuevo/archivo-de-codigo.sh"
-printf '0.2.0\n' > "$TA_TMP/nuevo/VERSION"
-# El paquete trae tambien un settings: NO tiene que pisar el de la persona.
-printf '{"apariencia":{"nombre":"DEL PAQUETE"}}' > "$TA_TMP/nuevo/mentis-settings.json"
-( cd "$TA_TMP/nuevo" && tar -czf "$TA_ORIGEN/paquetes/mentis-0.2.0.tar.gz". 2>/dev/null )
-
-TA_TGZ="$TA_ORIGEN/paquetes/mentis-0.2.0.tar.gz"
-TA_FIRMA="$(nv_firma_firmar "$TA_TGZ" "$TA_CLAVES/mentis-firma-privada.pem")"
-TA_SHA="$(openssl dgst -sha256 "$TA_TGZ" 2>/dev/null | sed -E 's/.*= *//')"
-_manifiesto() {
-  printf '{"version":"%s","fecha":"2026-08-07","notas":"%s","archivo":"paquetes/mentis-0.2.0.tar.gz","sha256":"%s","firma":"%s"}\n' \
-    "$1" "$2" "$3" "$4" > "$TA_ORIGEN/manifiesto.json"
+_publicar() {  # $1 = que cambia ("codigo" | "app")
+  ( cd "$TA_SIEMBRA"
+    printf '0.2.0\n' > VERSION
+    if [ "$1" = "app" ]; then printf 'ventana nueva\n' > app/main.js
+    else printf 'codigo NUEVO\n' > archivo-de-codigo.sh; fi
+    GIT add -A && GIT commit --quiet -m "version 0.2.0" && GIT push --quiet origin main ) 2>/dev/null
 }
-_manifiesto "0.2.0" "arregle cosas" "$TA_SHA" "$TA_FIRMA"
+_publicar codigo
 
-_correr() { ( cd "$TA_COPIA" && MENTIS_ORIGEN_ACTUALIZACIONES="$TA_ORIGEN" bash./mentis-actualizar.sh "$@" 2>&1 ); }
-
-echo "-- 1. avisa que hay algo nuevo"
-TA_SAL="$(_correr revisar)"
-printf '%s' "$TA_SAL" | grep -q "0.2.0" \
-  && _ok "detecta la version nueva" \
-  || _mal "no detecto la actualizacion" "$(printf '%s' "$TA_SAL" | tail -2 | tr '\n' ' ')"
+echo "-- 1. avisa que hay algo nuevo, sin instalarlo"
+TA_SAL="$(_correr buscar)"
+if printf '%s' "$TA_SAL" | grep -q "version 0.2.0"; then
+  _ok "'buscar' lista el cambio nuevo"
+else
+  _mal "no detecto la actualizacion" "$(printf '%s' "$TA_SAL" | tail -2 | tr '\n' ' ')"
+fi
+if [ "$(tr -d ' \r\n' < "$TA_COPIA/VERSION")" = "0.1.0" ]; then
+  _ok "'buscar' no instala nada"
+else
+  _mal "'buscar' instalo" "buscar tiene que mirar, no tocar"
+fi
 
 echo "-- 2. NO instala sin que la persona diga que si"
 TA_SAL="$(printf 'n\n' | _correr instalar)"
-if [ "$(cat "$TA_COPIA/VERSION" | tr -d ' \r\n')" = "0.1.0" ]; then
-  _ok "si contesta que no, no instala nada"
+if [ "$(tr -d ' \r\n' < "$TA_COPIA/VERSION")" = "0.1.0" ]; then
+  _ok "contestando que no, no instala nada"
 else
   _mal "instalo sin permiso" "la version cambio contestando que no"
 fi
 
-echo "-- 3. EL CHEQUEO QUE SOSTIENE TODO: firma invalida = no se instala"
-_manifiesto "0.2.0" "actualizacion de un impostor" "$TA_SHA" "ZmlybWEgZmFsc2EgcXVlIG5vIHZhbGUgbmFkYQ=="
+echo "-- 3. EL FRENO: no pisa trabajo de la persona"
+printf 'lo estuve tocando yo\n' >> "$TA_COPIA/archivo-de-codigo.sh"
 TA_SAL="$(printf 's\n' | _correr instalar)"
-if [ "$(cat "$TA_COPIA/VERSION" | tr -d ' \r\n')" = "0.1.0" ] && printf '%s' "$TA_SAL" | grep -qi "FIRMA NO ES VALIDA"; then
-  _ok "RECHAZA una actualizacion con firma invalida"
+if printf '%s' "$TA_SAL" | grep -q "PARO:"; then
+  _ok "se planta si hay archivos de Mentis modificados"
 else
-  _mal "ACEPTO UNA FIRMA INVALIDA" "cualquiera podria ejecutar codigo en esta maquina"
+  _mal "no freno con archivos modificados" "pisaria el trabajo de la persona"
 fi
-
-echo "-- 4. tampoco instala si el paquete fue alterado despues de firmado"
-printf 'paquete manipulado' >> "$TA_TGZ"
-_manifiesto "0.2.0" "manipulada" "$TA_SHA" "$TA_FIRMA"
-TA_SAL="$(printf 's\n' | _correr instalar)"
-[ "$(cat "$TA_COPIA/VERSION" | tr -d ' \r\n')" = "0.1.0" ] \
-  && _ok "rechaza un paquete que no coincide con su sha" \
-  || _mal "instalo un paquete alterado" "el chequeo de integridad no funciona"
-
-echo "-- 5. con la firma buena, instala"
-( cd "$TA_TMP/nuevo" && tar -czf "$TA_TGZ". 2>/dev/null )
-TA_FIRMA="$(nv_firma_firmar "$TA_TGZ" "$TA_CLAVES/mentis-firma-privada.pem")"
-TA_SHA="$(openssl dgst -sha256 "$TA_TGZ" 2>/dev/null | sed -E 's/.*= *//')"
-_manifiesto "0.2.0" "arregle cosas" "$TA_SHA" "$TA_FIRMA"
-TA_SAL="$(printf 's\n' | _correr instalar)"
-if [ "$(cat "$TA_COPIA/VERSION" | tr -d ' \r\n')" = "0.2.0" ]; then
-  _ok "instala cuando la firma es correcta"
-else
-  _mal "no instalo con firma valida" "$(printf '%s' "$TA_SAL" | tail -3 | tr '\n' ' ')"
-fi
-grep -q "NUEVO" "$TA_COPIA/archivo-de-codigo.sh" 2>/dev/null \
-  && _ok "el codigo quedo actualizado" \
-  || _mal "el codigo no se actualizo" "sigue el viejo"
-
-echo "-- 6. los datos de la persona NO se tocaron"
-grep -q "mi conversacion privada" "$TA_COPIA/conversations/charla.jsonl" 2>/dev/null \
-  && _ok "las conversaciones siguen intactas" || _mal "se perdieron las conversaciones" "grave"
-grep -q "mi memoria" "$TA_COPIA/memoria/recuerdo.md" 2>/dev/null \
-  && _ok "las memorias siguen intactas" || _mal "se perdieron las memorias" "grave"
-grep -q "Nina" "$TA_COPIA/mentis-settings.json" 2>/dev/null \
-  && _ok "la configuracion no fue pisada por la del paquete" \
-  || _mal "el paquete piso la configuracion" "perdio su nombre y sus claves"
-
-echo "-- 7. volver deja todo como estaba"
-TA_SAL="$(_correr volver)"
-if [ "$(cat "$TA_COPIA/VERSION" | tr -d ' \r\n')" = "0.1.0" ] && grep -q "codigo viejo" "$TA_COPIA/archivo-de-codigo.sh" 2>/dev/null; then
-  _ok "volver restaura la version anterior"
-else
-  _mal "volver no restauro" "$(printf '%s' "$TA_SAL" | tail -2 | tr '\n' ' ')"
-fi
-
-echo "-- 8. frena si la persona modifico un archivo"
-printf 's\n' | _correr instalar >/dev/null 2>&1     # volver a 0.2.0 para tener huellas
-printf 'lo toque yo\n' > "$TA_COPIA/archivo-de-codigo.sh"
-printf '0.3.0\n' > "$TA_TMP/nuevo/VERSION"
-( cd "$TA_TMP/nuevo" && tar -czf "$TA_ORIGEN/paquetes/mentis-0.2.0.tar.gz". 2>/dev/null )
-TA_FIRMA="$(nv_firma_firmar "$TA_TGZ" "$TA_CLAVES/mentis-firma-privada.pem")"
-TA_SHA="$(openssl dgst -sha256 "$TA_TGZ" 2>/dev/null | sed -E 's/.*= *//')"
-_manifiesto "0.3.0" "otra mas" "$TA_SHA" "$TA_FIRMA"
-TA_SAL="$(printf 's\n' | _correr instalar)"
-if printf '%s' "$TA_SAL" | grep -qi "modificaste" && grep -q "lo toque yo" "$TA_COPIA/archivo-de-codigo.sh" 2>/dev/null; then
-  _ok "frena y no pisa lo que la persona modifico"
+if grep -q "lo estuve tocando yo" "$TA_COPIA/archivo-de-codigo.sh"; then
+  _ok "el archivo modificado sigue intacto"
 else
   _mal "piso un archivo modificado por la persona" "perdio su trabajo sin avisar"
+fi
+( cd "$TA_COPIA" && GIT checkout --quiet --. ) 2>/dev/null
+
+echo "-- 4. instala cuando esta todo limpio y se dice que si"
+TA_SAL="$(printf 's\n' | _correr instalar)"
+if [ "$(tr -d ' \r\n' < "$TA_COPIA/VERSION")" = "0.2.0" ]; then
+  _ok "la version quedo actualizada"
+else
+  _mal "no instalo" "$(printf '%s' "$TA_SAL" | tail -2 | tr '\n' ' ')"
+fi
+if grep -q "codigo NUEVO" "$TA_COPIA/archivo-de-codigo.sh"; then
+  _ok "el codigo quedo actualizado"
+else
+  _mal "el codigo no se actualizo" "sigue el viejo"
+fi
+
+echo "-- 5. los datos de la persona no se tocan NUNCA"
+grep -q "mi conversacion privada" "$TA_COPIA/conversations/charla.jsonl" \
+  && _ok "las conversaciones siguen intactas" || _mal "toco las conversaciones" "dato personal perdido"
+grep -q "mi memoria" "$TA_COPIA/memoria/recuerdo.md" \
+  && _ok "la memoria sigue intacta" || _mal "toco la memoria" "dato personal perdido"
+grep -q "Nina" "$TA_COPIA/mentis-settings.json" \
+  && _ok "la configuracion sigue intacta" || _mal "toco la configuracion" "se perdio la personalizacion"
+
+echo "-- 6. deja como volver atras"
+if ls "$TA_COPIA"/.respaldos-actualizacion/*.punto >/dev/null 2>&1; then
+  _ok "guardo el punto de retorno antes de tocar nada"
+else
+  _mal "no guardo punto de retorno" "sin esto 'volver' no puede funcionar"
+fi
+
+echo "-- 7. avisa cuando hay que rearmar la ventana"
+# La app empaquetada NO se actualiza sola: si cambio app/ y no se avisa, la persona queda con el
+#.exe viejo creyendo que actualizo. Es un problema real y repetido de este proyecto.
+_publicar app
+TA_SAL="$(printf 's\n' | _correr instalar)"
+if printf '%s' "$TA_SAL" | grep -q "npm run empaquetar"; then
+  _ok "avisa que hay que re-empaquetar cuando cambia app/"
+else
+  _mal "no aviso de re-empaquetar" "queda con la ventana vieja sin saberlo"
 fi
 
 echo

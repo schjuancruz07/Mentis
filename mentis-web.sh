@@ -8,6 +8,8 @@
 #   mentis-web.sh token       # muestra (o crea) el token de acceso
 #   mentis-web.sh rotar       # cambia el token (invalida los favoritos viejos)
 #   mentis-web.sh direcciones # las direcciones para abrir: la de casa y la de Tailscale
+#   mentis-web.sh https       # publica por HTTPS con Tailscale, para poder INSTALARLA como app
+#   mentis-web.sh https-apagar # deja de publicarla
 #
 # COMO SE USA: prendelo, abri en el celular la direccion que imprime, y guardala en favoritos.
 # El token va en la direccion, asi que el favorito ya queda con la llave puesta.
@@ -228,7 +230,65 @@ finally:
       echo "  3. Volve a correr: mentis-web.sh direcciones"
     fi ;;
 
+  https)
+    # PARA QUE SIRVE: convertir la pagina en una app que se instala en el telefono sin pasar por
+    # ninguna tienda. Chrome solo deja instalar una pagina si viene por HTTPS (o localhost), y la
+    # direccion de Tailscale es HTTP. `tailscale serve` pone un HTTPS con certificado de verdad
+    # delante del servidor local, sin comprar dominio ni tocar certificados a mano.
+    #
+    # LO QUE NO PUEDO HACER YO: habilitar HTTPS en la tailnet. Es una casilla en la consola de
+    # Tailscale (gratis) y hay que apretarla una sola vez, desde la cuenta del usuario.
+    TS_EXE="/c/Program Files/Tailscale/tailscale.exe"
+    if [ ! -x "$TS_EXE" ]; then
+      echo "Tailscale no esta instalado en esta computadora." >&2
+      exit 1
+    fi
+    TS_DOM="$("$TS_EXE" status --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    doms = d.get("CertDomains") or []
+    print(doms[0] if doms else "")
+except Exception:
+    print("")' 2>/dev/null | tr -d '\r')"
+    if [ -z "${TS_DOM// }" ]; then
+      echo "Falta un paso que solo podes hacer vos (una vez, gratis):"
+      echo
+      echo "  1. Entra a  https://login.tailscale.com/admin/dns"
+      echo "  2. En 'HTTPS Certificates', apreta Enable."
+      echo "  3. Volve a correr:  mentis-web.sh https"
+      echo
+      echo "Mientras tanto la pagina funciona igual por HTTP (mentis-web.sh direcciones)."
+      echo "Lo unico que no se puede sin esto es INSTALARLA como app en el telefono."
+      exit 3
+    fi
+    if ! _pid_vivo >/dev/null; then
+      echo "El servidor no esta prendido. Prendelo primero:  mentis-web.sh prender" >&2
+      exit 1
+    fi
+    echo "Publicando https://$TS_DOM/ -> localhost:$PUERTO..."
+    if "$TS_EXE" serve --bg --https=443 "http://127.0.0.1:$PUERTO" 2>&1; then
+      TOKEN="$(_token)" || exit 1
+      echo
+      echo "Listo. Abri ESTO en el celular (con Tailscale prendido):"
+      echo "  https://$TS_DOM/?t=$TOKEN"
+      echo
+      echo "Y para instalarlo como app: menu de Chrome -> 'Instalar aplicacion'"
+      echo "(o 'Agregar a pantalla de inicio'). Queda con icono propio y sin barra de direcciones."
+      echo
+      echo "Para dejar de publicarlo:  mentis-web.sh https-apagar"
+    else
+      echo "ERROR: tailscale serve fallo." >&2
+      exit 1
+    fi ;;
+
+  https-apagar)
+    TS_EXE="/c/Program Files/Tailscale/tailscale.exe"
+    [ -x "$TS_EXE" ] || { echo "Tailscale no esta instalado." >&2; exit 1; }
+    "$TS_EXE" serve --https=443 off 2>&1 && echo "ya no se publica por HTTPS"
+    echo "OJO: la app instalada en el telefono deja de abrir hasta que lo vuelvas a prender." ;;
+
   *)
-    echo "Uso: mentis-web.sh prender|estado|apagar|token|rotar|direcciones" >&2
+    echo "Uso: mentis-web.sh prender|estado|apagar|token|rotar|direcciones|https|https-apagar" >&2
     exit 2 ;;
 esac

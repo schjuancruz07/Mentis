@@ -790,13 +790,24 @@ CLI_ROOT=""; BUDGET=25; ROLE="reason"; ROLE_EXPLICIT=0
 # consultas de solo lectura contra APIs publicas, sin riesgo real, asi que arrancan ACTIVAS por
 # defecto ("n" minuscula existe solo por simetria con el resto, "N" mayuscula la desactiva).
 ALLOW_BROWSE=1; ALLOW_MCP=1; ALLOW_GEN=1; ALLOW_SCREEN=1; ALLOW_DANGEROUS=0; ALLOW_CONTROL=0; ALLOW_EDITOR=1; ALLOW_ARDUINO=0; ALLOW_DATOS=1; ALLOW_CARBS=1; ALLOW_TELEFONO=0; CLI_HISTFILE=""
+# EL EQUIPO (departamentos de Cowork). Apagado por defecto: activarlo cambia a quien atiende el
+# turno, y eso no puede pasar sin que el usuario lo pida.
+ALLOW_EQUIPO=0
 MODO_REMOTO=0
-while getopts ":d:i:m:btgscexanupRBTGSENUPH:" opt; do
+# LAS MODALIDADES (idea 7 del usuario, 2026-08-21). Conviven con los modos y son otra cosa: el MODO
+# dice de que trabaja Mentis (codigo, diseno, estudio); la MODALIDAD dice cuanto puede tocar.
+#   plan -> piensa y te muestra el plan, NO toca nada hasta que el usuario diga que si
+#   work -> ejecuta de corrido, sin frenar
+#   off  -> como se comportaba hasta hoy (el valor por defecto: nada cambia si nadie la pide)
+# No aplica en el modo "mentis" a secas, que es la charla comun -- ahi no hay nada que planear.
+MODALIDAD="off"
+while getopts ":d:i:m:M:btgscexanupqRBTGSENUPQH:" opt; do
   case "$opt" in
     d) CLI_ROOT="$OPTARG" ;;
     i) BUDGET="$OPTARG" ;;
     m) ROLE="$OPTARG"; ROLE_EXPLICIT=1 ;;
     b) ALLOW_BROWSE=1 ;;
+    q) ALLOW_EQUIPO=1 ;;
     t) ALLOW_MCP=1 ;;
     g) ALLOW_GEN=1 ;;
     s) ALLOW_SCREEN=1 ;;
@@ -809,6 +820,7 @@ while getopts ":d:i:m:btgscexanupRBTGSENUPH:" opt; do
     p) ALLOW_TELEFONO=1 ;;
     P) ALLOW_TELEFONO=0 ;;
     B) ALLOW_BROWSE=0 ;;
+    Q) ALLOW_EQUIPO=0 ;;
     T) ALLOW_MCP=0 ;;
     G) ALLOW_GEN=0 ;;
     S) ALLOW_SCREEN=0 ;;
@@ -817,6 +829,7 @@ while getopts ":d:i:m:btgscexanupRBTGSENUPH:" opt; do
     U) ALLOW_CARBS=0 ;;
     H) CLI_HISTFILE="$OPTARG" ;;
     R) MODO_REMOTO=1 ;;
+    M) MODALIDAD="$OPTARG" ;;
     *) echo "ERROR: opción inválida -$OPTARG" >&2; exit 1 ;;
   esac
 done
@@ -829,6 +842,11 @@ fi
 # El apagado del modo remoto va DESPUES del bucle de opciones, a proposito: si viviera dentro del
 # case, un "-R -g" volveria a encender lo que -R apago, segun el orden en que se escribieron las
 # banderas. Un permiso que depende del orden de los argumentos no es un permiso.
+case "$MODALIDAD" in
+  off|plan|work) : ;;
+  *) echo "ERROR: modalidad invalida '$MODALIDAD'. Las que hay: off, plan, work." >&2; exit 1 ;;
+esac
+
 if [ "$MODO_REMOTO" = "1" ]; then
   ALLOW_SCREEN=0; ALLOW_CONTROL=0; ALLOW_EDITOR=0; ALLOW_ARDUINO=0; ALLOW_DANGEROUS=0; ALLOW_GEN=0; ALLOW_TELEFONO=0
   # Y decirle la VERDAD sobre lo que puede hacer. Sin esto, el prompt le seguía prometiendo
@@ -860,6 +878,26 @@ if [ -f "$MENTIS_ENV_DIR/engine/nv-idioma-lib.sh" ]; then
   [ -n "${MC_IDIOMA_INSTR// }" ] && MC_PERSONA="$MC_PERSONA
 
 $MC_IDIOMA_INSTR"
+fi
+
+# LA MODALIDAD SE LE CUENTA AL MODELO (2026-08-21). Quitarle las banderas no alcanza: hay que
+# DECIRLE en que modalidad esta, o va a intentar escribir, comerse el rechazo y quemar iteraciones.
+# Es la misma leccion que dejo el modo remoto (ERR-098) y que se volvio a encontrar el 2026-08-20
+# con la lista de skills.
+if [ "$MODALIDAD" = "plan" ] && [ "$MC_MODO_INICIAL" != "mentis" ]; then
+  MC_PERSONA="$MC_PERSONA
+
+MODALIDAD PLAN: en este turno NO vas a tocar nada. No tenés herramientas para escribir archivos,
+ejecutar comandos ni correr skills, y eso es a propósito. Lo que el usuario quiere es que pienses el
+trabajo y se lo MUESTRES: qué harías, en qué orden, qué archivos tocarías y qué podría salir mal.
+Leer, buscar y mirar el proyecto SÍ podés, y conviene que lo hagas antes de proponer nada. Cuando
+él apruebe, te lo va a pedir de nuevo en modalidad 'work' y ahí lo hacés."
+elif [ "$MODALIDAD" = "work" ] && [ "$MC_MODO_INICIAL" != "mentis" ]; then
+  MC_PERSONA="$MC_PERSONA
+
+MODALIDAD WORK: hacé el trabajo de corrido, sin frenar a pedir permiso paso a paso. el usuario ya
+aprobó lo que hay que hacer. Lo irreversible -- borrar cosas, mandar mensajes, gastar plata --
+sigue necesitando su OK, modalidad o no."
 fi
 
 MC_MODO_TEXTO="$(nv_modo_persona "$MC_MODO_INICIAL")"
@@ -917,13 +955,36 @@ for k, v in d.items():
 ' 2>/dev/null | tr -d '\r')
 fi
 
+# LAS SKILLS EN MODO REMOTO (2026-08-20). Esta lista se arma UNA vez y se inyecta en cada turno,
+# y hasta hoy no miraba MODO_REMOTO: desde el telefono el prompt decia "PODÉS USARLA VOS SOLA"
+# sobre 14 skills mientras el motor las rechazaba todas con "skill RECHAZADO (sin -K)", porque -K
+# no se pasaba en remoto. Verificado con `bash -x./mentis-chat.sh -R`: 9 libres + 5 recibo, todas
+# mentira. Es el mismo ERR-098 que ya se habia arreglado 80 lineas mas arriba PARA LA PERSONA y no
+# para las skills: la correccion se aplico donde se habia encontrado el sintoma, no donde estaba
+# la clase de error.
+#
+# Se arregla en las dos direcciones a la vez, porque una sola no alcanza:
+#   - las tres de SOLO LECTURA pasan a funcionar de verdad desde el telefono (decision del usuario).
+#     No escriben nada: /recall busca en conversaciones viejas, /where ubica cosas en el
+#     ecosistema, /boveda busca en las notas. Bloquearlas era de brocha gorda.
+#   - el resto se etiqueta con la verdad, en vez de prometer un permiso que las manos no tienen.
+MC_SKILLS_REMOTO="recall where boveda"
+
 SKILLS_TEXT=""
 for CAP_P in "${!MC_CAPS[@]}"; do
   # El prefijo llega como "/nombre"; el registro de autonomia usa el nombre pelado.
   _cap_n="${CAP_P#/}"
-  case "${MC_AUTON[$_cap_n]:-no}" in
+  _cap_estado="${MC_AUTON[$_cap_n]:-no}"
+  if [ "$MODO_REMOTO" = "1" ]; then
+    case " $MC_SKILLS_REMOTO " in
+      *" $_cap_n "*) : ;;
+      *) _cap_estado="remoto" ;;
+    esac
+  fi
+  case "$_cap_estado" in
     libre)  _cap_perm="[PODÉS USARLA VOS SOLA, sin pedir permiso]" ;;
     recibo) _cap_perm="[PODÉS USARLA VOS SOLA, pero después contale al usuario qué hiciste y cómo deshacerlo]" ;;
+    remoto) _cap_perm="[NO la tenés en este turno: entra desde el teléfono y esta skill necesita la computadora. Podés nombrarla para que el usuario la use cuando vuelva]" ;;
     *)      _cap_perm="[NO la corras vos: sugerísela al usuario para que la escriba él]" ;;
   esac
   SKILLS_TEXT="${SKILLS_TEXT}${CAP_P} -- ${MC_CAP_DESC[$CAP_P]} ${_cap_perm}
@@ -1189,10 +1250,40 @@ while true; do
   # (que arranca apagado). Y nunca desde el modo remoto: manejar el telefono desde una pagina
   # que entra por la WiFi de casa es justo lo que el modo remoto viene a impedir.
   [ "$ALLOW_TELEFONO" = "1" ] && [ "$MODO_REMOTO" != "1" ] && NVA_FLAGS="$NVA_FLAGS -P"
-  # Skills autonomas: NUNCA en modo remoto. Dos de ellas (/builder y /multiply) abren otro agente
-  # con permiso de escribir y ejecutar, asi que habilitarlas desde el telefono abriria por atras
-  # exactamente el candado que -R cierra por adelante.
-  [ "$MODO_REMOTO" != "1" ] && NVA_FLAGS="$NVA_FLAGS -K"
+  # Skills autonomas. Dos de ellas (/builder y /multiply) abren otro agente con permiso de escribir
+  # y ejecutar, asi que habilitarlas todas desde el telefono abriria por atras exactamente el
+  # candado que -R cierra por adelante. Por eso estuvieron TODAS apagadas en remoto hasta el
+  # 2026-08-20 -- pero eso era brocha gorda: /recall, /where y /boveda no escriben nada, y son
+  # justo las que sirven desde el telefono ("¿que habiamos decidido sobre X?").
+  #
+  # Ahora en remoto tambien se pasa -K, y el recorte lo hace MENTIS_SKILLS_SOLO: una lista blanca
+  # que el motor respeta skill por skill. Lista blanca y no negra, por la misma razon que en el
+  # publicador: si manana aparece una skill nueva que escribe, queda AFUERA sola.
+  NVA_FLAGS="$NVA_FLAGS -K"
+
+  # MODALIDAD "plan": las manos atadas, igual que el modo remoto y por el mismo mecanismo -- se le
+  # SACAN las banderas, no se le pide que se contenga. Una instruccion escrita es una sugerencia;
+  # esto es un candado. Se saca -w (escribir y ejecutar), -x (comandos peligrosos) y -K (las
+  # skills, porque cinco de ellas dejan algo hecho despues del turno: agendan tareas, instalan
+  # paquetes, abren otro agente con permiso de escribir).
+  #
+  # No se aplica en el modo "mentis" a secas: ahi no hay nada que planear, es la charla comun.
+  # ${MC_MODO:-$MC_MODO_INICIAL}: en esta linea MC_MODO TODAVIA NO EXISTE -- se define ~30 lineas
+  # mas abajo -- y con `set -u` usar una variable sin definir mata el script entero. El turno moria
+  # antes de llamar al agente y sin decir por que. Se cae al modo con el que arranco la sesion, que
+  # es el dato correcto en este punto.
+  if [ "$MODALIDAD" = "plan" ] && [ "${MC_MODO:-$MC_MODO_INICIAL}" != "mentis" ]; then
+    NVA_FLAGS="$(printf '%s' "$NVA_FLAGS" | sed -E 's/(^| )-w( |$)/ /g; s/(^| )-x( |$)/ /g; s/(^| )-K( |$)/ /g')"
+  fi
+
+  if [ "$MODO_REMOTO" = "1" ]; then
+    export MENTIS_SKILLS_SOLO="$MC_SKILLS_REMOTO"
+    # Para las guardas que viven DENTRO de una skill (ver /boveda, que tiene un subcomando
+    # 'reindexar' que reconstruye el indice: leer esta bien, reconstruirlo desde el celular no).
+    export MENTIS_REMOTO=1
+  else
+    unset MENTIS_SKILLS_SOLO
+  fi
   [ "$ALLOW_DATOS" = "1" ] && NVA_FLAGS="$NVA_FLAGS -D"
   [ "$ALLOW_CARBS" = "1" ] && NVA_FLAGS="$NVA_FLAGS -C"
 
@@ -1251,14 +1342,35 @@ while true; do
   for _p in "${ATTACH_IMG_PATHS[@]:-}"; do
     [ -n "$_p" ] && NVA_IMG_FLAGS+=("-I" "$_p")
   done
-  if [ "$TURN_TIPO" = "trivial" ]; then
+  # EL EQUIPO: si esta encendido y el pedido cae en un departamento, lo atiende el departamento
+  # (2026-08-20). Es lo que el usuario pidio con el "+": una decision, no doce.
+  #
+  # De a UNO por turno, elegido por disparador deterministico. En un organismo, cortarse un dedo
+  # no enciende el sistema digestivo -- y encender cinco departamentos a la vez seria multiplicar
+  # el reparto simultaneo, que es justo lo que mide peor.
+  #
+  # Si NINGUN departamento cubre el pedido, el turno sigue normal: el equipo no secuestra la
+  # conversacion. Preguntarle la hora con el equipo encendido tiene que contestar la hora.
+  MC_DEPTO=""
+  if [ "${ALLOW_EQUIPO:-0}" = "1" ] && [ -x "$MENTIS_ENV_DIR/mentis-departamento.sh" ] 2>/dev/null; then
+    MC_DEPTO="$(bash "$MENTIS_ENV_DIR/mentis-departamento.sh" cual "$MSG" 2>/dev/null)" || MC_DEPTO=""
+  elif [ "${ALLOW_EQUIPO:-0}" = "1" ] && [ -f "$TOOLSDIR/../mentis-departamento.sh" ]; then
+    MC_DEPTO="$(bash "$TOOLSDIR/../mentis-departamento.sh" cual "$MSG" 2>/dev/null)" || MC_DEPTO=""
+  fi
+  if [ -n "$MC_DEPTO" ]; then
+    echo "[mentis-chat] el equipo atiende: $MC_DEPTO" >&2
+    ANSWER="$(bash "$TOOLSDIR/../mentis-departamento.sh" correr "$MC_DEPTO" "$MSG" 2>"$MC_ERR_FIFO")" || true
+    [ -z "$ANSWER" ] && ANSWER="El departamento de $MC_DEPTO no llegó a terminar. Probá de nuevo o pedímelo sin el equipo."
+  elif [ "$TURN_TIPO" = "trivial" ]; then
     # Cerebro rapido (pedido del usuario, 2026-07-16): nv-agent.sh llama a ask-nvidia.sh en modo RAW
     # (-r), que PISA el system prompt del rol (SYS_FAST) por el protocolo completo de tools --
     # innecesario y mas lento para un "hola"/"gracias" que nunca va a llamar una herramienta.
     # Llamada directa de un solo paso al rol 'fast' (con su SYS_FAST liviano intacto), saltando
     # el loop agentico entero. mismo canal de stderr que nv-agent.sh para no romper el tee/FIFO
     # de progreso de arriba (ask-nvidia.sh solo escribe algun AVISO ahi, nada que romper).
-    ANSWER="$(printf '%s' "$MSG" | bash "$TOOLSDIR/ask-nvidia.sh" fast 2>"$MC_ERR_FIFO")"
+    # NV_ANSWER_RAW: este es el turno de CHARLA (sin herramientas) y devuelve prosa, no el JSON
+    # de accion del agente. Sin esto el streaming quedaba mudo justo en el turno mas comun.
+    ANSWER="$(printf '%s' "$MSG" | NV_ANSWER_RAW=1 bash "$TOOLSDIR/ask-nvidia.sh" fast 2>"$MC_ERR_FIFO")"
     [ -z "$ANSWER" ] && ANSWER="Hola! (tuve un problema con el cerebro rápido -- pero acá estoy)"
   else
     ANSWER="$(bash "$TOOLSDIR/nv-agent.sh" $NVA_FLAGS -n "$MC_SIN_TOOLS" "${NVA_IMG_FLAGS[@]}" -d "$ROOT" -m "$TURN_ROLE" -i "$BUDGET" "$TASK" 2>"$MC_ERR_FIFO")"

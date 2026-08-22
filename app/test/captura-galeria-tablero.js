@@ -138,9 +138,9 @@ function contratoTablero() {
       // Se llama modosLista (preload.js:60) y devuelve {modos, actual} -- sin 'ok'. Con el nombre
       // mal, el comodin devolvia {ok:true} y pintarFichas se caia con "undefined.find".
       modosLista: async () => ({ modos: [
-        { id: 'mentis', titulo: 'Mentis', descripcion: 'Conversar', letra: 'google-sans', acento: 'medio' },
-        { id: 'code', titulo: 'Mentis Code', descripcion: 'Programar', letra: 'silkscreen', acento: 'oscuro' },
-        { id: 'cowork', titulo: 'Mentis Cowork', descripcion: 'Coordinar', letra: 'plus-jakarta', acento: 'medio' },
+        { id: 'mentis', titulo: 'Mentis', descripcion: 'Conversar', letra: 'google-sans' },
+        { id: 'code', titulo: 'Mentis Code', descripcion: 'Programar', letra: 'silkscreen' },
+        { id: 'cowork', titulo: 'Mentis Cowork', descripcion: 'Coordinar', letra: 'plus-jakarta' },
       ], actual: 'mentis' }),
     };
     window.mentisAPI = new Proxy(base, {

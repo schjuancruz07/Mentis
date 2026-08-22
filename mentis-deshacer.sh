@@ -48,13 +48,38 @@ _git_sombra() {
 
 _asegurar_repo() {
   local sombra="$1" dir="$2"
-  [ -d "$sombra" ] && return 0
-  mkdir -p "$sombra" || return 1
-  git --git-dir="$sombra" init --quiet 2>/dev/null || return 1
-  git --git-dir="$sombra" config user.email "mentis@local" 2>/dev/null
-  git --git-dir="$sombra" config user.name "Mentis" 2>/dev/null
+  if [ ! -d "$sombra" ]; then
+    mkdir -p "$sombra" || return 1
+    git --git-dir="$sombra" init --quiet 2>/dev/null || return 1
+    git --git-dir="$sombra" config user.email "mentis@local" 2>/dev/null
+    git --git-dir="$sombra" config user.name "Mentis" 2>/dev/null
+  fi
+  # LA LISTA DE EXCLUSIONES SE REESCRIBE SIEMPRE (2026-08-20), no solo al crear el repo: si no,
+  # los repos que ya existen se quedan para siempre con la lista del dia que nacieron -- y la de
+  # este mismo cambio nunca les llegaria.
+  #
+  # 'engine/sombras/' es la correccion que importa: EL PROPIO REPO SOMBRA VIVE AHI ADENTRO, o sea
+  # adentro de la carpeta que se esta fotografiando. Sin excluirlo, el `add -A.` intenta indexar
+  # el indice de git mientras git lo esta escribiendo, y aborta. Y como el add trae `|| true` y el
+  # commit trae --allow-empty, el error quedaba invisible: la foto salia VACIA e imprimia su hash
+  # igual. Paso de verdad -- la foto 704f0ed ("antes de la Fase 0") tiene CERO archivos.
+  #
+  # node_modules, dist y.repo-publico son artefactos: se regeneran, no hay nada que restaurar de
+  # ahi, y son la mayor parte de los 6.751 archivos que hacian lenta cada foto.
   # El.git propio del usuario NO se versiona: es suyo y además sería enorme.
-  printf '.git/\nnode_modules/\n.mentis-obs/\n' > "$sombra/info/exclude" 2>/dev/null || true
+  printf '.git/\nnode_modules/\n.mentis-obs/\nengine/sombras/\ndist/\n.repo-publico/\n__pycache__/\n' \
+    > "$sombra/info/exclude" 2>/dev/null || true
+
+  # Y lo que YA estaba adentro se saca. info/exclude solo gobierna a los archivos que git todavia
+  # no sigue: si una ruta entro al indice antes de que la excluyeran, sigue entrando en cada foto
+  # para siempre. Sin esto, un repo sombra que ya se llevo engine/sombras adentro nunca se
+  # recupera solo -- y era el caso. `rm --cached` saca del indice y NO toca el disco.
+  local _ex
+  for _ex in engine/sombras dist.repo-publico node_modules; do
+    if git --git-dir="$sombra" --work-tree="$dir" ls-files --error-unmatch "$_ex" >/dev/null 2>&1; then
+      git --git-dir="$sombra" --work-tree="$dir" rm -r --cached --quiet "$_ex" >/dev/null 2>&1 || true
+    fi
+  done
 }
 
 DIR="${2:-}"
@@ -70,7 +95,27 @@ case "${1:-}" in
     # --allow-empty: si no cambió nada desde la última foto, igual queda el punto de referencia
     # (con su motivo y su hora), que es lo que hace legible la lista después.
     if _git_sombra "$SOMBRA" "$DIR" commit --allow-empty -q -m "$MOTIVO" >/dev/null 2>&1; then
-      printf '%s\n' "$(_git_sombra "$SOMBRA" "$DIR" rev-parse --short HEAD 2>/dev/null)"
+      FOTO_ID="$(_git_sombra "$SOMBRA" "$DIR" rev-parse --short HEAD 2>/dev/null)"
+
+      # LA FOTO TIENE QUE TENER ALGO ADENTRO (2026-08-20). El 'add' de arriba se traga su error
+      # con `|| true` y el commit lleva --allow-empty: las dos cosas juntas hacen que una foto
+      # VACIA se vea exactamente igual que una buena -- imprime su hash y sale con 0. Paso de
+      # verdad: la primera foto de este repo (704f0ed, "antes de la Fase 0") quedo con CERO
+      # archivos y nadie se entero hasta que hubo que mirar adentro. Un punto de retorno que no
+      # guarda nada es peor que no tener ninguno, porque uno trabaja creyendo que tiene red.
+      #
+      # No se toca el `|| true` del add (un archivo ilegible no tiene que abortar la foto entera):
+      # lo que se hace es MIRAR EL RESULTADO, que es la unica verificacion que no depende de que
+      # los errores se propaguen bien.
+      FOTO_N="$(_git_sombra "$SOMBRA" "$DIR" ls-tree -r --name-only HEAD 2>/dev/null | grep -c. || true)"
+      if [ "${FOTO_N:-0}" -eq 0 ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
+        echo "ERROR: la foto salio VACIA (0 archivos) y la carpeta no lo esta." >&2
+        echo "       No hay punto de retorno: no sigas con nada que pise archivos." >&2
+        echo "       Probá de nuevo; si vuelve a pasar, mirá si el repo sombra quedo a medio crear:" >&2
+        echo "       $SOMBRA" >&2
+        exit 1
+      fi
+      printf '%s\n' "$FOTO_ID"
     else
       echo "ERROR: no se pudo sacar la foto" >&2; exit 1
     fi

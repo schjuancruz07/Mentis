@@ -559,6 +559,7 @@ run_model_stream() {
            NVSYS="$SYS" NVSKILL="$SKILLTEXT" NVIMAGES="$IMGFILE" NVKEY="$key" NVURL="$URL" \
            NV_TTFT="$NVTTFT" NV_SILENCIO="$NVSIL" NV_TECHO="$techo" NV_EMITIR="${NV_EMITIR:-0}" \
            NV_ANSWER_STDERR="${NV_ANSWER_STDERR:-0}" \
+           NV_ANSWER_RAW="${NV_ANSWER_RAW:-0}" \
            NV_META_FILE="$meta_file" \
            python3 "$NVDIR/nv_stream.py")"
     rc=$?

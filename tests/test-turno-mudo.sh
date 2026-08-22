@@ -90,6 +90,21 @@ else
   _mal "salida normal" "se rompio el camino feliz"
 fi
 
+
+# --- EXHAUSTIVO, no una lista (2026-08-18) ------------------------------------------------------
+# Las aserciones de arriba verifican los caminos que alguien enumero. Asi se llego a tres arreglos
+# separados del mismo problema: cada vez aparecia una rama que la lista no tenia. turno-mudo-
+# exhaustivo.py no enumera -- busca TODOS los cortes del loop y exige que cada uno cierre. Se
+# verifico inyectando un cuarto camino mudo: lo encuentra.
+if python3 "$(dirname "${BASH_SOURCE[0]}")/turno-mudo-exhaustivo.py" > /tmp/tm-ex.$$ 2>&1; then
+  _ok "EXHAUSTIVO: $(cat /tmp/tm-ex.$$ | tr -d '
+')"
+else
+  _mal "EXHAUSTIVO: hay un camino que corta el turno sin respuesta" "$(head -3 /tmp/tm-ex.$$ | tr '
+' ' ')"
+fi
+rm -f /tmp/tm-ex.$$
+
 echo
 printf 'test-turno-mudo: %d ok, %d fallas\n' "$ok" "$fallo"
 [ "$fallo" -eq 0 ]

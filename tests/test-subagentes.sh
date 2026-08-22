@@ -40,7 +40,9 @@ grep -q 'no lo cites como si lo fuera' "$AGENTE" && echo "ok: le aclara al cereb
 grep -q 'STATUS=budget' "$AGENTE" && echo "ok: detecta el STATUS=budget del sub-agente" || { echo "FAIL: no detecta el status"; fail=1; }
 
 echo "== 5. el protocolo se lo explica al modelo =="
-grep -q "'value' es su presupuesto de iteraciones" "$AGENTE" && echo "ok: el protocolo documenta el presupuesto" || { echo "FAIL: el modelo no sabe que puede pedirlo"; fail=1; }
+# El protocolo se mudo a engine/textos/protocolo/*.txt: buscar solo en nv-agent.sh daba
+# FAIL con el texto intacto, en base.txt. Se busca en las dos fuentes (2026-08-18).
+grep -rq "'value' es su presupuesto de iteraciones" "$AGENTE" "$(dirname "$AGENTE")/textos" && echo "ok: el protocolo documenta el presupuesto" || { echo "FAIL: el modelo no sabe que puede pedirlo"; fail=1; }
 
 echo "== 6. prueba VIVA: un sub-agente con presupuesto corto termina en budget, no en silencio =="
 # Esto llama modelos de verdad. Es la unica forma de comprobar que el contrato (STATUS=budget +

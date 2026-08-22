@@ -104,5 +104,19 @@ else
 fi
 
 echo ""
+
+# --- EJECUTADO, no grepeado (2026-08-18) --------------------------------------------------------
+# Las aserciones de arriba comprueban que las funciones EXISTAN. El bug que motivo este archivo era
+# otro: todas las piezas existian y andaban, y el panel igual no se abria. preview-panel-ejecuta.js
+# extrae abrirPanelSiHaceFalta del renderer y la corre contra un DOM de mentira. Se verifico
+# reinyectando el bug historico (la funcion sin el remove('collapsed')): lo encuentra.
+if node "$(dirname "${BASH_SOURCE[0]}")/preview-panel-ejecuta.js" > /tmp/pv-ejec.$$ 2>&1; then
+  _ok "EJECUTADO: el panel se abre con actividad y respeta que el usuario lo cierre ($(grep -o 'casos: [0-9]*' /tmp/pv-ejec.$$))"
+else
+  _mal "EJECUTADO: la apertura del panel no se comporta" "$(head -3 /tmp/pv-ejec.$$ | tr '
+' ' ')"
+fi
+rm -f /tmp/pv-ejec.$$
+
 echo "== $ok ok, $fallo fallan =="
 [ "$fallo" -eq 0 ]

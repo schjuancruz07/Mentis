@@ -40,6 +40,12 @@ const FAMILIAS = [
   { spec: 'Silkscreen:wght@400;700',          para: 'logotipo de Mentis Code' },
   { spec: 'Plus+Jakarta+Sans:wght@600;800',   para: 'logotipo de Mentis Cowork' },
   { spec: 'Michroma',                         para: 'logotipo de Mentis Science' },
+  // 2026-08-20: Study y Editor eran los dos unicos modos sin letra propia -- su logotipo salia
+  // igual al del modo Mentis a secas, o sea que cambiar de modo no se notaba. Bitter es una slab
+  // serif (aire de libro de texto) y Oswald una condensada de titulos (aire de placa de video).
+  // Las dos son OFL, como el resto.
+  { spec: 'Bitter:wght@700',                  para: 'logotipo de Mentis Study' },
+  { spec: 'Oswald:wght@500',                  para: 'logotipo de Mentis Editor' },
 ];
 
 const SUBCONJUNTOS = ['latin', 'latin-ext'];

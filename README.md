@@ -1,162 +1,87 @@
 # Mentis
 
-Un asistente personal que vive en tu computadora. Le hablás, te contesta con voz, y puede hacer
-cosas de verdad: escribir archivos, buscar en internet, generar documentos e imágenes, leer un PDF,
-manejar el navegador, acordarse de lo que hablaron la semana pasada.
+Un asistente que corre **entero en tu computadora**. Habla, escucha, lee tus documentos, busca en
+internet, edita video, mira imágenes y hace trabajo de empresa chica — con modelos que en su
+configuración de fábrica **no cuestan nada**.
 
-No es una página web con una cuenta. Es un programa que corre en tu máquina, con tus archivos, y
-que sigue siendo tuyo cuando lo cerrás.
+No es un envoltorio de una API paga. Es un motor propio (bash + Python) con una app de escritorio
+encima, y todo lo que guardás se queda en tu máquina.
+
+> **Para instalarlo:** [INSTALAR.md](INSTALAR.md). Si tenés Claude Code, pedile que lo haga por vos.
 
 ---
 
 ## Qué hace
 
-- **Habla y escucha.** Tocás el círculo y le hablás. Te contesta con voz mientras piensa, sin
-  esperar a tener toda la respuesta armada.
-- **Hace, no sólo responde.** Crea archivos, corre programas, arma documentos de Word y
-  presentaciones, genera imágenes, busca en la web y navega páginas.
-- **Se acuerda.** Recuerda lo que le contaste en conversaciones anteriores y lo trae cuando viene
-  al caso.
-- **Se ve trabajar.** Un panel muestra en vivo qué está haciendo paso por paso, qué archivo está
-  escribiendo y en qué punto va: *"paso 3 de 10"*.
-- **Trabaja aparte.** Le podés dar una tarea larga y seguir con lo tuyo; te avisa cuando termina.
-- **Desde el celular.** Abre una página en tu red local para escribirle desde el teléfono, sin
-  instalar nada.
-- **Cambia de modo.** El mismo Mentis con distintas manos: *Code* para programar, *Designe* para
-  crear, *Study* para estudiar con tu propio material, *Science* para datos con fuente, *Cowork*
-  para trabajo con muchas partes. Cada modo muestra sólo lo que ese trabajo necesita.
-- **Tiene catálogo.** En Designe y en Study no hace falta saber qué pedir: elegís de una grilla
-  (logo, afiche, diapositivas, cuestionario, mapa mental…), contestás dos preguntas y el pedido
-  queda escrito, listo para revisar antes de enviarlo.
-- **No dice que algo funciona sin haberlo probado.** Si una respuesta afirma que anda, tiene que
-  haber en ese mismo turno la salida del comando que lo demuestra; y si nombra archivos que no
-  existen, el cierre se rechaza y los escribe. No es una promesa del prompt: es código, con tests.
-
-## Qué necesitás
-
 | | |
 |---|---|
-| **Sistema** | Windows 10 u 11. El motor corre en Git Bash. |
-| **Programas** | [Git para Windows](https://git-scm.com/download/win), [Node.js](https://nodejs.org/) 20 o mayor, [Python](https://www.python.org/downloads/) 3.11 o mayor |
-| **Una clave de IA** | Gratuita, de NVIDIA. Se saca en [build.nvidia.com](https://build.nvidia.com) y toma dos minutos. |
-| **Espacio** | Unos 500 MB con todo instalado |
+| **Conversa** | Por texto o por voz, de ida y vuelta. Se acuerda de lo que hablaron antes y lo trae solo cuando hace falta |
+| **Trabaja en tu máquina** | Lee y escribe archivos, corre comandos, mira la pantalla — siempre con permiso y con la posibilidad de deshacer |
+| **Departamentos** | Cobranzas y Presupuestos: perfiles con objetivo, herramientas y **libro mayor auditable** |
+| **Study y Science** | Estudiar sobre un corpus propio; química en 3D con datos reales de PubChem |
+| **Editor** | Editar un video entero con ffmpeg, automático, sin línea de tiempo |
+| **3D y CAD** | Analizar mallas y generar piezas paramétricas en STEP |
+| **Ve** | Cámara, pantalla, imágenes y video analizado como secuencia — no como fotos sueltas |
+| **Busca imágenes por lo que se ve** | "la captura donde estaba el error de la cámara" y aparece |
+| **Aprende mirando** | Hacés una tarea, y de ahí sale una skill |
+| **Desde el celular** | Página propia, e instalable como app sin pasar por ninguna tienda |
 
-No hace falta una placa de video potente: los modelos corren en la nube, tu computadora sólo
-coordina.
+---
 
-**Dos claves opcionales, gratis, que cambian bastante la experiencia** (el instalador las pide y se
-pueden saltear):
+## Qué lo diferencia de lo que ya es gratis
 
-| | Para qué | Por qué conviene |
-|---|---|---|
-| [Groq](https://console.groq.com/keys) | Las respuestas rápidas | Medido acá: acierta más (15/15 contra 13/15) y tarda 4,6 veces menos. Sin tarjeta. |
-| [Tavily](https://tavily.com) | Buscar en la web | 1000 búsquedas por mes. Sin esto la búsqueda queda con índices chicos: los buscadores grandes contestan con CAPTCHA a los programas. |
+Cline y Goose son agentes gratis y muy buenos; Claude Code es de pago y también. Se comparó
+capacidad por capacidad —ejecución autónoma, acceso a internet, integración con IDEs, memoria
+externa, ejecución de código, contexto largo, entrada multimodal, planificación, precios y
+despliegue en la nube— y en **nueve de diez hay paridad**: lo que a Mentis "le falta" ya lo dan
+gratis Cline o Goose. Lo que Mentis tiene y ellos no:
 
-## Instalación
+1. **Departamentos con libro mayor.** El entregable se verifica **contra el disco**, no contra lo
+   que el modelo dice haber hecho. Nació de un caso real: un departamento informó que había dejado
+   los borradores en un archivo de 3 bytes.
+2. **El conjunto local**: voz de ida y vuelta, Study, Science, 3D/CAD, modo Editor. Son
+   verticales, no funciones de agente de código.
+3. **El costo por turno puede ser cero.** Cline y Goose son gratis pero el modelo lo pagás vos.
 
-```bash
-git clone https://github.com/schjuancruz07/Mentis.git
-cd Mentis
-bash instalar.sh
-```
+Y lo que **no** tiene, dicho de frente: no es una extensión de VS Code, no corre en la nube, y
+nadie probó todavía que alguien pague por él.
 
-El instalador te va a pedir la clave de NVIDIA, instalar lo que falte y dejar la aplicación lista.
-Cuando termine, abrís Mentis desde el menú de inicio.
+---
 
-Si algo no anda, corré `bash mentis-diagnostico.sh`: revisa todo y te dice qué falta en castellano.
-
-## Actualizarlo
-
-```bash
-bash mentis-actualizar.sh buscar     # ve si hay algo nuevo y qué cambió
-bash mentis-actualizar.sh instalar   # lo instala (pregunta antes)
-```
-
-Nunca se actualiza solo. Antes de tocar nada hace un respaldo, y si modificaste algún archivo de
-Mentis **frena y te avisa** en vez de pisarte el trabajo. Si algo sale mal:
-`bash mentis-actualizar.sh volver`.
-
-Tus conversaciones, tu memoria y tus claves no se tocan nunca: viven en archivos que las
-actualizaciones ni miran.
-
-## Lo que conviene saber antes de usarlo
-
-Esto no es la letra chica: es lo que hay que entender **antes** de instalarlo. Mentis puede hacer
-cosas reales en tu computadora, y conviene que sepas cuáles.
-
-### Lo que escribís sale de tu computadora
-
-Mentis usa modelos de IA en la nube (NVIDIA por defecto), así que lo que le contás viaja por
-internet. Antes de mandar, se ocultan automáticamente las claves, tokens y contraseñas que
-detecte; **el resto del texto va tal cual**.
-
-Si además prendés **Google Gemini** —que viene apagado— tené en cuenta que el plan gratuito de
-Google **usa lo que le mandás para entrenar sus modelos**, y hay revisores humanos que pueden
-llegar a leerlo. El plan pago no. Mentis te lo avisa antes de encenderlo.
-
-### Lo que puede hacer en tu máquina
-
-| Capacidad | Qué significa |
-|---|---|
-| **Escribir y borrar archivos** | Crea, modifica y elimina archivos en la carpeta de trabajo. Es para lo que sirve, pero es real. |
-| **Ejecutar comandos** | Corre programas en tu sistema. Los comandos destructivos están bloqueados salvo que habilites el modo sin frenos. |
-| **Ver tu pantalla** | Puede sacar capturas de lo que tenés abierto y mandárselas al modelo para entender qué estás mirando. |
-| **Manejar el mouse y el teclado** | Puede operar tu computadora como lo harías vos. |
-| **Encender la cámara** | Saca fotos con la webcam. Tiene un tope de usos por turno para que no pueda quedarse sacando fotos aunque algo salga mal. |
-| **Navegar la web** | Abre páginas y las opera. |
-| **Controlar hardware** | Si conectás una placa Arduino o similar, puede compilar y grabarle programas: eso mueve cosas en el mundo físico. |
-| **Acceder a tu teléfono** | Si lo vinculás, lee notificaciones y mensajes. |
-
-**Todas arrancan apagadas** menos escribir archivos y ejecutar comandos, que son el corazón del
-programa. Se prenden de a una, a mano, desde Conectores. Las acciones delicadas piden permiso en
-una ventana antes de correr, y el botón **"Frenar ya"** aparece mientras alguna capacidad de
-riesgo esté activa.
-
-### Si conectás servicios externos
-
-Mentis puede conectarse a **Google Workspace** (Drive, Docs, Sheets, Gmail y Calendar) y a
-**GitHub**. Si lo hacés, Mentis pasa a tener acceso a tu correo, tus documentos y tus
-repositorios con tus propios permisos.
-
-GitHub arranca en **modo sólo lectura**, y ninguno de los dos se conecta hasta que vos pongas las
-credenciales. Pero vale decirlo claro: conectar tu Gmail es darle acceso a tu Gmail.
-
-### Lo que no hace
-
-No manda nada a ningún servidor del proyecto: no hay cuentas, ni telemetría, ni servidor central.
-Tus conversaciones y tu memoria quedan en tu disco. Las claves que cargues quedan en archivos
-locales que nunca viajan.
-
-## Cómo está armado
+## Cómo está construido
 
 ```
-engine/         El motor: el agente, las llamadas a los modelos, la voz, la búsqueda
-app/            La ventana (Electron)
-capabilities/   Habilidades sueltas: documentos, imágenes, hardware, bóveda
-mcp-bridge/     Puente para conectar servicios externos por MCP
-tests/          Las pruebas. Son bastantes y se corren solas antes de cada publicación.
+mentis-*.sh          los comandos (chat, voz, departamentos, video, imágenes, celular…)
+engine/              el motor: agente, modelos, streaming, búsqueda, índice vectorial
+capabilities/        las skills (/recall, /where, /estudiar, /boveda…)
+app/                 la app de escritorio (Electron)
+tests/               los tests. Son muchos y a propósito
 ```
 
-El motor es bash y Python; la ventana es Electron. Se pueden usar por separado: `mentis-chat.sh`
-funciona en una consola sin abrir la aplicación.
+**La regla del proyecto:** nada entra sin ganarle a lo que ya hay, medido en una tarea real. Hay
+cosas que se construyeron, se midieron y **se eliminaron**: la disputa cruzada entre dos
+proveedores corrigió 0 casos de 16 y se borró; el reparto automático de tareas perdió 31 a 37 y
+quedó apagado. Las mediciones quedan en el repositorio de desarrollo.
 
-## Sobre este proyecto
+---
 
-Mentis nació como un asistente personal para uso propio y creció hasta acá. El código está en
-castellano —los comentarios explican **por qué** está hecho así, no qué hace la línea siguiente— y
-muchas decisiones tienen al lado la medición que las justifica.
+## Lo que necesita
 
-Se publica por si a alguien le sirve, entero o en partes. No hay soporte ni garantías: es un
-proyecto personal, no un producto.
+- **Windows** con Git Bash, Python 3 y Node.js
+- Una **clave de NVIDIA** (gratis) para los modelos
+- ffmpeg para video y audio
 
-## Si querés participar
+Todo lo demás es opcional y el instalador te dice qué falta.
 
-- **[Cómo contribuir](CONTRIBUTING.md)** — cómo reportar un problema y cómo mandar código.
-- **[Código de conducta](CODE_OF_CONDUCT.md)** — es corto: tratá a los demás con respeto.
-- **[Seguridad](SECURITY.md)** — si encontraste un agujero, **no lo abras como issue público**:
-  ahí está el canal privado.
+---
 
-## Licencia
+## Honestidad sobre el estado
 
-[Apache 2.0](LICENSE). Podés usarlo, modificarlo y distribuirlo, incluso comercialmente, mientras
-mantengas el aviso de licencia y digas qué cambiaste.
+Esto se usa todos los días y funciona. También:
+
+- Hay guardas que existen porque el sistema ya falló de esa manera exacta, y cada una tiene el
+  incidente escrito al lado en el código.
+- Las mediciones que salieron mal están publicadas igual que las que salieron bien.
+- Cuando algo no se pudo verificar, lo dice en vez de suponer.
+
+Si encontrás algo que promete más de lo que hace, es un bug y vale reportarlo como tal.

@@ -54,7 +54,19 @@ MR_LOCK="${MR_LOCK_FILE:-$MR_NVDIR/logs/reparar.lock}"
 MR_MAX_CANDIDATOS="${MR_MAX_CANDIDATOS:-4}"   # cuantos candidatos VIVOS llegan a rendir examen
 MR_MAX_SONDEOS="${MR_MAX_SONDEOS:-20}"        # cuantos se pueden tantear buscando esos vivos
 MR_MAX_LLAMADAS="${MR_MAX_LLAMADAS:-45}"      # techo duro de llamadas de toda la reparacion
-MR_MIN_APROBADO="${MR_MIN_APROBADO:-60}"      # % de fixtures que tiene que aprobar un candidato
+MR_MIN_APROBADO="${MR_MIN_APROBADO:-60}"
+
+# Lee un campo del rol en modelos-override.json. Imprime vacio si no esta.
+_mr_campo_rol() {
+  MRC_ROL="$1" MRC_CAMPO="$2" MRC_F="$MR_OVERRIDE" python3 -c '
+import json, os, sys
+try:
+    d = json.load(open(os.environ["MRC_F"], encoding="utf-8"))
+    print(d.get("roles", {}).get(os.environ["MRC_ROL"], {}).get(os.environ["MRC_CAMPO"], ""))
+except Exception:
+    print("")
+' 2>/dev/null | tr -d "\r"
+}      # % de fixtures que tiene que aprobar un candidato
 MR_PAUSA="${MR_PAUSA:-1.5}"                   # segundos entre sondeos (ver _mr_estado: sin esto se fabrican muertos)
 
 MR_ROL=""; MR_SIMULACRO=0; MR_FORZAR=0
@@ -185,6 +197,9 @@ _mr_estado() {
   printf '%s' "${e%% *}"
 }
 
+# Un TTFT util es un entero de ms. Vacio, "sin-token" o cualquier otra cosa NO es una medicion.
+_mr_es_num() { case "${1:-}" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+
 MR_CAUSA=""   # que justifica el reemplazo: "muerte" o "presupuesto"
 
 MR_E1="$(_mr_estado "$MR_P")"
@@ -201,22 +216,61 @@ if [ "$MR_E1" != "MUERTO" ] && [ "$MR_E1" != "SIN-ACCESO" ]; then
   # caia al fallback en 2 de 2 llamadas reales y sumaba ~21 s muertos por turno. El
   # reparador miraba tiempo TOTAL contra un umbral fijo de 15 s; el rol mira PRIMER TOKEN contra
   # su propio presupuesto. Dos subsistemas midiendo lo mismo con reglas distintas.
+  #
+  # PRIMERO: medir el presupuesto SOLO tiene sentido contra un endpoint que contesta sano
+  # (2026-08-22, ERR-215). Si el sondeo dio SATURADO, ERROR o RARO, el primer token va a venir
+  # vacio por el estado del servicio y no por el modelo -- y degradar por eso es tirar a la basura
+  # una eleccion que costo mediciones. SATURADO no es MUERTO: vuelve solo.
+  case "$MR_E1" in
+    VIVO|LENTO) : ;;
+    *)
+      _mr_log "el sondeo dio $MR_E1: no es muerte, pero tampoco una respuesta sana. No se puede medir el presupuesto contra esto. No toco nada."
+      exit 0
+      ;;
+  esac
   MR_PRESU="$(nv_ttft_rol "$MR_ROL" "$MR_ASK")"; MR_PRESU="${MR_PRESU:-12}"
   MR_T1="$(nv_probar_ttft "$MR_P" "$MR_KEY" "$MR_NVDIR")"; _mr_gasto
   sleep "${MR_PAUSA:-1.5}"
   MR_T2="$(nv_probar_ttft "$MR_P" "$MR_KEY" "$MR_NVDIR")"; _mr_gasto
   _mr_log "primer token de '$MR_P': ${MR_T1:-sin-token}/${MR_T2:-sin-token} ms (el rol espera hasta ${MR_PRESU}s)"
 
-  # Vacio = nunca emitio: peor que pasarse. Se cuenta como fuera de presupuesto.
-  _mr_fuera() {
-    local t="$1" lim=$(( MR_PRESU * 1000 ))
-    [ -z "$t" ] && return 0
-    [ "$t" -gt "$lim" ]
-  }
   # LOS DOS sondeos tienen que dar fuera, igual que con la muerte: un pico aislado de latencia no
   # puede costar un cambio de modelo. Es la misma prudencia que evita confundir SATURADO con
   # MUERTO, aplicada a la tercera categoria.
-  if _mr_fuera "$MR_T1" && _mr_fuera "$MR_T2"; then
+  #
+  # Y UN VACIO NO ES UNA MEDICION (2026-08-22, ERR-215). Antes esta rama trataba "sin token" como
+  # "peor que pasarse" y degradaba. Con eso, el 21/08 el rol 'general' se cambio por el motivo
+  # "tarda sin-token/sin-token ms": dos valores vacios. La regla vive ahora en
+  # nv_ttft_veredicto (nv-modelos-lib.sh), que es pura y se testea sola.
+  MR_EST_TTFT=""
+  if ! _mr_es_num "$MR_T1" || ! _mr_es_num "$MR_T2"; then
+    MR_EST_TTFT="$(_mr_estado "$MR_P")"
+    _mr_log "  un sondeo no dio numero; reconfirmo el endpoint antes de decidir: $MR_EST_TTFT"
+  fi
+  MR_VEREDICTO="$(nv_ttft_veredicto "$MR_T1" "$MR_T2" "$(( MR_PRESU * 1000 ))" "$MR_EST_TTFT")"
+  _mr_log "veredicto de presupuesto para '$MR_P': $MR_VEREDICTO"
+  if [ "$MR_VEREDICTO" = "NO-MEDIBLE" ]; then
+    _mr_log "NO SE PUDO MEDIR el primer token de '$MR_P' (endpoint: ${MR_EST_TTFT:-sin dato}). Un rol no se degrada por algo que no se midio."
+    exit 0
+  fi
+  if [ "$MR_VEREDICTO" = "FUERA" ]; then
+    # CALIDAD ANTES QUE VELOCIDAD (2026-08-21). Hay roles donde un modelo lento y bueno vale mas
+    # que uno rapido y peor. El reparador no puede saberlo -- mide latencia, no calidad -- asi que
+    # se lo dice el propio rol con "calidad_primero": true en modelos-override.json.
+    #
+    # POR QUE EXISTE, con los numeros: el 14/08 esta misma rama degrado el rol 'code' de
+    # deepseek-v4-flash a nemotron-nano-30b porque el primero "tardaba". Medido despues con el
+    # duelo de codigo (arreglar 3 bugs reales en un archivo, 3 vueltas): deepseek 3 de 3 con
+    # mediana 69 s, nemotron-nano 1 de 3 con mediana 118 s. El cambio hecho POR VELOCIDAD dejo un
+    # modelo peor Y mas lento, y nadie lo noto en una semana.
+    #
+    # Esto NO apaga el reparador: si el principal se MUERE, sigue actuando igual. Lo unico que ya
+    # no puede hacer es cambiarlo por lento.
+    if [ "$(_mr_campo_rol "$MR_ROL" calidad_primero)" = "True" ]; then
+      _mr_log "'$MR_P' tarda, pero el rol '$MR_ROL' esta marcado como calidad_primero: NO se cambia por lentitud."
+      _mr_log "  (si de verdad hay que cambiarlo, medilo antes con eval/duelo-code/duelo.sh y hacelo a mano)"
+      exit 0
+    fi
     MR_CAUSA="presupuesto"
     _mr_log "FUERA DE PRESUPUESTO confirmado: '$MR_P' esta vivo pero no llega a tiempo para '$MR_ROL'. Buscando reemplazo."
   else
@@ -505,7 +559,16 @@ echo "  Rol '$MR_ROL':"
 echo "    antes : $MR_P  ->  ${MR_F1:--}  ->  ${MR_F2:--}"
 echo "    ahora : $MR_NP  ->  ${MR_NF1:--}  ->  ${MR_NF2:--}"
 if [ "$MR_CAUSA" = "presupuesto" ]; then
-  echo "    motivo: '$MR_P' esta vivo pero tarda ${MR_T1:-sin-token}/${MR_T2:-sin-token} ms en el primer token, y '$MR_ROL' espera hasta ${MR_PRESU}s"
+  # Como se lee el numero del primer token en los textos que quedan archivados. Si los dos sondeos
+  # vinieron vacios, el veredicto ya confirmo que el endpoint estaba SANO -- decirlo asi es la
+  # verdad. "tarda sin-token/sin-token ms" fue lo que hizo ilegible el cambio del rol 'general'
+  # el 21/08: una frase que no dice ningun numero y ademas suena a que si lo dice (ERR-215).
+  if _mr_es_num "${MR_T1:-}" || _mr_es_num "${MR_T2:-}"; then
+    MR_TTFT_TXT="tarda ${MR_T1:-sin-token}/${MR_T2:-sin-token} ms en el primer token"
+  else
+    MR_TTFT_TXT="nunca emitio un primer token en dos sondeos, con el endpoint contestando sano (${MR_EST_TTFT:-VIVO})"
+  fi
+  echo "    motivo: '$MR_P' esta vivo pero $MR_TTFT_TXT, y '$MR_ROL' espera hasta ${MR_PRESU}s"
 else
   echo "    motivo: '$MR_P' esta muerto ($MR_E1)"
 fi
@@ -530,7 +593,7 @@ MR_FECHA="$(date '+%Y-%m-%dT%H:%M:%S%z')"
 # dentro de seis meses. "no responde (LENTO)" seria enganoso para un reemplazo por presupuesto: el
 # modelo SI respondia. Lo que no hacia era llegar a tiempo, y ese numero es el dato que importa.
 if [ "$MR_CAUSA" = "presupuesto" ]; then
-  MR_MOTIVO_TXT="'$MR_P' esta vivo pero tarda ${MR_T1:-sin-token}/${MR_T2:-sin-token} ms en el primer token y el rol '$MR_ROL' espera hasta ${MR_PRESU}s: caia al fallback en cada llamada. Reemplazo automatico."
+  MR_MOTIVO_TXT="'$MR_P' esta vivo pero ${MR_TTFT_TXT:-no llega a tiempo} y el rol '$MR_ROL' espera hasta ${MR_PRESU}s: caia al fallback en cada llamada. Reemplazo automatico."
 else
   MR_MOTIVO_TXT="'$MR_P' no responde ($MR_E1); reemplazo automatico"
 fi

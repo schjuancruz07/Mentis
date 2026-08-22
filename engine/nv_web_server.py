@@ -67,10 +67,18 @@ PASO_RE = re.compile(r"^\[nv-agent\] iter \d+: (.+)$")
 # Prefijo de la carpeta de builds de Three.js (ver _servir_estatico).
 BUILD_THREE = "/estatico/node_modules/three/build/"
 
-# La pagina NO inventa un estilo propio: usa los mismos valores que app/renderer/style.css, que a
-# su vez salen del cuerpo digital 3D (cuerpo-digital.js). Naranja #ff6600 sobre negro #050507,
-# esquinas de 2px (no redondeadas), las respuestas de Mentis en SERIF y las del usuario en sans. Si
-# alguna vez cambia la paleta de la app, hay que cambiarla aca tambien: son el mismo Mentis.
+# La pagina NO inventa un estilo propio: usa los mismos valores que app/renderer/style.css.
+# Esquinas de 2px (no redondeadas), las respuestas de Mentis en SERIF y las del usuario en sans.
+#
+# LA ADVERTENCIA DE ABAJO SE INCUMPLIO SOLA (2026-08-20). Este comentario decia, desde el
+# principio: 'si alguna vez cambia la paleta de la app, hay que cambiarla aca tambien: son el
+# mismo Mentis'. La paleta de la app cambio el 2026-08-10 con la identidad terracota y esto se
+# quedo con la vieja -- naranja #ff6600 sobre negro #050507 -- durante diez dias. O sea que la
+# pagina del celular y la app eran dos productos distintos a la vista.
+#
+# tests/test-web.sh lo venia diciendo en cada corrida (seis FAIL, uno por color). La leccion no
+# es que faltara el aviso: es que un aviso escrito en un comentario depende de que alguien lo
+# lea el dia exacto en que toca otro archivo. El test si lo agarro; lo que faltaba era mirarlo.
 # EL PREFIJO r NO ES OPCIONAL Y ROMPIA LA PAGINA ENTERA (2026-08-06).
 #
 # Adentro de este bloque hay JavaScript, y el JavaScript tiene sus propias secuencias de escape.
@@ -89,21 +97,21 @@ PAGINA = r"""<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#050507">
+<meta name="theme-color" content="#141413">
 <title>Mentis</title>
 <style>
   :root {
     color-scheme: dark;
-    --fondo: #050507;
-    --principal: #141418;
-    --secundario: #1c1c22;
-    --texto: #dcdcdc;
-    --texto-dim: #8b8b93;
-    --acento: #ff6600;
-    --acento-soft: rgba(255, 102, 0, 0.16);
-    --peligro: #ff1100;
-    --border: #2e2e36;
-    --bubble-usuario: #1f1f26;
+    --fondo: #141413;
+    --principal: #1f1e1d;
+    --secundario: #2a2927;
+    --texto: #faf9f5;
+    --texto-dim: #b1ada1;
+    --acento: #d97757;
+    --acento-soft: rgba(217, 119, 87, 0.16);
+    --peligro: #ff453a;
+    --border: #33322f;
+    --bubble-usuario: #232220;
     --radius: 2px;
     /* Courier tambien aca (2026-08-07). Tiene que ser el MISMO cambio que en
        app/renderer/style.css: la pagina del celular y la app son la misma cosa vista de dos
@@ -271,6 +279,18 @@ PAGINA = r"""<!doctype html>
               cursor: pointer; opacity:.75; color: var(--texto-dim); font-weight: 300; }
   #btn-foto:active { opacity: 1; color: var(--texto); }
 </style>
+<!-- App instalable sin pasar por ninguna tienda (2026-08-22). Ni el manifest ni el registro del
+     service worker llevan el token: cuando esta pagina se sirve, el servidor deja una cookie
+     HttpOnly con el, y todo lo de abajo se autentica con eso. La primera version SI ponia el
+     token en estas URLs y estaba mal -- habria roto la regla, con test propio desde antes, de que
+     el token no viaja escrito en el cuerpo de la pagina. De paso queda mejor de lo que estaba: la
+     app instalada abre en "/" a secas, sin la llave colgando de la direccion. -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/estatico/pwa/icono-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mentis">
+<meta name="mobile-web-app-capable" content="yes">
 </head><body>
 <div id="barra-titulo">
   <div id="barra-titulo-nombre" data-nombre-ia>Mentis</div>
@@ -295,7 +315,6 @@ PAGINA = r"""<!doctype html>
   <div id="panel-cuerpo"></div>
 </div>
 <div id="zona-cuerpo">
-  <canvas id="cuerpo" width="220" height="220"></canvas>
   <div id="cuerpo-estado">en espera</div>
 </div>
 <div id="messages"></div>
@@ -314,19 +333,13 @@ PAGINA = r"""<!doctype html>
   <button id="btn-send" type="submit">Enviar</button>
 </form>
 
-<!-- El cuerpo digital es el MISMO modulo que usa la app (se sirve desde /estatico, espejando la
-     estructura de carpetas para que su import relativo de Three.js siga funcionando). Si no
-     carga -- telefono viejo, sin WebGL, red lenta -- el canvas se esconde y la pagina sigue
-     andando: la cara de Mentis es lindo tenerla, pero no es la funcion. -->
-<script type="module">
-  try {
-    const { crearCuerpoDigital } = await import('/estatico/renderer/cuerpo-digital.js');
-    const cuerpo = crearCuerpoDigital(document.getElementById('cuerpo'), { detalle: 'bajo', estado: 'STANDBY' });
-    window.__cuerpo = cuerpo;
-  } catch (e) {
-    document.getElementById('cuerpo').style.display = 'none';
-  }
-</script>
+<!-- ACA IBA EL CUERPO DIGITAL, y ya no va (2026-08-20). el usuario lo saco de la app hace tiempo por
+     decision propia; lo que quedaba era el import de un modulo que NO EXISTE en el repo. No
+     rompia nada -- el catch escondia el canvas -- pero pedia un archivo inexistente en cada
+     carga y el test lo reportaba como un 404 de permisos, mandando a buscar un problema que no
+     era. Se saca el import, el canvas y la entrada de la lista blanca. El texto de estado
+     (#cuerpo-estado) SI se queda: no dependia del modulo 3D y es lo que dice si Mentis esta
+     trabajando. -->
 <script>
 const T = new URLSearchParams(location.search).get('t') || '';
 
@@ -355,11 +368,11 @@ let turnoActual = null;
 const NOMBRE_ESTADO = { STANDBY: 'en espera', PROCESSING: 'trabajando', SPEAKING: 'contestando',
                         LISTENING: 'escuchando', ALERT: 'algo falló' };
 function estadoCuerpo(e) {
-  try { if (window.__cuerpo) window.__cuerpo.setEstado(e); } catch (_) {}
+  // (el cuerpo digital 3D ya no esta; el estado se muestra solo como texto)
   cuerpoEstado.textContent = NOMBRE_ESTADO[e] || '';
   cuerpoEstado.className = e === 'PROCESSING' ? 'trabajando' : (e === 'ALERT' ? 'mal' : '');
 }
-function sinapsis() { try { if (window.__cuerpo && window.__cuerpo.dispararSinapsis) window.__cuerpo.dispararSinapsis(); } catch (_) {} }
+function sinapsis() { /* era el destello del cuerpo digital 3D, que ya no esta */ }
 function conexionMal(txt) { conexion.textContent = txt; conexion.classList.add('mal'); }
 function conexionBien() { conexion.textContent = 'conectado'; conexion.classList.remove('mal'); }
 
@@ -753,13 +766,102 @@ function hablar(texto) {
 
 estadoCuerpo('STANDBY');
 cargarHistorial();
+
+// --- instalable como app (2026-08-22) ---------------------------------------------------------
+// El service worker es lo que convierte esta pagina en una app que se instala en el telefono sin
+// pasar por Google Play. Chrome solo lo permite en un contexto seguro (HTTPS o localhost), y la
+// direccion de Tailscale es HTTP: por eso se pregunta antes en vez de registrar a ciegas. Sin
+// esta guarda, la consola del celular se llena de un error que no significa nada y que hace
+// perder el tiempo buscando un bug donde solo falta habilitar HTTPS en la tailnet.
+if ('serviceWorker' in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register('/sw.js', { scope: '/' })
+.catch(function (e) { console.warn('no se pudo instalar el service worker:', e); });
+}
 </script>
 </body></html>"""
+
+# --- lo que hace falta para instalar la pagina como app -------------------------------------------
+# POR QUE UNA PWA Y NO UN.APK (2026-08-22): el usuario pidio "una app verdadera sin pasar por Google Play
+# ni App Store". Un.apk cumple, pero exige el SDK de Android y un JDK para compilarlo, y despues
+# hay que rearmarlo en cada cambio. Una PWA se instala desde el navegador con "Agregar a pantalla de
+# inicio", queda con su icono, abre en pantalla completa sin barra de direcciones, y se actualiza
+# sola porque es la misma pagina. Para el que la usa es lo mismo; para el que la mantiene, no.
+#
+# LO QUE FALTA Y NO DEPENDE DE ESTE ARCHIVO: Chrome exige contexto seguro. La direccion de Tailscale
+# es http://100.x.y.z:8765, que NO lo es. Se arregla habilitando HTTPS en la consola de Tailscale
+# (una casilla, gratis) y sirviendo por `tailscale serve` -- ver `mentis-web.sh https`. Mientras
+# tanto la pagina funciona igual por HTTP; lo unico que no se puede es instalarla.
+MANIFEST = {
+    "name": "Mentis",
+    "short_name": "Mentis",
+    "description": "Mentis desde el telefono, por la red privada de Tailscale.",
+    "start_url": "/",
+    "scope": "/",
+    # 'standalone' es lo que saca la barra de direcciones: sin esto se instala igual pero se ve
+    # como una pestaña, que es justo lo que el usuario no queria.
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#141413",
+    "theme_color": "#141413",
+    "lang": "es",
+    "icons": [
+        {"src": "/estatico/pwa/icono-192.png", "sizes": "192x192", "type": "image/png"},
+        {"src": "/estatico/pwa/icono-512.png", "sizes": "512x512", "type": "image/png"},
+        {"src": "/estatico/pwa/icono-maskable-512.png", "sizes": "512x512",
+         "type": "image/png", "purpose": "maskable"},
+    ],
+}
+
+# El service worker MINIMO que Chrome acepta para declarar la app instalable: tiene que existir y
+# tiene que atender 'fetch'. A proposito NO cachea las respuestas de Mentis -- una conversacion
+# vieja servida desde el cache en vez de la real seria peor que un error de red, porque parece
+# fresca. Solo guarda la cascara para poder decir "no hay conexion" en vez de mostrar el dinosaurio.
+SERVICE_WORKER = r"""
+const CACHE = 'mentis-cascara-v1';
+
+self.addEventListener('install', (e) => { self.skipWaiting(); });
+self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
+
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  // Nada de la API se cachea NUNCA: son turnos, historial y estado en vivo.
+  if (url.pathname.startsWith('/api/')) return;
+  if (e.request.method !== 'GET') return;
+
+  e.respondWith(
+    fetch(e.request)
+.then((r) => {
+        if (r && r.ok && (url.pathname === '/' || url.pathname.startsWith('/estatico/'))) {
+          const copia = r.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copia)).catch(() => {});
+        }
+        return r;
+      })
+.catch(() => caches.match(e.request).then((c) => c || new Response(
+        'Sin conexion con Mentis. Revisa que la computadora este prendida y Tailscale activo.',
+        { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })))
+  );
+});
+"""
 
 
 def _token_ok(handler):
     q = parse_qs(urlparse(handler.path).query)
     dado = (q.get("t") or [""])[0] or handler.headers.get("X-Mentis-Token", "")
+    # Y la cookie (2026-08-22). LA COOKIE NO ES UNA COMODIDAD: es lo que permite que la app
+    # instalada en el telefono no tenga el token escrito en ningun lado. Sin esto, el manifest
+    # tendria que llevar el token en su start_url y en el <link> del HTML -- y hay una regla
+    # anterior, con test propio, de que el token NO viaja escrito en el cuerpo de la pagina.
+    # Bajar esa regla para que entrara la app instalable habria sido cambiar seguridad por
+    # comodidad; con la cookie se cumplen las dos cosas y ademas el token deja de estar en la URL
+    # una vez que el navegador la guardo.
+    if not dado:
+        cookies = handler.headers.get("Cookie", "") or ""
+        for parte in cookies.split(";"):
+            nombre, _, valor = parte.strip().partition("=")
+            if nombre == "mentis_token":
+                dado = valor
+                break
     return bool(TOKEN) and hmac.compare_digest(str(dado), TOKEN)
 
 
@@ -997,11 +1099,14 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass  # el log por defecto escupe una linea por pedido; no aporta nada
 
-    def _responder(self, codigo, cuerpo, tipo="application/json; charset=utf-8"):
+    def _responder(self, codigo, cuerpo, tipo="application/json; charset=utf-8", extra=None):
         datos = cuerpo if isinstance(cuerpo, bytes) else str(cuerpo).encode("utf-8")
         self.send_response(codigo)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(datos)))
+        # 'extra' existe para una sola cosa hoy: el Service-Worker-Allowed del service worker.
+        for k, v in (extra or {}).items():
+            self.send_header(k, v)
         # Sin cache: si el telefono guardara la pagina, cambiarla no serviria de nada.
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -1018,7 +1123,6 @@ class Handler(BaseHTTPRequestHandler):
         de dibujo y una libreria publica -- y la lista blanca de abajo impide pedir cualquier otra
         cosa: sin ella, un "/estatico/../../engine/.nv-secrets" seria una fuga de claves."""
         permitidos = {
-            "/estatico/renderer/cuerpo-digital.js": ("app/renderer/cuerpo-digital.js", "text/javascript"),
             # El formateador de las respuestas es EL MISMO archivo que usa la app. Si hubiera una
             # copia aca, el dia que se arregle un caso raro en uno de los dos el otro se queda con
             # el bug -- y el celular es justo donde menos se mira.
@@ -1026,6 +1130,14 @@ class Handler(BaseHTTPRequestHandler):
             # Las paletas, tambien compartidas: si el celular tuviera su propia lista, el tema
             # elegido en la app se veria distinto en el telefono, que es peor que no tener temas.
             "/estatico/renderer/temas.js": ("app/renderer/temas.js", "text/javascript"),
+            # Los iconos de la app instalable. Van SIN token igual que los de arriba, y aca la
+            # razon es distinta: Android los vuelve a pedir por su cuenta cuando arma el icono de
+            # la pantalla de inicio, y si algun dia se rota el token, un icono roto en el telefono
+            # del usuario seria un misterio caro de diagnosticar. No hay nada secreto: es el logo.
+            "/estatico/pwa/icono-192.png": ("app/renderer/assets/pwa/icono-192.png", "image/png"),
+            "/estatico/pwa/icono-512.png": ("app/renderer/assets/pwa/icono-512.png", "image/png"),
+            "/estatico/pwa/icono-maskable-512.png": (
+                "app/renderer/assets/pwa/icono-maskable-512.png", "image/png"),
         }
         tipo = "text/javascript"
         if ruta in permitidos:
@@ -1063,7 +1175,25 @@ class Handler(BaseHTTPRequestHandler):
         if not _token_ok(self):
             return self._responder(401, json.dumps({"ok": False, "error": "token invalido"}))
         if ruta in ("/", "/index.html"):
-            return self._responder(200, PAGINA, "text/html; charset=utf-8")
+            # Al entrar con el token bueno se deja una cookie con el mismo valor. Desde ahi el
+            # manifest, el service worker y la app instalada se autentican solos, sin que el token
+            # aparezca ni en el HTML ni en el start_url. SameSite=Strict para que ninguna otra
+            # pagina pueda usarla, y HttpOnly para que el JavaScript de la propia pagina tampoco
+            # pueda leerla. Un anio de vida: si expirara antes, la app instalada dejaria de abrir
+            # un dia cualquiera sin motivo visible, que es la peor forma de fallar.
+            galleta = ("mentis_token=%s; Path=/; Max-Age=31536000; HttpOnly; SameSite=Strict"
+                       % TOKEN)
+            return self._responder(200, PAGINA, "text/html; charset=utf-8",
+                                   extra={"Set-Cookie": galleta})
+        if ruta == "/manifest.webmanifest":
+            return self._responder(200, json.dumps(MANIFEST),
+                                   "application/manifest+json; charset=utf-8")
+        if ruta == "/sw.js":
+            # Sin 'Service-Worker-Allowed' el navegador limita el alcance a la carpeta del archivo.
+            # Como este se sirve desde la raiz ya alcanza, pero se declara igual para que el dia
+            # que se mueva no deje de controlar la pagina en silencio.
+            return self._responder(200, SERVICE_WORKER, "text/javascript; charset=utf-8",
+                                   extra={"Service-Worker-Allowed": "/"})
         if ruta == "/api/historial":
             q = parse_qs(urlparse(self.path).query)
             arch = _archivo_de_sesion((q.get("sesion") or [""])[0])

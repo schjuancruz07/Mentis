@@ -58,8 +58,13 @@ NO_VIAJA=(
   ".git"
 )
 # Archivos sueltos que sí van, pero vaciados.
+# SIN "theme" (2026-08-20): era una clave muerta. Nada en la app la lee -- la apariencia se
+# gobierna con `apariencia.paleta` desde el 2026-08-06 -- y encima el valor que se escribia acá,
+# "oscuro", no existe en el vocabulario de paletas (son "mentis-oscuro", "bitacora-de-campo", y
+# las otras cuatro de temas.js). O sea: cada instalación nueva arrancaba con una configuración
+# que no configuraba nada y que además estaba mal escrita.
 PLANTILLA_SETTINGS='{
-  "theme": "oscuro",
+  "apariencia": { "nombre": "", "paleta": "mentis-oscuro" },
   "profile": { "fullName": "", "nickname": "", "role": "", "instructions": "" },
   "connectorsEnabled": {}
 }'
@@ -136,7 +141,14 @@ _revisar_copia() {
   # guard de privacidad las enmascara. Sin esta excepcion, el instalador da un "MAL" que no lo es
   # -- y una alarma que suena siempre termina siendo una alarma que nadie mira.
   local conclave
-  conclave="$(grep -rlE "nvapi-[A-Za-z0-9_-]{20,}" "$destino" 2>/dev/null | grep -v "/tests/" | head -5)"
+  # Y se descuenta el PLACEHOLDER que deja el propio limpiador ("nvapi-CLAVE-DE-EJEMPLO-NO-REAL"):
+  # tiene forma de clave a proposito, asi que hacia saltar esta alarma sobre
+  # mentis-repo-publico.sh -- el archivo que borra las claves. Es exactamente la alarma que
+  # suena siempre y que el comentario de arriba advierte que nadie va a mirar (2026-08-18).
+  conclave="$(grep -rlE "nvapi-[A-Za-z0-9_-]{20,}" "$destino" 2>/dev/null | grep -v "/tests/" \n    | while IFS= read -r _f; do
+        grep -E "nvapi-[A-Za-z0-9_-]{20,}" "$_f" | grep -qv "CLAVE-DE-EJEMPLO" && printf '%s
+' "$_f"
+      done | head -5)"
   if [ -n "$conclave" ]; then
     echo "  MAL: hay claves de NVIDIA en:"; printf '    %s\n' $conclave; problemas=$((problemas+1))
   fi
@@ -146,7 +158,14 @@ _revisar_copia() {
   # persona eso ademas de personal es incorrecto: las consultas de ella irian a nombre de el.
   local connombre
   local patron_mail="usuario"; patron_mail="${patron_mail}07"
-  connombre="$(grep -rli "$patron_mail" "$destino" 2>/dev/null | grep -v "/docs/" | head -5)"
+  # El usuario de GitHub es el mismo string que la parte local del mail, y aparece legitimamente
+  # en la URL PUBLICA del repositorio (github.com/<usuario>/Mentis), que tiene que estar para
+  # que alguien pueda clonarlo. Se descuentan SOLO esas apariciones: el caso que importa --
+  # el mail viajando como User-Agent a Nominatim -- se sigue detectando igual (2026-08-18).
+  connombre="$(grep -rli "$patron_mail" "$destino" 2>/dev/null | grep -v "/docs/" \n    | while IFS= read -r _f; do
+        grep -i "$patron_mail" "$_f" | grep -qvi "github.com/$patron_mail" && printf '%s
+' "$_f"
+      done | head -5)"
   if [ -n "$connombre" ]; then
     echo "  MAL: quedo el mail del usuario en:"; printf '    %s\n' $connombre; problemas=$((problemas+1))
   fi

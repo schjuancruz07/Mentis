@@ -19,8 +19,18 @@ _bad() { echo "FAIL: $1"; FALLO=$((FALLO+1)); }
 SB="$(mktemp -d)"
 trap 'rm -rf "$SB"' EXIT
 mkdir -p "$SB/engine" "$SB/capabilities" "$SB/workspace"
-cp "$DIR/engine/nv-agent.sh" "$DIR/engine/nv-lib.sh" "$SB/engine/"
-cp "$DIR/engine/nv-verify.sh" "$SB/engine/" 2>/dev/null || true
+cp "$DIR/engine/nv-agent.sh" "$SB/engine/"
+# TODAS las libs, no una lista escrita a mano (2026-08-20). Este test estuvo ROTO desde que se
+# agrego nv-gate-lib.sh: el sandbox copiaba nv-lib.sh y nv-verify.sh por nombre, asi que el agente
+# moria en el `source` de la lib nueva y las 14 comprobaciones de abajo no se ejecutaban nunca.
+# Lo agarro el guardia del caso 0, que existe justamente para eso -- pero una lista de nombres se
+# desactualiza sola cada vez que aparece un archivo, y el copiado no tiene por que saber cuales
+# hacen falta.
+cp "$DIR"/engine/nv-*lib*.sh "$SB/engine/" 2>/dev/null || true
+cp "$DIR/engine/nv-lib.sh" "$DIR/engine/nv-verify.sh" "$SB/engine/" 2>/dev/null || true
+# Y los textos del protocolo, que desde 2026-08 salen de archivos en vez de estar adentro del
+# script. Es la segunda regresion que acumulo este sandbox por copiar por nombre.
+cp -r "$DIR/engine/textos" "$SB/engine/" 2>/dev/null || true
 cp "$DIR/skills-autonomas.json" "$SB/"
 
 # Skills de mentira: una "libre" y una "con recibo", que sólo dicen que corrieron.
@@ -124,6 +134,81 @@ SAL="$(_correr where -K)"
 case "$SAL" in
   *"CORRIO-LIBRE"*) _bad "siguió corriendo una skill que el usuario puso en 'no'" ;;
   *) _ok "apagar una skill en el registro la apaga de verdad" ;;
+esac
+
+echo "== 7. la lista blanca del modo remoto (MENTIS_SKILLS_SOLO) =="
+# POR QUE (2026-08-20): desde el telefono estaban apagadas TODAS -- no se pasaba -K. Pero
+# /recall, /where y /boveda no escriben nada y son justo las utiles desde el celular. Ahora en
+# remoto se pasa -K y el recorte lo hace esta lista blanca. Lo que hay que proteger es que siga
+# siendo un recorte: que no pueda ENCENDER nada que el registro tenga apagado.
+python3 - "$SB/skills-autonomas.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["where"] = "libre"          # se habia puesto en "no" en el caso 6
+json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PY
+
+SAL="$(MENTIS_SKILLS_SOLO="where recall boveda" _correr where -K)"
+case "$SAL" in
+  *"CORRIO-LIBRE"*) _ok "una skill que ESTA en la lista blanca corre igual" ;;
+  *) _bad "la lista blanca bloqueo una skill que si estaba adentro" ;;
+esac
+
+SAL="$(MENTIS_SKILLS_SOLO="where recall boveda" _correr programar -K)"
+case "$SAL" in
+  *"CORRIO-RECIBO"*) _bad "CORRIO UNA SKILL FUERA DE LA LISTA BLANCA (desde el telefono)" ;;
+  *) _ok "una skill fuera de la lista no corre, aunque el registro la tenga habilitada" ;;
+esac
+case "$SAL" in
+  *"skill RECHAZADO (fuera de MENTIS_SKILLS_SOLO"*) _ok "y lo dice con todas las letras en el log" ;;
+  *) _bad "la rechazo sin explicar por que" ;;
+esac
+
+# La invariante que de verdad importa: la lista blanca SOLO PUEDE SACAR. Si pudiera dar permisos,
+# alcanzaria con nombrar una skill ahi para saltearse el registro del usuario -- seria una llave
+# maestra, no una segunda llave. Es la misma regla que herramientas_fuera en los modos.
+python3 - "$SB/skills-autonomas.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["where"] = "no"
+json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PY
+SAL="$(MENTIS_SKILLS_SOLO="where" _correr where -K)"
+case "$SAL" in
+  *"CORRIO-LIBRE"*) _bad "la lista blanca ENCENDIO una skill que el registro tiene en 'no'" ;;
+  *) _ok "estar en la lista blanca no alcanza: el registro del usuario sigue mandando" ;;
+esac
+
+# Y sin la variable, todo sigue como antes (el modo remoto no puede filtrarse a la computadora).
+python3 - "$SB/skills-autonomas.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["where"] = "libre"
+json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PY
+SAL="$(_correr where -K)"
+case "$SAL" in
+  *"CORRIO-LIBRE"*) _ok "sin la variable no hay recorte: en la computadora corren todas" ;;
+  *) _bad "el recorte del telefono se aplico tambien en la computadora" ;;
+esac
+
+echo "== 8. /boveda: buscar si, reindexar no (guarda adentro de la skill) =="
+# La lista blanca deja entrar /boveda entera porque BUSCAR no escribe. Reindexar si: reconstruye
+# el indice del ecosistema y queda a medias si el celular se va de la WiFi. La guarda vive adentro
+# de la skill porque es la unica que sabe que ese subcomando escribe.
+SAL="$(MENTIS_REMOTO=1 bash "$DIR/capabilities/boveda.sh" reindexar 2>&1)"
+case "$SAL" in
+  *"no se puede desde el teléfono"*) _ok "reindexar desde el telefono se rechaza con un motivo" ;;
+  *"Indexando el ecosistema"*) _bad "ARRANCO A REINDEXAR desde el telefono" ;;
+  *) _bad "respuesta inesperada de /boveda reindexar: ${SAL:0:80}" ;;
+esac
+SAL="$(bash "$DIR/capabilities/boveda.sh" reindexar 2>&1 | head -2)"
+case "$SAL" in
+  *"no se puede desde el teléfono"*) _bad "bloqueo reindexar TAMBIEN en la computadora" ;;
+  *) _ok "en la computadora reindexar sigue disponible" ;;
 esac
 
 echo

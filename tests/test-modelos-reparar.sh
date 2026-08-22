@@ -199,6 +199,66 @@ else
   _falla "roles sin examen (cualquier modelo pasaria):$SIN_FIXTURE"
 fi
 
+# --- 4bis. UN VACIO NO ES UNA MEDICION (ERR-215, 2026-08-22) --------------------------------------
+# El bug: nv_probar_ttft devuelve vacio tanto cuando el modelo acepta y nunca emite (falla real)
+# como cuando hay un 429, un 503, un corte de red o curl sin tiempo. La rama de presupuesto los
+# trataba igual y degradaba. Asi se cambio el rol 'general' el 21/08 con el motivo literal
+# "tarda sin-token/sin-token ms": dos valores vacios pasando por una medicion.
+echo "-- un vacio no es una medicion"
+_veredicto_caso() {
+  local esperado="$1" got
+  shift
+  got="$(nv_ttft_veredicto "$@")"
+  if [ "$got" = "$esperado" ]; then
+    _ok "nv_ttft_veredicto('$1','$2',lim=$3,estado='${4:-}') = $got"
+  else
+    _falla "nv_ttft_veredicto('$1','$2',lim=$3,estado='${4:-}') dio '$got', se esperaba '$esperado'"
+  fi
+}
+# EL caso del bug: dos vacios sin saber como esta el endpoint. Antes: degradaba. Ahora: no se sabe.
+_veredicto_caso NO-MEDIBLE ""      ""      12000 ""
+_veredicto_caso NO-MEDIBLE ""      ""      12000 "SATURADO"
+_veredicto_caso NO-MEDIBLE ""      ""      12000 "ERROR"
+_veredicto_caso NO-MEDIBLE ""      ""      12000 "RARO"
+# El modo de falla que la rama SI vino a atrapar: endpoint sano y el modelo nunca emite.
+_veredicto_caso FUERA      ""      ""      12000 "VIVO"
+_veredicto_caso FUERA      ""      ""      12000 "LENTO"
+# Dos mediciones reales fuera de presupuesto: degradar esta bien.
+_veredicto_caso FUERA      19000   18000   12000 "VIVO"
+# Una sola medicion que llega a tiempo prueba que el modelo PUEDE: no se degrada.
+_veredicto_caso DENTRO     900     800     12000 "VIVO"
+_veredicto_caso DENTRO     ""      900     12000 "SATURADO"
+_veredicto_caso DENTRO     900     ""      12000 "SATURADO"
+_veredicto_caso DENTRO     19000   800     12000 "VIVO"
+# El limite es inclusivo: exactamente el presupuesto todavia entra.
+_veredicto_caso DENTRO     12000   12000   12000 "VIVO"
+_veredicto_caso FUERA      12001   12001   12000 "VIVO"
+# Basura donde deberia haber un numero no puede colarse como medicion.
+_veredicto_caso NO-MEDIBLE "sin-token" "sin-token" 12000 "SATURADO"
+
+# Y los invariantes en el codigo, para que nadie los saque sin querer.
+if grep -q "nv_ttft_veredicto" "$REP"; then
+  _ok "el reparador decide con nv_ttft_veredicto"
+else
+  _falla "el reparador ya no usa nv_ttft_veredicto: volvio a decidir por su cuenta"
+fi
+if grep -q "Vacio = nunca emitio" "$REP"; then
+  _falla "volvio el razonamiento viejo ('vacio = nunca emitio') que causo ERR-215"
+else
+  _ok "no quedo rastro del razonamiento que trataba un vacio como una medicion"
+fi
+if grep -q 'NO SE PUDO MEDIR' "$REP"; then
+  _ok "cuando no se puede medir, lo dice y no toca nada"
+else
+  _falla "no hay salida explicita para 'no se pudo medir'"
+fi
+# La guarda temprana: contra un endpoint que no contesta sano ni se intenta medir el presupuesto.
+if grep -q "no es muerte, pero tampoco una respuesta sana" "$REP"; then
+  _ok "con SATURADO/ERROR/RARO ni siquiera intenta medir el presupuesto"
+else
+  _falla "falta la guarda que evita medir presupuesto contra un endpoint no sano"
+fi
+
 # --- 5. EN VIVO (se saltea sin key/red) -----------------------------------------------------------
 echo "-- en vivo"
 LIVE_KEY="$(nv_read_setting NVIDIA_API_KEY 2>/dev/null)"
@@ -239,7 +299,7 @@ else
     _ok "un rol con el principal vivo no se toca (no escribio ningun override)"
   fi
   # Y que el motivo de no tocar sea uno de los previstos, no un error inesperado.
-  if printf '%s' "$SAL" | grep -qE "no esta muerto|Nada que reparar|SATURADO|no hay muerte confirmada"; then
+  if printf '%s' "$SAL" | grep -qE "no esta muerto|Nada que reparar|SATURADO|no hay muerte confirmada|NO SE PUDO MEDIR|tampoco una respuesta sana"; then
     _ok "y lo explica con un motivo previsto"
   elif printf '%s' "$SAL" | grep -q "dieron caidos a la vez"; then
     _salteo "ahora mismo no responde ningun modelo del rol (limite de uso o red)"

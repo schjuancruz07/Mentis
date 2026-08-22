@@ -994,8 +994,35 @@ $CAPTXT"
             echo "[nv-agent] iter $it: read documento: $REL ($_NIMG imagen(es) descrita(s))" >&2
           fi
         elif [ "$(file --brief --mime-encoding -- "$ABS" 2>/dev/null)" = "binary" ]; then
-          OBS="ERROR: '$REL' es un archivo binario (imagen/audio/video/etc), no se puede leer como texto con esta herramienta. Si ya está adjunto como imagen real (rol multimodal), analizalo directamente en vez de leerlo."
-          echo "[nv-agent] iter $it: read RECHAZADO (binario): $REL" >&2
+          # UN MODELO 3D SI SE PUEDE "LEER": SE LO ANALIZA (2026-08-18).
+          #
+          # Antes se probo un cartel que mandaba a usar la accion analizar3d. El modelo hacia
+          # caso, pero para eso primero pedia la ficha completa de gen y recien despues actuaba:
+          # dos pasos de rodeo para algo que se puede contestar aca mismo. Esto es lo que pidio
+          # en primer lugar -- leer el archivo -- y de un modelo 3D lo que se puede leer es que
+          # tiene y si se puede fabricar.
+          #
+          # OJO CON EL tr: aca va una clase POSIX ([:space:]) y no una barra invertida. Escribir
+          # el escape de salto de linea en este archivo desde una herramienta que colapsa las
+          # barras deja un salto LITERAL adentro del string, y eso rompe el script en runtime sin
+          # que bash -n lo vea: costo cinco corridas muertas antes de encontrarlo.
+          _ES3D=0
+          case "$REL" in *.glb|*.gltf|*.obj|*.stl|*.GLB|*.GLTF|*.OBJ|*.STL) _ES3D=1 ;; esac
+          if [ "$_ES3D" = "1" ] && [ -f "$NVDIR/modelo3d_analizar.py" ]; then
+            # El rc se captura con if/else y no con "|| true; $?": con el || el $? es siempre 0
+            # y el analisis fallido pasaria por bueno.
+            if _AN3D="$(timeout 120 python3 "$NVDIR/modelo3d_analizar.py" "$ABS" 2>&1)"; then _AN3DRC=0; else _AN3DRC=$?; fi
+            if [ "$_AN3DRC" = "0" ] || [ "$_AN3DRC" = "3" ]; then
+              OBS="$(printf %s "$_AN3D" | _trunc)"
+              echo "[nv-agent] iter $it: read modelo 3D: $REL" >&2
+            else
+              OBS="ERROR: '$REL' es un modelo 3D y no pude analizarlo: $(printf %s "$_AN3D" | tr -s "[:space:]" " " | cut -c1-160)"
+              echo "[nv-agent] iter $it: read modelo 3D FALLO: $REL" >&2
+            fi
+          else
+            OBS="ERROR: '$REL' es un archivo binario (imagen/audio/video/etc), no se puede leer como texto con esta herramienta. Si ya está adjunto como imagen real (rol multimodal), analizalo directamente en vez de leerlo."
+            echo "[nv-agent] iter $it: read RECHAZADO (binario): $REL" >&2
+          fi
         else
           # Un archivo de.mentis-obs NO se vuelve a descargar (bug real 2026-07-27, encontrado
           # probándolo): la salida guardada también supera el tope, así que leerla generaba OTRO
@@ -1049,7 +1076,20 @@ $CAPTXT"
           OBS="ERROR: '$REL' es la CARPETA donde se guardan las observaciones largas, no un archivo. Tenés que leer el archivo puntual que te indiqué (con el formato '$OBSDIR_REL/obs-<iteracion>-<n>.txt'). Los que hay ahora son:
 $(ls -1 -- "$ABS" 2>/dev/null | head -10 || true)"
         else
-          OBS="ERROR: '$REL' es un directorio, no un archivo. Para saber qué hay adentro usá {\"tool\":\"search\",\"query\":\"...\"}; para leer, nombrá el archivo concreto."
+          # LISTAR, NO RECHAZAR (2026-08-21). Antes esto era un ERROR que mandaba a usar
+          # 'search' -- pero search busca TEXTO ADENTRO de los archivos, no lista lo que hay en una
+          # carpeta. O sea que la respuesta al "¿qué hay acá adentro?" era una herramienta que no
+          # contesta esa pregunta, y no habia ninguna que la contestara.
+          #
+          # Paso de verdad: en la tarea de investigar sus propias capacidades, el turno pidio leer
+          # 'capabilities' para ver que skills existen, se comio el rechazo, probo search tres
+          # veces mas y termino escribiendo "Mentis no tiene esa capacidad" sobre cosas que SI
+          # tiene. No pudo mirar la carpeta que le hubiera dado la respuesta.
+          OBS="'$REL' es un directorio. Esto es lo que hay adentro:
+$(ls -1A -- "$ABS" 2>/dev/null | head -60 || true)
+
+(para leer uno, nombralo con su ruta: '$REL/<nombre>')"
+          echo "[nv-agent] iter $it: read (listado de directorio): $REL" >&2
         fi
         echo "[nv-agent] iter $it: read RECHAZADO (es un directorio): $REL" >&2
       else
@@ -1090,9 +1130,18 @@ $(ls -1 -- "$ABS" 2>/dev/null | head -10 || true)"
       SBASE="$ROOT"; [ -n "$SREL" ] && SBASE="$(_ruta_leible "$SREL" || echo "")"
       if [ -n "$SBASE" ] && [ -e "$SBASE" ]; then
         if command -v rg >/dev/null 2>&1; then
-          OBS="$(rg -n --no-heading -m 20 -- "$Q" "$SBASE" 2>/dev/null | _trunc || true)"
+          # QUE NO SE BUSQUE A SI MISMO (2026-08-21). El search devolvia resultados de
+          #.repo-publico/ -- que es una COPIA entera del proyecto, generada para publicar -- y de
+          #.mentis-obs/, que es donde el propio agente guarda sus observaciones largas.
+          #
+          # Lo segundo es lo peor: en una tarea real, el paso 4 hizo un search, la observacion
+          # quedo guardada en.mentis-obs/obs-4-1.txt, y en el paso 6 el MISMO search se la
+          # devolvio como si fuera codigo del proyecto. El turno mirando su propio eco.
+          # Y lo primero llena la respuesta de rutas que empiezan con.repo-publico/, que no son
+          # los archivos que hay que tocar.
+          OBS="$(rg -n --no-heading -m 20 $NVA_SEARCH_FUERA -- "$Q" "$SBASE" 2>/dev/null | _trunc || true)"
         else
-          OBS="$(grep -rn -m 20 -- "$Q" "$SBASE" 2>/dev/null | _trunc || true)"
+          OBS="$(grep -rn -m 20 $NVA_SEARCH_FUERA_GREP -- "$Q" "$SBASE" 2>/dev/null | _trunc || true)"
         fi
         # CON UN CORPUS ACTIVO, 'search' TAMBIEN LO MIRA (2026-08-12). Buscar en el material es
         # exactamente lo que el modo Study existe para hacer: dejarlo afuera obligaba al modelo a
@@ -1155,11 +1204,44 @@ $OBS"
         _foto_antes_de_tocar
         mkdir -p -- "$(dirname "$ABS")"
         CONTENT="$(_b64d "$CONTENT_B64")"
+
+        # NO ESCRIBIR EL PLACEHOLDER DEL PROTOCOLO (2026-08-21). El protocolo se documenta como
+        # {"tool":"write","path":"...","content":"<content>"}, y el modelo puede copiar el ejemplo
+        # literal en vez de rellenarlo. Cuando pasa, el archivo queda con nueve bytes que dicen
+        # "<content>" -- y si el archivo YA EXISTIA, se destruye lo que habia.
+        #
+        # Paso de verdad: un plan de 4.704 bytes quedo en 9. Y el turno cerro diciendo "redacte el
+        # documento, el archivo contiene la estrategia y los pasos concretos". Ni el gate de
+        # completitud ni la guarda de archivos nombrados lo vieron: el archivo EXISTIA y la
+        # respuesta no mentia sobre ninguna ruta, solo sobre lo que habia adentro.
+        _CONT_LIMPIO="$(printf '%s' "$CONTENT" | tr -d '[:space:]')"
+        # La lista incluye los puntos suspensivos sueltos, que es el que se escapo la primera vez: el
+        # modelo dejo "..." como contenido y el archivo -- un plan de 3.660 bytes -- quedo en 3.
+        # Cualquier contenido de menos de 12 caracteres que sea solo puntos o un <marcador> es un
+        # relleno, nunca un documento.
+        if [ "$_CONT_LIMPIO" = "<content>" ] || [ "$_CONT_LIMPIO" = "<contenido>" ] || [ "$_CONT_LIMPIO" = "<texto>" ] || [ "$_CONT_LIMPIO" = "<...>" ] || [ "$_CONT_LIMPIO" = "..." ] || [ "$_CONT_LIMPIO" = "…" ] || { [ "${#_CONT_LIMPIO}" -lt 12 ] && printf '%s' "$_CONT_LIMPIO" | grep -qE '^<[a-z_]+>$'; }; then
+          OBS="ERROR: eso es el EJEMPLO del protocolo, no el contenido. Escribiste literalmente '$_CONT_LIMPIO' en '$REL', asi que el archivo NO se toco. Volve a mandar el write con el texto completo adentro de 'content'."
+          echo "[nv-agent] iter $it: write RECHAZADO (placeholder del protocolo): $REL" >&2
+        else
+        # SI ESTO ENCOGE UN ARCHIVO QUE YA EXISTIA, SE AVISA. Reescribir un archivo dejandolo en
+        # una fraccion de lo que era casi siempre es una perdida y no una edicion: el modelo
+        # 'corrige' un documento y devuelve un resumen de lo que habia. No se rechaza -- a veces
+        # vaciar un archivo es lo correcto -- pero se le dice en la cara, con los dos numeros.
+        _TAM_ANTES=0
+        [ -f "$ABS" ] && _TAM_ANTES="$(wc -c < "$ABS" 2>/dev/null | tr -d ' ')"
         printf '%s' "$CONTENT" > "$ABS"
-        OBS="OK: archivo escrito ($(printf '%s' "$CONTENT" | wc -c) bytes): $REL"
+        _TAM_AHORA="$(printf '%s' "$CONTENT" | wc -c)"
+        OBS="OK: archivo escrito ($_TAM_AHORA bytes): $REL"
+        if [ "${_TAM_ANTES:-0}" -gt 400 ] && [ "$_TAM_AHORA" -lt "$(( _TAM_ANTES / 3 ))" ]; then
+          OBS="$OBS
+
+OJO: ese archivo tenia $_TAM_ANTES bytes y lo dejaste en $_TAM_AHORA. Si querias CORREGIR algo, acabas de borrar el resto. Si fue sin querer, volve a escribirlo ENTERO ahora. Si era a proposito, segui."
+          echo "[nv-agent] iter $it: write ENCOGIO $REL ($_TAM_ANTES -> $_TAM_AHORA bytes)" >&2
+        fi
         # Huella del contenido recien escrito (cksum: un proceso corto y sin dependencias).
         ESCRITO_HUELLA["$REL"]="$(printf '%s' "$CONTENT" | cksum | cut -d' ' -f1)"
         echo "[nv-agent] iter $it: write $REL" >&2
+        fi
         WLANG=""
         case "$REL" in
           *.py) CODE_LANG_GUESS="python"; WLANG="python" ;;
@@ -1520,7 +1602,15 @@ except Exception:
 if "error" in d:
     print("ERROR: " + str(d["error"]))
 else:
-    lines = [d.get("text", ""), "", "ELEMENTOS INTERACTIVOS:"]
+    # "text" O "texto" (2026-08-21). El servidor de navegador devuelve la pagina en "text"; el
+    # atajo de Tavily arma su respuesta con la clave en español, {"ok":true,"texto":...}. Este
+    # formateador leia solo "text", asi que TODO resultado de Tavily se tiraba a la basura y al
+    # modelo le llegaba una observacion vacia con el titulo "ELEMENTOS INTERACTIVOS:" y nada mas.
+    # El sintoma era el modelo pidiendo `browse` 25 veces seguidas -- el turno entero -- porque
+    # cada busqueda le devolvia el vacio y volvia a intentar. Dos nombres para el mismo campo, a
+    # dos metros de distancia en el mismo archivo.
+    texto = d.get("text") or d.get("texto") or ""
+    lines = [texto, "", "ELEMENTOS INTERACTIVOS:"]
     for el in d.get("elements", []):
         tsuffix = " (" + el["type"] + ")" if el.get("type") else ""
         lines.append("[" + str(el["n"]) + "] " + el["kind"] + ": \"" + el["label"] + "\"" + tsuffix)
@@ -1763,6 +1853,69 @@ else:
               echo "[nv-agent] iter $it: gen video FALLO (archivo ausente pese a exito reportado)" >&2
             fi
           fi
+        elif [ "$GKIND" = "pieza" ]; then
+          # PIEZAS PARA FABRICAR (2026-08-18). Distinto de action=3d: aquello saca una malla de
+          # una imagen (organica, aproximada, para mirar) y esto genera geometria EXACTA a partir
+          # de medidas, y exporta STEP -- que es lo que acepta un taller. Un.glb no se manda a
+          # fabricar.
+          #
+          # El guion entra por ARCHIVO y no por el JSON de la accion: describir varias piezas con
+          # sus agujeros no entra comodo en un solo campo, y ademas asi queda escrito en la carpeta
+          # del usuario, que puede editarlo y volver a generar sin repetir la conversacion.
+          if [ -z "$GPATH_REL" ]; then
+            OBS="ERROR: gen kind=pieza necesita 'path' con la ruta de un guion.json. Escribilo primero con write. Formato: {\"unidades\":\"mm\",\"piezas\":[{\"nombre\":\"base\",\"forma\":\"caja\",\"x\":80,\"y\":60,\"z\":10,\"agujeros\":[{\"diametro\":6,\"en\":[25,18]}]}]}"
+          elif GABS="$(_caged "$GPATH_REL" 2>/dev/null)" && [ -f "$GABS" ]; then
+            GPOUT="$MENTIS_CREATIONS_DIR/Piezas-3D/$GOUTNAME"
+            mkdir -p "$GPOUT"
+            if GPRES="$(timeout 300 python3 "$NVDIR/cad_pieza.py" "$GABS" "$GPOUT" 2>&1)"; then GPRC=0; else GPRC=$?; fi
+            OBS="$(printf %s "$GPRES" | _trunc)"
+            if [ "$GPRC" = "0" ]; then
+              HAD_REAL_ACTION=1; ACCIONES_N=$((ACCIONES_N+1))
+              for _f in "$GPOUT"/*.step; do [ -f "$_f" ] && echo "[nv-agent] ARTIFACT: $(_win_path "$_f")" >&2; done
+              echo "[nv-agent] iter $it: gen pieza (STEP+STL en $(_win_path "$GPOUT"))" >&2
+            else
+              echo "[nv-agent] iter $it: gen pieza RECHAZADA (el guion tiene problemas)" >&2
+            fi
+          else
+            OBS="ERROR: no encontre el guion '$GPATH_REL' en tu carpeta de trabajo."
+            echo "[nv-agent] iter $it: gen pieza RECHAZADA (guion no existe)" >&2
+          fi
+        elif [ "$GKIND" = "analizar3d" ]; then
+          # ANALIZAR UN MODELO 3D (2026-08-18). Mentis genera modelos con TripoSR y hasta hoy lo
+          # unico que podia decir de ellos era que existian. Un modelo se ve bien en el visor y eso
+          # no dice NADA sobre si se puede fabricar: la malla puede estar abierta, las normales al
+          # reves o la pieza puede ser veinte pedazos sueltos. Eso se descubria recien cuando
+          # fallaba la impresora.
+          #
+          # LA RUTA SE BUSCA EN DOS LADOS a proposito: lo que genera 'gen' NO queda en la raiz de
+          # trabajo sino en la carpeta de creaciones, asi que exigir _caged haria imposible
+          # analizar justo los modelos que Mentis acaba de hacer.
+          if [ -z "$GPATH_REL" ]; then
+            OBS="ERROR: gen kind=analizar3d necesita 'path' con la ruta del modelo (.glb,.obj o.stl)."
+          else
+            G3ABS=""
+            if GABS="$(_caged "$GPATH_REL" 2>/dev/null)" && [ -f "$GABS" ]; then
+              G3ABS="$GABS"
+            elif [ -f "$MENTIS_CREATIONS_DIR/Modelos-3D/$(basename "$GPATH_REL")" ]; then
+              G3ABS="$MENTIS_CREATIONS_DIR/Modelos-3D/$(basename "$GPATH_REL")"
+            elif [ -f "$GPATH_REL" ]; then
+              G3ABS="$GPATH_REL"
+            fi
+            if [ -z "$G3ABS" ]; then
+              OBS="ERROR: no encontre el modelo '$GPATH_REL' ni en tu raiz de trabajo ni en la carpeta de modelos."
+              echo "[nv-agent] iter $it: gen analizar3d RECHAZADO (no existe)" >&2
+            else
+              G3OUT="$(timeout 120 python3 "$NVDIR/modelo3d_analizar.py" "$G3ABS" 2>&1)"
+              G3RC=$?
+              if [ "$G3RC" = "0" ] || [ "$G3RC" = "3" ]; then
+                OBS="$(printf '%s' "$G3OUT" | _trunc)"
+              else
+                OBS="ERROR: no pude analizar el modelo. $(printf '%s' "$G3OUT" | tr '
+' ' ' | cut -c1-200)"
+              fi
+              echo "[nv-agent] iter $it: gen analizar3d $(basename "$G3ABS") (fabricable=$([ "$G3RC" = "0" ] && echo si || echo no))" >&2
+            fi
+          fi
         elif [ "$GKIND" = "3d" ]; then
           mkdir -p "$MENTIS_CREATIONS_DIR/Modelos-3D"
           if [ -n "$GPATH_REL" ]; then
@@ -1821,7 +1974,21 @@ else:
           echo "[nv-agent] iter $it: skill RECHAZADO (no existe: $SKN)" >&2
         else
           SKPERM="$(_skill_permiso "$SKN")"
+          # LISTA BLANCA OPCIONAL (2026-08-20). Si MENTIS_SKILLS_SOLO viene definida, solo esas
+          # skills pueden correr, por encima de lo que diga skills-autonomas.json. La usa
+          # mentis-chat.sh en modo remoto para dejar pasar unicamente las de solo lectura.
+          # Va DESPUES de leer el permiso y no en vez de: el registro del usuario sigue mandando para
+          # sacar, esto solo puede sacar mas. Un modo (o un canal) nunca agrega permisos.
+          if [ -n "${MENTIS_SKILLS_SOLO:-}" ]; then
+            case " $MENTIS_SKILLS_SOLO " in
+              *" $SKN "*) : ;;
+              *) SKPERM="fuera-de-lista" ;;
+            esac
+          fi
           case "$SKPERM" in
+            fuera-de-lista)
+              OBS="ERROR: en este turno no tenes '/$SKN' -- el mensaje entra desde el telefono y esa skill necesita la computadora. Las que si podes usar ahora: $MENTIS_SKILLS_SOLO. Nombrasela al usuario para cuando vuelva."
+              echo "[nv-agent] iter $it: skill RECHAZADO (fuera de MENTIS_SKILLS_SOLO: $SKN)" >&2 ;;
             no)
               OBS="ERROR: la skill '$SKN' NO esta habilitada para que la uses sola. el usuario la puede correr el mismo escribiendo /$SKN, y podes sugerirsela -- pero no la ejecutes."
               echo "[nv-agent] iter $it: skill RECHAZADO (no autorizada: $SKN)" >&2 ;;
@@ -2268,6 +2435,19 @@ for item in d:
     role = role.replace("\n", " ").replace("\t", " ")
     print(role + "\t" + base64.b64encode(prompt.encode("utf-8", "replace")).decode())
 ' > "$PMETA" 2>/dev/null || true
+        # LO QUE HACE QUE SE "COMUNIQUEN": cada parte recibe de que va el turno entero, no solo su
+        # pedacito. Sin esto, seis agentes resuelven seis cosas que no encajan entre si -- que es lo
+        # que pasa cuando en una empresa nadie sabe para que se le pidio lo que se le pidio.
+        PCONTEXTO="Sos una parte de un trabajo mas grande que se esta haciendo en paralelo. El pedido completo del usuario es: ${TASK:0:600}
+
+Tu parte concreta es la que sigue. Hacela ENTERA vos: si hay que escribir un archivo, escribilo vos, no lo devuelvas como texto. Lo que devuelvas se le reporta al usuario como lo que hiciste.
+
+"
+        # Las manos se heredan del padre: si el turno no puede escribir, las partes tampoco.
+        PSUBFLAGS=()
+        [ "${ALLOW_WRITE:-0}" = "1" ] && PSUBFLAGS+=(-w)
+        [ "${ALLOW_BROWSE:-0}" = "1" ] && PSUBFLAGS+=(-b)
+        PSUBITER="${NV_AGENT_PARALLEL_ITER:-6}"
         PPIDS=()
         PROLES=()
         pi=0
@@ -2275,7 +2455,28 @@ for item in d:
           PPROMPT="$(printf '%s' "$PPROMPT_B64" | base64 -d 2>/dev/null || true)"
           [[ "$PROLE" =~ ^(code|reason|deep|general|extract|multimodal|ultra)$ ]] || PROLE="general"
           PROLES[$pi]="$PROLE"
-          ( printf '%s' "$PPROMPT" | bash "$NVDIR/ask-nvidia.sh" -r "$PROLE" > "$PTMPDIR/out-$pi.txt" 2>/dev/null ) &
+          # CADA PARTE ES UN AGENTE, NO UNA PREGUNTA SUELTA (2026-08-18).
+          #
+          # Antes cada parte era `ask-nvidia.sh`: UNA llamada al modelo, sin loop, sin herramientas y
+          # sin saber nada del turno. O sea que el reparto no repartia trabajo -- hacia N preguntas a
+          # ciegas y pegaba las respuestas. De ahi salia el 31/60 contra 37/60 sin repartir.
+          #
+          # Y la causa del empeoramiento ya estaba diagnosticada en eval/reparto-cowork/VEREDICTO.md:
+          # "el material a la vista le hace creer que el trabajo ya esta hecho". Las tres peores
+          # corridas fueron iguales -- llegaban los tres analisis como TEXTO, el agente escribia UN
+          # archivo y cerraba. No mentia: habia hecho un tercio y lo contaba bien.
+          #
+          # Con manos, ese problema desaparece por construccion: cada parte ESCRIBE lo suyo, asi que
+          # no hay material suelto que parezca trabajo terminado. Lo que vuelve es lo que hizo.
+          #
+          # Profundidad 1: una parte no puede volver a repartir. Presupuesto acotado por parte, para
+          # que seis partes no se coman el presupuesto de la maquina.
+          # Mismo interruptor que el reparto automatico: sin medir, no entra encendido.
+          if [ "${MENTIS_REPARTO_AGENTES:-0}" = "1" ]; then
+            ( NVA_SUBAGENT_DEPTH=1 bash "$NVDIR/nv-agent.sh" -d "$ROOT" -m "$PROLE" -i "$PSUBITER"               "${PSUBFLAGS[@]}" "$PCONTEXTO$PPROMPT" > "$PTMPDIR/out-$pi.txt" 2>/dev/null ) &
+          else
+            ( printf %s "$PPROMPT" | bash "$NVDIR/ask-nvidia.sh" -r "$PROLE" > "$PTMPDIR/out-$pi.txt" 2>/dev/null ) &
+          fi
           PPIDS+=("$!")
           pi=$((pi+1))
         done < "$PMETA"
@@ -2285,9 +2486,15 @@ for item in d:
           PRES="$(cat "$PTMPDIR/out-$pi.txt" 2>/dev/null)"
           [ -z "$PRES" ] && PRES="(sin respuesta)"
           OBS="$OBS
---- resultado $((pi+1)) (${PROLES[$pi]:-general}) ---
+--- parte $((pi+1)) (${PROLES[$pi]:-general}) -- YA EJECUTADA ---
 $PRES"
         done
+        # El cierre del mensaje es la mitad del arreglo: sin esto el agente lee las partes como
+        # material para trabajar y vuelve a hacer el trabajo (o un tercio de el).
+        OBS="Las $PCOUNT partes YA SE EJECUTARON en paralelo, cada una con sus propias herramientas.
+Los archivos que hayan generado YA ESTAN ESCRITOS en el disco: no los vuelvas a escribir.
+Tu trabajo ahora es UNICAMENTE revisar que este todo y contarle al usuario lo que se hizo.
+$OBS"
         OBS="$(printf '%s' "$OBS" | _trunc)"
         rm -rf "$PTMPDIR"
         echo "[nv-agent] iter $it: parallel ($PCOUNT tareas en simultaneo)" >&2
@@ -2402,6 +2609,7 @@ except Exception:
             # que el corta-bucles mataba el turno y el usuario se quedaba sin respuesta. Un error lo
             # empuja a corregir la herramienta; lo que hace falta es que deje la herramienta y
             # conteste. Por eso esto se lee como una instruccion y no como una falla.
+            TASK_VACIO_N=$(( ${TASK_VACIO_N:-0} + 1 ))
             OBS="No cree ninguna tarea (la llamada vino sin 'subject' ni 'description', asi que no habia nada que anotar) y NO hace falta que lo intentes de nuevo. Lo que el usuario pregunto se contesta hablando: responde AHORA con {\"tool\":\"done\"} y tu respuesta adentro. Si mas adelante hiciera falta anotar un trabajo largo de varios pasos, la forma es {\"tool\":\"task\",\"action\":\"create\",\"subject\":\"titulo corto\",\"description\":\"detalle\"}."
           else
             OBS="$(bash "$MENTIS_ROOT/mentis-tasks.sh" create "$ROOT" "$TSUBJECT" "$TDESC" 2>&1)"
@@ -2475,7 +2683,25 @@ TASK="${*:-}"
 [ -d "$ROOT" ] || { echo "ERROR: dir raíz no existe: $ROOT" >&2; exit 1; }
 ROOT="$(cd "$ROOT" && pwd)"   # canónico
 
-OBSMAX="${NV_AGENT_OBSMAX:-2000}"   # tope de chars por observación devuelta al modelo
+# 8000 y no 2000 (2026-08-18). MEDIDO, no elegido a ojo. El tope viejo cortaba cualquier archivo
+# de codigo de mas de ~50 lineas, y entonces LEER un archivo dejaba de ser un paso: el contenido
+# se guardaba en.mentis-obs/ y el modelo tenia que ir a buscarlo por tramos, gastando una
+# llamada al modelo (~8-14 s) por cada 2000 caracteres. Y peor que el tiempo: el modelo se perdia
+# en el camino y terminaba sin hacer la tarea.
+#
+# Examen sobre una tarea real (arreglar un bug de 2 lineas en un archivo de 3.816 bytes), 3
+# corridas por valor:
+#     OBSMAX=2000   1/3 arreglos | 12,0 pasos | 1,7 lecturas de andamiaje | 117,6 s
+#     OBSMAX=8000   3/3 arreglos |  5,0 pasos | 0,0 lecturas de andamiaje |  58,4 s
+#     OBSMAX=16000  2/2 arreglos |  5,5 pasos | 0,0 lecturas de andamiaje |  73,7 s
+#
+# O sea: el doble de velocidad Y el triple de tasa de exito. 16000 no mejora a 8000 y empieza a
+# empeorar -- mas texto por llamada tambien cuesta -- asi que el punto esta en 8000.
+#
+# Habia una pista de que 2000 quedaba corto y estaba escrita en este mismo archivo: "mcp list"
+# tiene su propio tope de 16000 desde el 2026-07-12, justamente porque con 2000 no entraba. Lo
+# que no se hizo entonces fue preguntarse si el problema era solo de "mcp list".
+OBSMAX="${NV_AGENT_OBSMAX:-8000}"   # tope de chars por observación devuelta al modelo
 HIST=""                              # historial acumulado (acciones + observaciones)
 
 # FOTO ANTES DE TOCAR NADA (2026-07-27). Se saca UNA por turno, la primera vez que el agente va
@@ -2648,7 +2874,11 @@ _nva_indexar() {
   NVA_INDICE="$NVA_INDICE
   - \"$1\": $3"
 }
-_nva_indexar "gen"      "${NVA_FICHA_GEN:-}"      "generar imagenes, modelos 3D y documentos (docx/pdf/pptx/xlsx) reales."
+# La descripcion del indice es lo UNICO que el modelo ve antes de decidir si pide la ficha: si
+# no nombra el trabajo, la capacidad es invisible. Medido el 2026-08-18: con "imagenes, modelos
+# 3D y documentos", ante "necesito fabricar una placa con dos agujeros para el taller" el modelo
+# ni miro 'gen' -- escribio a mano un.dxf inventado de 283 bytes y despues entro en bucle.
+_nva_indexar "gen"      "${NVA_FICHA_GEN:-}"      "generar imagenes, modelos 3D, documentos (docx/pdf/pptx/xlsx) y PIEZAS PARA FABRICAR con medidas exactas (STEP/STL, para taller o impresion 3D); tambien analizar si un modelo 3D se puede fabricar."
 _nva_indexar "arduino"  "${NVA_FICHA_ARDUINO:-}"  "programar y hablar con placas Arduino/ESP32 conectadas por USB."
 _nva_indexar "control"  "${NVA_FICHA_CONTROL:-}"  "mover el mouse y escribir con el teclado de la computadora del usuario."
 _nva_indexar "datos"    "${NVA_FICHA_DATOS:-}"    "fuentes de datos reales: mapas, vuelos en vivo, Wikipedia, papers, NASA."
@@ -2660,6 +2890,32 @@ _nva_indexar "drive"    "${NVA_FICHA_DRIVE:-}"    "subir archivos a Google Drive
 if [ -n "$NVA_INDICE" ]; then
   PROTOCOL="$PROTOCOL
 $(nv_texto protocolo/indice INDICE="$NVA_INDICE")"
+fi
+
+# LA ACCION EXACTA, NO EL NOMBRE DE LA CAPACIDAD (2026-08-19).
+#
+# El indice de arriba dice QUE puede hacer cada capacidad, y para usarla el modelo tiene que pedir
+# la ficha completa primero. Para fabricacion eso no alcanzo: medido dos veces, ante "necesito
+# fabricar una placa para el taller" el modelo ni miraba 'gen' -- escribia un.dxf inventado de 283
+# bytes. Mejorar la descripcion del indice ya se probo y tampoco alcanzo.
+#
+# Cuando el pedido habla de fabricar, se le pone la accion EXACTA en el prompt inicial, sin rodeo
+# por la ficha (que ademas es de 5,6 KB y ya costo un turno muerto). Va condicionado: sin esas
+# palabras, el prompt es byte por byte el de antes.
+if [ -n "${NVA_FICHA_GEN:-}" ]; then
+  case "$(printf %s "$TASK" | tr 'A-Z' 'a-z')" in
+    *fabric*|*imprim*|*taller*|*mecaniz*|*torner*|*pieza*|*.stl*|*.glb*|*.step*|*modelo\ 3d*|*plano*)
+      PROTOCOL="$PROTOCOL
+
+  PARA LO QUE TE ESTA PIDIENDO TENES DOS ACCIONES CONCRETAS. Usalas directamente, NO pidas la ficha:
+    {\"tool\":\"gen\",\"action\":\"analizar3d\",\"path\":\"archivo.stl\"}
+        -> te dice si un modelo YA EXISTENTE se puede fabricar: si la malla esta cerrada, su tamaño,
+           si es una pieza sola o varios pedazos sueltos. Usalo ANTES de decir que algo se puede imprimir.
+    {\"tool\":\"gen\",\"action\":\"pieza\",\"prompt\":\"caja de 80x60x10 mm con dos agujeros de 6 mm\"}
+        -> genera la pieza EXACTA y devuelve un STEP (lo que acepta un taller) y un STL.
+           NUNCA escribas a mano un.dxf, un.step ni un.stl: salen invalidos y el taller los rechaza."
+      ;;
+  esac
 fi
 
 # ===================== HERRAMIENTAS QUE ESTE TURNO NO PUEDE USAR (-n) =====================
@@ -2732,7 +2988,25 @@ _nva_dt() {  # decimas de segundo entre dos marcas en microsegundos
 }
 NVA_T0="$(_nva_us)"
 NVA_TPREV="$NVA_T0"
-echo "[nv-agent] tarea: $TASK" >&2
+# LA TAREA VA RESUMIDA, NO ENTERA (2026-08-18). En produccion $TASK no es "la tarea": es el
+# prompt COMPLETO que arma mentis-chat.sh -- la persona de Mentis, las reglas de asesor, los
+# bloques de memoria, el perfil del usuario, y recien al final el mensaje que el escribio. Esto se
+# imprimia entero a stderr, y el stderr del motor es exactamente lo que la app vuelca al panel
+# de progreso. Medido en un turno real: 182 de las 216 lineas de stderr eran esto. O sea que
+# las instrucciones internas se le mostraban en pantalla al usuario -- el mismo problema que la
+# aduana de salida vino a tapar por el otro camino, entrando por la puerta de al lado.
+#
+# Se conserva lo que sirve para diagnosticar: cuanto mide (si el prompt se fue de tamaño, se ve)
+# y el FINAL, que es donde esta el pedido real. Con NV_TAREA_ENTERA=1 se imprime completa, que
+# es lo que quiere una corrida de eval guardando evidencia.
+if [ "${NV_TAREA_ENTERA:-0}" = "1" ]; then
+  echo "[nv-agent] tarea: $TASK" >&2
+elif [ "${#TASK}" -le 240 ]; then
+  echo "[nv-agent] tarea: $TASK" >&2
+else
+  echo "[nv-agent] tarea (${#TASK} chars, el final):...$(printf %s "$TASK" | tr '
+' ' ' | tail -c 200)" >&2
+fi
 echo "[nv-agent] raíz: $ROOT | rol: $ROLE | presupuesto: $MAXIT iter" >&2
 
 # Imagenes adjuntas (-I, acumulable) se re-adjuntan en CADA llamada del loop -- el modelo
@@ -2842,8 +3116,42 @@ DOC_RECHAZOS=0
 # La deteccion vive en nv_pide_documento (engine/nv-lib.sh) para que sea PROBABLE con frases de
 # verdad: aca adentro solo se podria testear con grep sobre este archivo, y eso da verde aunque la
 # logica este mal.
+# LO QUE EL SEARCH NO TIENE QUE MIRAR (2026-08-21). Copias del proyecto y rastros del propio
+# agente: buscar ahi devuelve el mismo codigo con otra ruta, o directamente el eco de lo que este
+# turno ya miro. Ver el comentario largo en la rama del search.
+NVA_SEARCH_FUERA="--glob=!.repo-publico/** --glob=!.mentis-obs/** --glob=!engine/sombras/** --glob=!dist/** --glob=!node_modules/** --glob=!engine/logs/** --glob=!engine/index/**"
+NVA_SEARCH_FUERA_GREP="--exclude-dir=.repo-publico --exclude-dir=.mentis-obs --exclude-dir=sombras --exclude-dir=dist --exclude-dir=node_modules --exclude-dir=logs --exclude-dir=index"
+
 NVA_DOC_PEDIDO=0
 nv_pide_documento "$TASK" && NVA_DOC_PEDIDO=1
+
+# EL ARCHIVO QUE LA TAREA NOMBRA POR SU RUTA (2026-08-21).
+#
+# Habia una guarda para "la tarea pide un documento y todavia no generaste ninguno", pero solo
+# miraba la herramienta 'gen'. Cuando el pedido nombra una RUTA concreta -- "deja el informe en
+# 'docs/idea6-habilidades.md'" -- el camino es 'write', y ahi no habia nada mirando.
+#
+# Paso de verdad en la primera tarea de la Fase 2: el turno busco bien, encontro lo que habia que
+# encontrar, y CONTESTO POR CHAT sin escribir el archivo. Ninguna guarda lo noto: la de
+# completitud no aplica porque no afirmo que nada funcionara, y la de archivos-nombrados tampoco
+# porque la respuesta no menciona ningun archivo. El hueco es justo ese: no decir nada.
+#
+# La extraccion vive en engine/archivos_pedidos.py y no en un python3 -c aca adentro: la primera
+# version iba incrustada y las barras de la expresion regular se rompieron al escribir el archivo,
+# dejando el bash con un error de sintaxis. Es la misma leccion que ya documenta tavily_buscar.py.
+# El `|| true` NO es adorno: bajo `set -e`, una asignacion desde una sustitucion de comando que
+# sale distinto de cero ABORTA el script entero. Si este.py falta o falla, el turno moriria
+# antes de la primera iteracion y sin decir por que -- que es exactamente lo que paso mientras
+# se escribia esto: el sandbox de un test no copiaba el.py y el agente dejo de arrancar.
+# Es la misma trampa que ya documenta la rama de 'lsp' mas arriba en este archivo.
+NVA_ARCH_PEDIDOS="$(NVA_TAREA="$TASK" python3 "$(_win_path "$NVDIR/archivos_pedidos.py")" 2>/dev/null | tr -d '\r' || true)"
+# `if` y no `cond && accion`: bajo `set -e`, un `&&` cuya condicion es falsa devuelve 1 y ABORTA
+# EL SCRIPT ENTERO. Con esta linea escrita como `&&`, cualquier tarea que no nombrara un archivo
+# mataba al agente antes de la primera iteracion -- el turno terminaba sin hacer nada y sin decir
+# por que. Es la misma familia que ERR-009.
+if [ -n "${NVA_ARCH_PEDIDOS// }" ]; then
+  echo "[nv-agent] la tarea nombra archivos de salida: $NVA_ARCH_PEDIDOS" >&2
+fi
 # Tope duro anti-loop (pedido del usuario, 2026-07-18, ver bug real: 'read Calculadora.exe' fallo
 # 7+ veces porque SAME_TOOL_STREAK solo cuenta repeticiones CONSECUTIVAS -- se intercalaban
 # otras herramientas (control click, delegate, run) entre medio, asi que nunca llegaba a 2
@@ -2917,11 +3225,37 @@ for item in d[:4]:
   n="$(printf '%s' "$roles_prompts" | grep -c. || true)"
   [ "${n:-0}" -ge 2 ] || return 1
 
+  # Cada parte tiene que saber DE QUE VA el trabajo entero, no solo su pedacito: sin eso, cuatro
+  # agentes resuelven cuatro cosas que no encajan entre si.
+  _RACTX="Sos una parte de un trabajo mas grande que se hace en paralelo. El pedido completo del usuario es: ${TASK:0:600}
+  
+  Tu parte concreta es la que sigue. Hacela ENTERA vos: si hay que escribir un archivo, escribilo vos, no lo devuelvas como texto.
+  
+  "
+  _RAFLAGS=()
+  [ "${ALLOW_WRITE:-0}" = "1" ] && _RAFLAGS+=(-w)
+  [ "${ALLOW_BROWSE:-0}" = "1" ] && _RAFLAGS+=(-b)
   tmpd="$(mktemp -d)"; pi=0
   while IFS=$'\t' read -r _rol _p64; do
     [ -n "${_rol:-}" ] || continue
     roles[$pi]="$_rol"
-    ( printf '%s' "$_p64" | base64 -d 2>/dev/null | timeout 180 bash "$NVDIR/ask-nvidia.sh" -r "$_rol" > "$tmpd/out-$pi.txt" 2>/dev/null ) &
+    # MISMO ARREGLO QUE EL TOOL parallel (2026-08-18). Este es el reparto AUTOMATICO (-p), que es
+    # una COPIA SEPARADA del mismo concepto y tenia identico defecto: cada parte era UNA llamada al
+    # modelo, ciega y sin manos, y despues se pegaban los textos. Arreglar solo el tool dejaba esto
+    # igual -- y es justo el camino que mide eval/reparto-cowork, que corre con -p y no con el tool.
+    # Se descubrio midiendo: la evidencia de la tanda mostraba 'parallel: 0', o sea que el cambio
+    # anterior no se habia ejecutado ni una vez.
+    _RAP="$(printf %s "$_p64" | base64 -d 2>/dev/null)"
+    # INTERRUPTOR (2026-08-18). Que cada parte sea un agente con manos NO esta medido todavia: la
+    # unica tanda que corri midio el camino viejo por error (la evidencia mostraba 'parallel: 0'),
+    # y la prueba de humo posterior mostro que el agente principal reescribe el trabajo igual.
+    # Entra APAGADO hasta tener el numero, que es la regla de este proyecto: nada entra sin ganarle
+    # a lo que ya hay. Con MENTIS_REPARTO_AGENTES=1 se prueba; sin la variable, es el de siempre.
+    if [ "${MENTIS_REPARTO_AGENTES:-0}" = "1" ]; then
+      ( NVA_SUBAGENT_DEPTH=1 timeout 240 bash "$NVDIR/nv-agent.sh" -d "$ROOT" -m "$_rol" -i "${NV_AGENT_PARALLEL_ITER:-6}" "${_RAFLAGS[@]}" "$_RACTX$_RAP" > "$tmpd/out-$pi.txt" 2>/dev/null ) &
+    else
+      ( printf %s "$_RAP" | timeout 180 bash "$NVDIR/ask-nvidia.sh" -r "$_rol" > "$tmpd/out-$pi.txt" 2>/dev/null ) &
+    fi
     pids+=("$!")
     pi=$((pi+1))
   done <<< "$roles_prompts"
@@ -2929,7 +3263,7 @@ for item in d[:4]:
 
   for (( pi=0; pi<n; pi++ )); do
     out="$out
---- parte $((pi+1)) (${roles[$pi]:-general}) ---
+--- parte $((pi+1)) (${roles[$pi]:-general}) -- YA EJECUTADA ---
 $(cat "$tmpd/out-$pi.txt" 2>/dev/null || true)"
   done
   rm -rf "$tmpd"
@@ -2945,6 +3279,24 @@ if [ "${REPARTO:-0}" = "1" ] && [ "${MENTIS_REPARTO_OFF:-0}" != "1" ]; then
     # Entra al historial como una accion ya hecha, con una instruccion acotada: el material ya
     # esta, lo que falta es usarlo. Sin esta linea el modelo vuelve a generarlo todo de nuevo y
     # el reparto no habria servido para nada.
+    # LA NOTA DEPENDE DE SI LAS PARTES TUVIERON MANOS (2026-08-20). Habia UNA sola nota, escrita
+    # para el camino por defecto -- donde cada parte es una llamada ciega al modelo y devuelve
+    # texto: ahi es cierto que "no está guardado en ningún archivo" y hay que pedirle al
+    # coordinador que los escriba el.
+    #
+    # Con MENTIS_REPARTO_AGENTES=1 esa misma nota es FALSA: cada parte corre como agente con -w y
+    # ya escribio sus archivos. Al coordinador se le estaba diciendo que escribiera lo que ya
+    # existia, asi que rehacia el trabajo de las partes y se quedaba sin iteraciones -- que es
+    # exactamente el `rc=4` que quedo anotado como pendiente sin explicacion. `exit 4` en este
+    # motor no es un crash: es "no llegue a una respuesta final".
+    #
+    # Es el mismo error que aparecio tres veces mas en esta sesion: el texto que lee el modelo
+    # describe un mundo que el codigo no construye.
+    if [ "${MENTIS_REPARTO_AGENTES:-0}" = "1" ]; then
+      _RA_NOTA="OJO: cada una de estas partes corrio como un agente CON MANOS y ya escribió sus archivos en el disco. NO las rehagas ni las reescribas. Lo que te toca a vos: comprobar con 'read' o 'search' que estén, completar lo que falte, y armar la respuesta final. Si algo quedó a medias, arreglá ESO, no todo de nuevo."
+    else
+      _RA_NOTA="OJO, LO MAS IMPORTANTE: este material NO está guardado en ningún archivo -- vive sólo acá, en esta conversación. Si la tarea pide archivos, los tenés que escribir vos con 'write', uno por uno, y recién ahí existen. Medido el 2026-08-14: con el material a la vista, el turno escribió UN archivo de tres y cerró diciendo que había hecho los tres."
+    fi
     HIST="$HIST
 --- turno 0 (reparto automatico) ---
 acción: {\"tool\":\"parallel\"}
@@ -2952,7 +3304,7 @@ observación:
 $REPARTO_OBS
 
 NOTA: estas $REPARTO_N partes ya se resolvieron en paralelo antes de empezar. NO las vuelvas a generar: usá este material tal cual.
-OJO, LO MAS IMPORTANTE: este material NO está guardado en ningún archivo -- vive sólo acá, en esta conversación. Si la tarea pide archivos, los tenés que escribir vos con 'write', uno por uno, y recién ahí existen. Medido el 2026-08-14: con el material a la vista, el turno escribió UN archivo de tres y cerró diciendo que había hecho los tres.
+$_RA_NOTA
 "
   else
     echo "[nv-agent] reparto automatico: la tarea no se parte en partes independientes; sigo normal" >&2
@@ -3076,6 +3428,19 @@ NOTA IMPORTANTE (protocolo de error): ya consultaste a otro cerebro con 'delegat
   # desde la iteracion 3 -- antes seria interrumpir una investigacion legitima, y despues llega
   # tarde. El recordatorio trae la sintaxis exacta: la falla no era de intencion sino de que el
   # modelo terminaba el turno sin haber emitido nunca la llamada.
+  # El gemelo de la guarda de abajo para los archivos nombrados por su ruta. Se comprueba contra
+  # EL DISCO -- existe o no existe -- que es la unica forma que no depende de lo que el modelo diga.
+  if [ -n "${NVA_ARCH_PEDIDOS// }" ] && [ "$it" -ge 3 ]; then
+    _falta=""
+    for _a in $NVA_ARCH_PEDIDOS; do
+      [ -f "$ROOT/$_a" ] || [ -f "$_a" ] || _falta="${_falta:+$_falta, }$_a"
+    done
+    if [ -n "$_falta" ]; then
+      CORRECTION_NOTE="$CORRECTION_NOTE
+
+NOTA IMPORTANTE (lo que se pidió): la tarea pide dejar el resultado en un archivo y ESE ARCHIVO TODAVIA NO EXISTE: $_falta. Contestar en el chat no cuenta -- el usuario lo va a buscar ahí y no lo va a encontrar. Escribilo AHORA con {\"tool\":\"write\",\"path\":\"<la ruta pedida>\",\"content\":\"...\"} y recién después cerrá con 'done'."
+    fi
+  fi
   if [ "$NVA_DOC_PEDIDO" = "1" ] && [ "${HAD_DOC:-0}" != "1" ] && [ "$it" -ge 3 ]; then
     CORRECTION_NOTE="$CORRECTION_NOTE
 
@@ -3192,6 +3557,29 @@ Respondé con el próximo objeto JSON de acción."
   done <<< "$ACT"
 
   _dispatch_tool "$it"
+
+  # TECHO DURO A LA LLAMADA VACIA DE 'task' (2026-08-18).
+  #
+  # Historia: el 2026-08-12 esta observacion se cambio de "ERROR:" a instruccion porque con el
+  # error el modelo reintentaba la llamada vacia TRES veces. El cambio no alcanzo: medido el
+  # 2026-08-18 en un turno real de "contame que es el mate", el modelo la repitio SEIS veces --
+  # el techo generico de bucle-de-aciertos, que es el que termino cortando -- y se comio unos
+  # 100 segundos para una pregunta que se contesta hablando.
+  #
+  # Dos intentos de convencerlo con texto, dos fracasos. Asi que este no le pide nada: cuenta.
+  # Una llamada vacia puede ser un desliz; la segunda ya es el patron, y para entonces el motor
+  # ya le explico como seguir. El techo generico (6) esta bien para acciones que SI hicieron algo
+  # -- este caso no hizo nada, no hay ningun trabajo que perder por cortar temprano.
+  #
+  # No se muere mudo: CIERRE_FORZADO hace que conteste con lo que sepa, que es justo lo que
+  # habia que hacer desde el primer paso.
+  if [ "${TASK_VACIO_N:-0}" -ge "${TASK_VACIO_MAX:-2}" ]; then
+    LOOP_DETECTADO=1
+    CIERRE_FORZADO=1
+    OBS="ERROR: llamaste a 'task' sin 'subject' ni 'description' $TASK_VACIO_N veces. Lo que el usuario preguntó se contesta hablando, no anotando una tarea."
+    echo "[nv-agent] iter $it: 'task' vacío $TASK_VACIO_N veces -- corto el turno y contesto" >&2
+    STATUS="task_vacio"; break
+  fi
 
   # Escalada del doble cerebro (ver arriba): un 'control type' con texto largo es redaccion
   # real (el usuario pidio explicitamente que ESO lo resuelva el cerebro avanzado, no el rapido) --
@@ -3643,7 +4031,19 @@ if [ "$STATUS" != "done" ] && [ "${CIERRE_FORZADO:-0}" = "1" ]; then
 $HIST
 
 $_cierre_pie"
-  FINAL="$(printf '%s' "$_cierre_prompt" | bash "$NVDIR/ask-nvidia.sh" -r "$ROLE" 2>/dev/null || true)"
+  # STREAMING TAMBIEN EN EL CIERRE (2026-08-18). Este era EL agujero del streaming, y estuvo
+  # abierto desde que el cierre forzado existe. La iteracion normal (arriba) si emite NVANSWER,
+  # pero ESTA llamada -- la que produce la respuesta que el usuario lee cada vez que el modelo no cierra
+  # solo, o sea la mayoria de los turnos largos -- mandaba su stderr entero a /dev/null, y con el
+  # se iban los chunks. Medido antes del arreglo: 0 lineas NVANSWER en un turno real completo,
+  # con el motor emitiendolas correctamente token a token cada ~110 ms un eslabon mas arriba.
+  #
+  # Va condicionado igual que arriba: sin NV_ANSWER_STDERR la linea es byte por byte la de antes.
+  if [ "${NV_ANSWER_STDERR:-0}" = "1" ]; then
+    FINAL="$(printf '%s' "$_cierre_prompt" | NV_ANSWER_RAW=1 bash "$NVDIR/ask-nvidia.sh" -r "$ROLE" 2> >(awk '/^NVANSWER /{ print; fflush() }' >&2) || true)"
+  else
+    FINAL="$(printf '%s' "$_cierre_prompt" | bash "$NVDIR/ask-nvidia.sh" -r "$ROLE" 2>/dev/null || true)"
+  fi
   if [ -z "$FINAL" ]; then
     # Ultimo recurso: sin modelo, se dice lo unico que sabemos con certeza -- que hubo acciones
     # reales -- en vez de mentir en cualquiera de las dos direcciones.

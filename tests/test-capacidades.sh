@@ -26,6 +26,13 @@ _ok()  { TC_OK=$((TC_OK+1));  echo "  OK   $1"; }
 _mal() { TC_MAL=$((TC_MAL+1)); echo "  MAL  $1  ($2)"; }
 
 AGENTE="$TC_ROOT/engine/nv-agent.sh"
+# El protocolo dejo de vivir dentro de nv-agent.sh: los 17 textos se movieron a
+# engine/textos/protocolo/*.txt. A4 y A5 seguian buscando las frases en el agente y fallaban
+# contra codigo correcto -- las frases estaban intactas, en indice.txt. Se busca en las dos
+# fuentes para que mover un texto de archivo no vuelva a romper el test (2026-08-18).
+TC_FUENTES=( "$AGENTE" )
+[ -d "$TC_ROOT/engine/textos" ] && TC_FUENTES+=( "$TC_ROOT/engine/textos" )
+_tc_dice() { grep -rq "$1" "${TC_FUENTES[@]}" 2>/dev/null; }
 [ -f "$AGENTE" ] || { echo "ABORTA: no existe $AGENTE" >&2; exit 1; }
 
 TC_TMP="$(mktemp -d)"
@@ -69,14 +76,14 @@ done
                     || _mal "A3 todas en el indice" "sin linea de indice:$SININDICE"
 
 # A4: la redaccion del indice tiene que cerrarle la puerta al "no puedo".
-if grep -q "NUNCA digas que no podes hacer algo que esta en esta lista" "$AGENTE"; then
+if _tc_dice "NUNCA digas que no podes hacer algo que esta en esta lista"; then
   _ok "A4 el indice prohibe explicitamente el 'no puedo'"
 else
   _mal "A4 prohibicion explicita" "se perdio la instruccion contra ERR-084"
 fi
 
 # A5: y tiene que decir que estan ACTIVAS, no solo listarlas.
-if grep -q "ESTAN ACTIVAS y son tuyas" "$AGENTE"; then
+if _tc_dice "ESTAN ACTIVAS y son tuyas"; then
   _ok "A5 el indice aclara que las capacidades estan activas"
 else
   _mal "A5 dice que estan activas" "el modelo podria leer la lista como 'cosas que no tengo'"

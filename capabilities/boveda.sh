@@ -97,6 +97,16 @@ if [ -z "${PREGUNTA// }" ]; then
   exit 0
 fi
 
+# NO SE REINDEXA DESDE EL TELÉFONO (2026-08-20). /boveda entró a la lista blanca del modo remoto
+# porque BUSCAR no escribe nada. Reindexar sí: reconstruye el índice entero del ecosistema, tarda,
+# y deja el índice a medio hacer si el celular se va de la WiFi en el medio. La guarda vive acá,
+# adentro de la skill, y no en la lista blanca de afuera, porque el que sabe que este subcomando
+# escribe es este archivo -- una lista de nombres allá afuera no puede saberlo.
+if [ "$PREGUNTA" = "reindexar" ] && [ "${MENTIS_REMOTO:-0}" = "1" ]; then
+  echo "Reindexar la bóveda no se puede desde el teléfono: reconstruye el índice entero y se rompe si se corta la conexión. Buscar sí funciona. Corré '/boveda reindexar' desde la computadora."
+  exit 0
+fi
+
 # --- /boveda reindexar: reconstruye el índice semántico de todo el ecosistema + la bóveda ---
 if [ "$PREGUNTA" = "reindexar" ]; then
   # BUG REAL que este bloque tenía y que motivó todo este trabajo (2026-07-26): nv-index.sh no

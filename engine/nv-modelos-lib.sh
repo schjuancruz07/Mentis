@@ -213,3 +213,41 @@ except Exception:
 ' "$(nv_winpath "$body" 2>/dev/null || printf '%s' "$body")" 2>/dev/null | tr -d '\r'
   rm -f "$body"
 }
+
+# --- nv_ttft_veredicto <t1> <t2> <lim_ms> <estado_endpoint> --------------------------------
+# Decide si un principal esta FUERA del presupuesto de su rol, DENTRO, o si directamente NO SE
+# PUDO MEDIR. Imprime una de esas tres palabras. Funcion pura: no llama a nadie, se testea sola.
+#
+# POR QUE EXISTE (2026-08-22, ERR-215). La version anterior vivia dentro del reparador y decia:
+#   "Vacio = nunca emitio: peor que pasarse. Se cuenta como fuera de presupuesto."
+# Ese razonamiento es falso. nv_probar_ttft devuelve vacio por CUALQUIERA de estas razones y no
+# las distingue: el modelo acepto y nunca emitio (falla real), un 429 del free tier, un 503, un
+# corte de red, o curl que se quedo sin tiempo. Las cuatro ultimas no son culpa del modelo.
+#
+# El dano medido: el 2026-08-21 el rol 'general' fue degradado de nemotron-3-nano-30b a
+# muse-glimmer-30b, y el motivo que quedo escrito en modelos-override.json fue literalmente
+#   "tarda sin-token/sin-token ms en el primer token"
+# -- o sea, se cambio un modelo elegido con mediciones por DOS VALORES VACIOS. Es la misma
+# leccion que ya estaba escrita tres veces en este repo (SATURADO != MUERTO), sin aplicar aca.
+#
+# LA REGLA:
+#   - un solo sondeo que llegue a tiempo alcanza para probar que el modelo PUEDE -> DENTRO.
+#     (si midio bien una vez, el otro sondeo vacio es sospecha, no evidencia)
+#   - los dos midieron y los dos se pasaron -> FUERA, sin ambiguedad.
+#   - hay algun vacio: solo cuenta como FUERA si el endpoint contesta sano (VIVO/LENTO), porque
+#     ahi el silencio SI es del modelo. Con SATURADO, ERROR, RARO o sin dato -> NO-MEDIBLE.
+nv_ttft_veredicto() {
+  local t1="$1" t2="$2" lim="$3" est="${4:-}"
+  local n1=0 n2=0
+  case "$t1" in ''|*[!0-9]*) n1=0 ;; *) n1=1 ;; esac
+  case "$t2" in ''|*[!0-9]*) n2=0 ;; *) n2=1 ;; esac
+
+  if [ "$n1" = 1 ] && [ "$t1" -le "$lim" ]; then printf 'DENTRO'; return 0; fi
+  if [ "$n2" = 1 ] && [ "$t2" -le "$lim" ]; then printf 'DENTRO'; return 0; fi
+  if [ "$n1" = 1 ] && [ "$n2" = 1 ];          then printf 'FUERA';  return 0; fi
+
+  case "$est" in
+    VIVO|LENTO) printf 'FUERA' ;;
+    *)          printf 'NO-MEDIBLE' ;;
+  esac
+}

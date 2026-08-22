@@ -4,7 +4,6 @@
   "_un_modo_solo_puede_QUITAR": "REGLA QUE NO SE ROMPE. El modo se aplica DESPUES de los permisos que ya existian (los conectores que el usuario prende y apaga en la app, y las banderas del proceso). Nunca los sobreescribe hacia arriba: si el conector de la camara esta apagado, ningun modo la enciende. Un modo es una segunda llave por dentro, no una llave maestra. Si algun dia alguien hace que un modo AGREGUE un permiso, rompe el modelo de seguridad entero sin que falle ningun test.",
   "_por_que_el_modo_chat_queda_pelado": "Es el unico modo que no puede romper nada ni mirar nada tuyo, y por eso es el unico que le podes prestar a otra persona sin pensarlo dos veces. Si tuviera ejecutar y escribir en cualquier lado no seria un modo: seria Mentis con menos botones.",
   "por_defecto": "mentis",
-  "recordar_ultimo": true,
   "nucleo": {
     "_comentario": "ANILLO 0. Conversar, buscar, leer, recordar, aprender, generar y programar. Escribir SI, pero solo dentro de workspace/. Ejecutar NO.",
     "herramientas": [
@@ -60,7 +59,6 @@
       "titulo": "Mentis",
       "descripcion": "Conversar, buscar, leer, recordar y crear. No ejecuta, no programa y no mira nada tuyo.",
       "letra": "google-sans",
-      "acento": "medio",
       "herramientas": [],
       "capacidades": [],
       "banderas": [],
@@ -74,7 +72,6 @@
       "titulo": "Mentis Code",
       "descripcion": "Escribir y ejecutar codigo, git, editor, sub-agentes y conectores.",
       "letra": "silkscreen",
-      "acento": "oscuro",
       "herramientas": [
         "exec",
         "git",
@@ -92,7 +89,8 @@
         "corregir",
         "builder",
         "programar",
-        "conectar"
+        "conectar",
+        "mirar"
       ],
       "banderas": [
         "-w",
@@ -100,7 +98,6 @@
         "-t"
       ],
       "invasivas": true,
-      "motor_externo": null,
       "persona": "Este turno corre en el modo Mentis Code. Tenes escritura y ejecucion reales, git, el analizador de codigo y sub-agentes. Navegar la web tambien -- el usuario lo pidio explicitamente para este modo.",
       "paneles": [
         "directory",
@@ -111,20 +108,19 @@
     "designe": {
       "titulo": "Mentis Designe",
       "descripcion": "Imagen, 3D, documentos y direccion de arte.",
-      "letra": "playfair",
-      "acento": "claro",
+      "letra": "syne",
       "herramientas": [
         "gen"
       ],
       "capacidades": [
-        "design"
+        "design",
+        "imagenes"
       ],
       "banderas": [
         "-w",
         "-g"
       ],
       "invasivas": false,
-      "motor_externo": null,
       "persona": "Este turno corre en el modo Mentis Designe. Lo tuyo es lo visual: imagenes, 3D, documentos con imagen, sistemas de diseno. Podes escribir archivos en la carpeta del proyecto. NO ejecutas comandos ni tocas codigo: si el pedido es de programacion, deciselo y ofrecele el modo Code.",
       "paneles": [
         "directory",
@@ -137,7 +133,6 @@
       "titulo": "Mentis Cowork",
       "descripcion": "Muchas manos: delegar, trabajar en paralelo, datos y conectores.",
       "letra": "plus-jakarta",
-      "acento": "medio",
       "herramientas": [
         "delegate",
         "parallel",
@@ -159,19 +154,18 @@
         "-e"
       ],
       "invasivas": true,
-      "motor_externo": "openwork",
-      "persona": "Este turno corre en el modo Mentis Cowork. Estás para coordinar trabajo, no para hacerlo todo vos. Si la tarea tenía partes independientes, ya se repartieron y se resolvieron en paralelo ANTES de que empieces: las vas a encontrar en el historial como 'reparto automático'. Usá ese material tal cual para armar lo que falte (archivos, respuesta final) en vez de volver a generarlo. Si algo quedó sin repartir y tiene partes independientes, repartilo vos con parallel. Tenés acceso a datos y a los conectores externos.",
+      "persona": "Este turno corre en el modo Mentis Cowork. Estás para coordinar trabajo, no para hacerlo todo vos. Si la tarea tiene partes independientes, repartilas con parallel en vez de resolverlas una atrás de otra. Tenés acceso a datos y a los conectores externos.",
       "paneles": [
         "directory",
         "galeria"
       ],
-      "tablero": true
+      "tablero": true,
+      "_persona_sin_promesas": "La persona decia hasta el 2026-08-20: 'ya se repartieron y se resolvieron en paralelo ANTES de que empieces: las vas a encontrar en el historial como reparto automatico'. Era falso desde el 2026-08-14, cuando se apago el reparto por medicion (31/60 contra 37/60): ningun modo tiene ya 'reparto': true, asi que el modelo empezaba cada turno buscando en el historial un material que no existia. Un prompt FIJO no puede afirmar algo que pasa a veces. Cuando el reparto corre de verdad, el propio motor inyecta la nota ('estas N partes ya se resolvieron en paralelo, NO las vuelvas a generar') -- ahi si, porque ahi ya paso."
     },
     "study": {
       "titulo": "Mentis Study",
       "descripcion": "Estudiar con TUS fuentes: responde solo desde lo que le diste, y cita.",
-      "letra": "google-sans",
-      "acento": "medio",
+      "letra": "bitter",
       "herramientas": [],
       "herramientas_fuera": [
         "browse",
@@ -186,7 +180,8 @@
         "boveda",
         "recall",
         "estudiar",
-        "material"
+        "material",
+        "imagenes"
       ],
       "banderas": [],
       "invasivas": false,
@@ -201,7 +196,6 @@
       "titulo": "Mentis Science",
       "descripcion": "Analisis de datos y metodo: calcula de verdad y dice sus limites.",
       "letra": "michroma",
-      "acento": "medio",
       "herramientas": [
         "run",
         "exec",
@@ -226,8 +220,7 @@
     "editor": {
       "titulo": "Mentis Editor",
       "descripcion": "Editar videos enteros: cortar, subtitular, musica y exportar.",
-      "letra": "plus-jakarta",
-      "acento": "oscuro",
+      "letra": "oswald",
       "herramientas": [
         "video"
       ],
@@ -293,5 +286,9 @@
     "_galeria_en_cowork": "Cowork ve la galeria COMPLETA y no solo lo suyo (2026-08-13). Es el modo de coordinar trabajo: mirar lo que produjeron los otros modos es su oficio. Y como no genera nada propio, filtrarsela la dejaria siempre vacia. El filtro vive en main.js (listar-creaciones), que es donde esta el dato de que modo creo cada archivo."
   },
   "_paneles_por_que_directorio_no_esta_en_el_nucleo": "El Directorio es donde se prenden y apagan los conectores y las capacidades: es administracion, no conversacion. El modo Mentis a secas es el unico que se le puede prestar a otra persona sin pensarlo, y entregarselo con el panel que enciende la camara y el control del mouse seria justo lo contrario.",
-  "_los_botones_siguen_a_las_banderas": "El boton de una capacidad se ve si y solo si el modo tiene su bandera (-b web, -g imagenes/3D, -t conectores, -e editor, -s pantalla, -c control, -V camara, -P telefono, -a Arduino, -D datos). Una lista aparte de 'botones por modo' se desincronizaria del reparto real el primer dia."
+  "_los_botones_siguen_a_las_banderas": "El boton de una capacidad se ve si y solo si el modo tiene su bandera (-b web, -g imagenes/3D, -t conectores, -e editor, -s pantalla, -c control, -V camara, -P telefono, -a Arduino, -D datos). Una lista aparte de 'botones por modo' se desincronizaria del reparto real el primer dia.",
+  "_letra": "La tipografia del logotipo por modo. La REGLA la aplica el CSS por data-modo (app/renderer/style.css); este campo es el espejo legible, no la fuente. Hasta el 2026-08-20 dos de los siete valores no coincidian con la pantalla: designe decia 'playfair' cuando el logotipo usa Syne (Playfair es solo la segunda palabra), y editor decia 'plus-jakarta' cuando no tenia regla CSS y salia en la generica. Nadie lo noto porque nada lee este campo. Si cambias uno, cambia los dos -- tests/test-modos.sh compara el JSON contra el CSS y falla si se separan.",
+  "_recordar_ultimo_borrado": "Habia una clave 'recordar_ultimo': true que NADIE leia: ponerla en false no apagaba nada, el modo se recuerda igual (state.json -> nv_modo_actual). Se borro el 2026-08-20 con el resto de los campos decorativos (acento, motor_externo).",
+  "_acento_borrado": "Cada modo declaraba 'acento' (claro/medio/oscuro). Se midio el 2026-08-10 y NO entro -- el terracota claro da 2.29 de contraste sobre el tema claro, debajo del minimo de 3.0 -- pero el campo quedo 10 dias en los 7 modos sin que nada lo leyera. Borrado el 2026-08-20.",
+  "_capacidades_nuevas_2026_08_22": "'mirar' e 'imagenes' se agregaron el 2026-08-22. Una capacidad que existe en capabilities/ pero no figura en la lista de ningun modo NO SE VE EN NINGUN LADO: el Directorio filtra por esta lista. Es el paso que hay que acordarse de dar al agregar una skill nueva."
 }

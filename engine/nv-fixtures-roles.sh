@@ -61,25 +61,53 @@ nv_fixtures_de() {
       echo 'Devolve SOLO un objeto JSON con las claves marca, modelo y anio para este texto: Tengo un Fiat Palio 2015. Sin explicacion.|||json|||marca,modelo,anio'
       echo 'Devolve SOLO un objeto JSON con las claves hora_inicio y hora_fin para este texto: Trabajo de 9 a 18. Sin explicacion.|||json|||hora_inicio,hora_fin'
       ;;
-    # 'code' tiene que escribir código, no describirlo. Estos 15 son el chequeo BARATO: miden si
-    # emite código en vez de prosa. La calidad real del código se mide aparte con HumanEval, que
-    # ejecuta los tests de verdad (tests/bench-humaneval.sh) -- no se puede medir con 'contiene'.
+    # 'code' NO escribe codigo desde cero: arregla codigo que ya existe. Ese es el trabajo real del
+    # rol en Mentis, y hasta el 2026-08-22 este examen no lo medía en absoluto.
+    #
+    # POR QUE CAMBIO (ERR-216). Las 15 fixtures de antes eran todas de la forma "escribi una
+    # funcion suma": las aprueba CUALQUIER modelo, incluso uno que no sabe leer un archivo. Con ese
+    # examen, el reparador degrado el rol 'code' el 14/08 de deepseek-v4-flash a nemotron-nano-30b
+    # y el candidato nuevo "aprobo" sin problema. El duelo de codigo real (arreglar 3 bugs en un
+    # archivo, tests como juez) midio despues deepseek 3 de 3 contra nemotron-nano 1 de 3. O sea
+    # que el examen aprobaba a un modelo que fallaba 2 de cada 3 veces en el trabajo de verdad.
+    # El comentario que estaba aca decia que la calidad real se medía en tests/bench-humaneval.sh:
+    # ESE ARCHIVO NUNCA EXISTIO. Un examen flojo con una nota al pie que promete un examen serio
+    # inexistente es peor que un examen flojo a secas, porque desactiva la sospecha.
+    #
+    # QUE MIDEN LOS 6 CASOS NUEVOS: trazar codigo ajeno. Todos preguntan que hace el codigo TAL
+    # COMO ESTA, no que deberia hacer -- por eso no se pueden contestar por el nombre de la funcion
+    # ni de memoria. Un modelo que responde por semantica ("se llama acumular, entonces suma")
+    # falla; uno que lee, acierta. Cada respuesta es un entero exacto, sin margen de interpretacion.
+    #
+    # Salieron 6 fixtures de trivia (ls, wc, git status, upper, ZeroDivisionError, print hola):
+    # medían memoria de comandos, no programacion, y el examen sigue teniendo 15 casos.
+    #
+    # LO QUE ESTE EXAMEN SIGUE SIN MEDIR, dicho para que nadie lo suponga: usar herramientas,
+    # editar un archivo de verdad y verificar con un test. Eso solo lo mide eval/duelo-code/duelo.sh,
+    # que necesita el loop agentico entero y no entra en el formato de estas fixtures.
     code)
       echo 'Escribi solo una funcion Python llamada suma que reciba a y b y devuelva la suma. Sin explicacion, sin markdown.|||contiene|||def suma'
-      echo 'Escribi solo una linea de Python que imprima el texto hola. Sin explicacion.|||contiene|||print'
       echo 'Escribi solo una funcion Python llamada es_par que devuelva True si el numero es par. Sin explicacion.|||contiene|||def es_par'
-      echo 'Escribi solo el comando de bash que lista los archivos del directorio actual. Sin explicacion.|||contiene|||ls'
       echo 'Escribi solo una consulta SQL que seleccione todas las columnas de la tabla clientes. Sin explicacion.|||contiene|||select'
       echo 'Escribi solo una funcion Python llamada invertir que reciba un string s y devuelva el string invertido. Sin explicacion.|||contiene|||def invertir'
-      echo 'Como se llama el metodo de Python que convierte un string a mayusculas? Responde solo el nombre del metodo.|||contiene|||upper'
-      echo 'Escribi solo el comando de git que muestra el estado del repositorio. Sin explicacion.|||contiene|||git status'
       echo 'Escribi solo una funcion JavaScript llamada doble que reciba n y devuelva n por 2, usando la palabra clave function. Sin explicacion.|||contiene|||function doble'
-      echo 'En Python, que excepcion se lanza al dividir por cero? Responde solo el nombre de la excepcion.|||contiene|||zerodivisionerror'
       echo 'Escribi solo una expresion regular que matchee exactamente 10 digitos seguidos. Sin explicacion.|||contiene|||{10}'
-      echo 'Escribi solo el comando de bash que cuenta cuantas lineas tiene el archivo datos.txt. Sin explicacion.|||contiene|||wc'
       echo 'Escribi solo una funcion Python recursiva llamada factorial. Sin explicacion.|||contiene|||def factorial'
       echo 'Escribi solo la linea de Python que abre el archivo datos.txt en modo lectura usando with. Sin explicacion.|||contiene|||with open'
       echo 'Escribi solo una funcion Python llamada contar_vocales que reciba un texto y devuelva cuantas vocales tiene. Sin explicacion.|||contiene|||def contar_vocales'
+      # --- leer y trazar codigo ajeno (2026-08-22) ---
+      # Asigna en vez de acumular: quien lee dice 8, quien supone por el nombre dice 20.
+      echo 'Este codigo Python esta escrito en lineas separadas por L1, L2, etc. L1: xs = [1, 2, 3, 4] L2: total = 0 L3: for x in xs: L4: total = x * 2 L5: print(total). Que numero imprime EXACTAMENTE este codigo tal como esta? Responde solo el numero.|||numero|||8-8'
+      # range(1, n) excluye el n: la respuesta es 24, no el factorial de 5 que es 120.
+      echo 'Este codigo Python esta escrito en lineas separadas por L1, L2, etc. L1: def f(n): L2: r = 1 L3: for i in range(1, n): L4: r = r * i L5: return r. Que devuelve EXACTAMENTE f(5) con este codigo tal como esta? Responde solo el numero.|||numero|||24-24'
+      # Slicing con limite superior excluyente: 20 + 30 = 50.
+      echo 'En Python, si xs = [10, 20, 30, 40, 50], cuanto vale sum(xs[1:3])? Responde solo el numero.|||numero|||50-50'
+      # El bug del promedio esta en el return, que divide por len menos uno.
+      echo 'Este codigo Python deberia calcular el promedio pero devuelve un valor mas grande de lo que corresponde. L1: def promedio(xs): L2: total = 0 L3: for x in xs: L4: total += x L5: return total / (len(xs) - 1). En que linea esta el bug? Responde solo el numero de linea.|||numero|||5-5'
+      # Aliasing: b y a son la misma lista. Quien no lo ve responde 3.
+      echo 'En Python, que numero imprime este codigo: a = [1, 2, 3] y despues b = a y despues b.append(4) y despues print(len(a))? Responde solo el numero.|||numero|||4-4'
+      # Argumento por defecto mutable: la lista se comparte entre llamadas. Quien no lo ve dice 1.
+      echo 'En Python hay una funcion definida asi: def agregar(x, lista=[]): lista.append(x); return lista. Si se llama agregar(1) y despues agregar(2), cuantos elementos tiene la lista que devuelve la SEGUNDA llamada? Responde solo el numero.|||numero|||2-2'
       ;;
     # Razonamiento: problemas con respuesta única y verificable. Mismo espíritu que la medición
     # que decidió el modelo de 'deep' el 2026-07-25. Los tres roles comparten el examen A

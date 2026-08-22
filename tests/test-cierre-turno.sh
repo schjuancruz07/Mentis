@@ -85,12 +85,16 @@ if awk '/CIERRE_FORZADO:-0/,/^fi$/' "$A" | grep -q 'STATUS="done"'; then
 else
   _mal "el cierre forzado da done" "reportaria como fallida una tarea que produjo resultados"
 fi
-if awk '/_cierre_prompt=/,/NO ofrezcas/' "$A" | grep -q "NO listes directorios"; then
+# ANCLA CORREGIDA (2026-08-18): estas dos aserciones buscaban desde /_cierre_prompt=/ en
+# adelante, pero el prompt se partió en _cierre_cab/_cierre_pie y el texto que se verifica
+# vive en el PIE, que se asigna ANTES. O sea que fallaban con el codigo correcto: el rango
+# del awk arrancaba despues del texto. Se ancla al bloque entero.
+if awk '/_cierre_cab=/,/_cierre_prompt=/' "$A" | grep -q "NO listes directorios"; then
   _ok "la respuesta final tiene prohibido el listado de directorios"
 else
   _mal "prohibe el listado de directorios" "era literalmente lo que le contesto al usuario"
 fi
-if awk '/_cierre_prompt=/,/^  fi$/' "$A" | grep -q "donde quedo guardado\|dónde quedó guardado"; then
+if awk '/_cierre_cab=/,/_cierre_prompt=/' "$A" | grep -q "donde quedo guardado\|dónde quedó guardado"; then
   _ok "pide decir QUE genero y DONDE quedo"
 else
   _mal "pide que y donde" "sin eso vuelve a contar lo que busco en vez de lo que hizo"

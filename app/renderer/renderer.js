@@ -1495,6 +1495,11 @@ function renderConversationItem(conv) {
 // deja screen en su default prendido, sin mandar nada extra.
 function currentFlags() {
   const flags = [];
+  // EL EQUIPO arranca APAGADO, al reves que los demas: encenderlo cambia QUIEN atiende el turno
+  // (un departamento en vez de Mentis), y eso no puede pasar por descuido. Por eso se manda '-q'
+  // cuando esta tildado, y no '-Q' cuando no lo esta.
+  const equipoEl = document.getElementById('flag-equipo');
+  if (equipoEl && equipoEl.checked) flags.push('-q');
   if (!document.getElementById('flag-b').checked) flags.push('-B');
   if (!document.getElementById('flag-t').checked) flags.push('-T');
   if (!document.getElementById('flag-g').checked) flags.push('-G');
@@ -1849,6 +1854,43 @@ document.getElementById('btn-new-folder').addEventListener('click', async () => 
 // mecanismo, Mentis no distingue entre los dos, ver abajo) y "Conectores" (VS Code, Git Bash,
 // Terminal, Google Workspace). Reemplaza al viejo modal chico "Agregar plugin o skill". =====
 const directoryOverlay = document.getElementById('directory-overlay');
+// EL DIRECTORIO SE FILTRA POR MODO (idea 2 del usuario, 2026-08-21).
+//
+// El panel se mostraba u ocultaba ENTERO segun el modo, pero su contenido era siempre el mismo:
+// en Study aparecian habilidades y conectores que ese modo no puede usar. Tocarlos no hacia nada
+// -- o peor, prendia un conector que el turno despues rechaza.
+//
+// La lista NO se arma aca. Sale de modos.json a traves de datosDelModo() (app/lib/modos-store.js),
+// que es la misma fuente que usa el motor para repartir las herramientas. Una segunda lista
+// escrita a mano se desincronizaria el primer dia: es la misma razon por la que los botones de
+// capacidad siguen a las banderas en vez de tener su propia tabla.
+let modoDirectorio = null;   // { capacidades: [...], banderas: [...] }
+
+// De la bandera del modo al conector que la necesita. Es el mismo mapa que ya usa
+// pintarCapacidades() para mostrar u ocultar los botones del composer, escrito del otro lado:
+// si el modo no tiene la bandera, el conector no se puede usar en ese modo.
+const CONECTOR_BANDERA = {
+  'local:webcam': '-V',
+  'local:telefono': '-P',
+  'local:arduino-cli': '-a',
+  'local:vscode': '-e',
+  'local:terminal': '-x',
+};
+
+function directorioFiltraHabilidad(prefijo) {
+  // Sin modo cargado todavia: no se filtra nada. Es deliberado -- que el panel se vea completo
+  // por un instante es mucho mejor que verlo vacio y creer que no hay nada.
+  if (!modoDirectorio || !Array.isArray(modoDirectorio.capacidades)) return true;
+  return modoDirectorio.capacidades.includes(String(prefijo).replace(/^\//, ''));
+}
+
+function directorioFiltraConector(id) {
+  if (!modoDirectorio || !Array.isArray(modoDirectorio.banderas)) return true;
+  const bandera = CONECTOR_BANDERA[id];
+  if (!bandera) return true;   // los que no dependen de una bandera se ven siempre
+  return modoDirectorio.banderas.includes(bandera);
+}
+
 const directoryGrid = document.getElementById('directory-grid');
 const directorySearch = document.getElementById('directory-search');
 const btnDirectoryAdd = document.getElementById('btn-directory-add');
@@ -1915,10 +1957,15 @@ async function renderDirectoryGrid() {
   const query = directorySearch.value.trim().toLowerCase();
   if (directoryTab === 'habilidades') {
     btnDirectoryAdd.classList.remove('hidden');
-    const items = capabilityCatalog.filter((c) =>
-      !query || c.prefix.toLowerCase().includes(query) || c.description.toLowerCase().includes(query));
+    const items = capabilityCatalog
+.filter((c) => directorioFiltraHabilidad(c.prefix))
+.filter((c) =>
+        !query || c.prefix.toLowerCase().includes(query) || c.description.toLowerCase().includes(query));
     if (items.length === 0) {
-      directoryGrid.appendChild(directoryEmpty('Sin resultados.'));
+      // Se distingue "no hay ninguna en este modo" de "tu busqueda no encontro nada": son dos
+      // situaciones distintas y el mismo cartel para las dos deja al usuario sin saber cual es.
+      directoryGrid.appendChild(directoryEmpty(
+        query ? 'Sin resultados.' : 'Este modo no usa habilidades. Cambiá de modo para verlas.'));
       return;
     }
     items.forEach((item) => directoryGrid.appendChild(directoryCard(item.prefix, item.description)));
@@ -1940,10 +1987,13 @@ async function renderDirectoryGrid() {
     // Runway) en UNA sola lista -- antes esto leía connectorStatus() (solo 3-4 locales
     // fijos), ahora usa la misma fuente que el popup de click-derecho del composer.
     if (!connectorStatusCache) connectorStatusCache = await window.mentisAPI.listAllConnectors();
-    const items = connectorStatusCache.filter((c) =>
-      !query || c.name.toLowerCase().includes(query) || c.detail.toLowerCase().includes(query));
+    const items = connectorStatusCache
+.filter((c) => directorioFiltraConector(c.id))
+.filter((c) =>
+        !query || c.name.toLowerCase().includes(query) || c.detail.toLowerCase().includes(query));
     if (items.length === 0) {
-      directoryGrid.appendChild(directoryEmpty('Sin resultados.'));
+      directoryGrid.appendChild(directoryEmpty(
+        query ? 'Sin resultados.' : 'Este modo no tiene conectores para prender.'));
       return;
     }
     items.forEach((item) => directoryGrid.appendChild(connectorCard(item)));
@@ -3345,6 +3395,7 @@ function estadoPonerTiempo(txt) {
     'flag-telefono': '-P',
     'flag-datos': '-D',
     'flag-a': '-a',
+    'flag-equipo': '-q',
   };
   function pintarCapacidades(modo) {
     const tiene = new Set(modo.banderas || []);
@@ -3441,6 +3492,15 @@ function estadoPonerTiempo(txt) {
   function aplicar(modo, avisar) {
     const anterior = modoActual;
     modoActual = modo;
+    // El Directorio se entera del modo por aca y no por su cuenta: este es el unico lugar donde
+    // el cambio de modo ya esta aplicado, asi que no puede quedar contando otra cosa.
+    modoDirectorio = { capacidades: modo.capacidades || [], banderas: modo.banderas || [] };
+    if (typeof renderDirectoryGrid === 'function' && directoryOverlay
+        && !directoryOverlay.classList.contains('hidden')) {
+      // Si el panel esta abierto en el momento del cambio, se repinta: si no, mostraria las
+      // habilidades del modo anterior hasta que alguien lo cierre y lo vuelva a abrir.
+      renderDirectoryGrid();
+    }
     // El historial de la barra lateral sigue al modo: al cambiar, se repinta con las charlas de
     // ESE modo. Va acá y no en el manejador del botón porque el modo también cambia por otras
     // vías (al arrancar, desde el celular), y todas pasan por esta función.

@@ -143,5 +143,19 @@ sim() {
 [ "$(sim 99 3)" = "RECHAZA" ] && _ok "y sigue rechazando"    || _mal "usos altos" "deberia rechazar"
 
 echo ""
+
+# --- EJECUTA de verdad, no solo mira el fuente (2026-08-18) --------------------------------------
+# Las aserciones de arriba son `grep` sobre nv-agent.sh: comprueban que las lineas esten escritas,
+# no que el tope FRENE. Es la capacidad que ya se fue en bucle una vez, asi que aca un test
+# declarativo es el que menos alcanza. camara-tope-ejecuta.sh extrae las funciones reales del
+# agente y las corre; se verifico que falla si se rompe la comparacion del tope.
+if bash "$(dirname "${BASH_SOURCE[0]}")/camara-tope-ejecuta.sh" > /tmp/ct-ejec.$$ 2>&1; then
+  _ok "EJECUTADO: el tope frena de verdad ($(grep -o 'casos: [0-9]*' /tmp/ct-ejec.$$))"
+else
+  _mal "EJECUTADO: el tope NO frena" "$(head -3 /tmp/ct-ejec.$$ | tr '
+' ' ')"
+fi
+rm -f /tmp/ct-ejec.$$
+
 echo "== $ok ok, $fallo fallan =="
 [ "$fallo" -eq 0 ]
