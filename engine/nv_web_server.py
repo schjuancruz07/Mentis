@@ -112,7 +112,13 @@ PAGINA = r"""<!doctype html>
     --peligro: #ff453a;
     --border: #33322f;
     --bubble-usuario: #232220;
-    --radius: 2px;
+    /* El redondeo pasa de 2px a 10px (2026-08-22). Tiene que ser EL MISMO cambio que en
+       app/renderer/style.css, por la misma razon que la tipografia y la paleta: la pagina del
+       celular y la app son la misma cosa vista de dos lados, y una esquina viva en el telefono
+       contra una redondeada en la computadora se nota al instante. */
+    --radius: 10px;
+    --radius-chico: 6px;
+    --radius-pildora: 999px;
     /* Courier tambien aca (2026-08-07). Tiene que ser el MISMO cambio que en
        app/renderer/style.css: la pagina del celular y la app son la misma cosa vista de dos
        lados, y si una queda con Courier y la otra no, se nota al instante. Ver el comentario

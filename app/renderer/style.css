@@ -31,7 +31,42 @@
   /* Sombra negra plena: con un fondo casi negro, cualquier tinte de color se ve como una mancha
      en vez de como profundidad. */
   --shadow-tonal: 0 8px 28px rgba(0, 0, 0, 0.65);
-  --radius: 2px;
+
+  /* ===== LAS TRES ESCALAS (2026-08-22) ==========================================================
+     POR QUE EXISTEN. Antes de esto el CSS tenia 8 valores de redondeo, 12 tamanios de letra y 57
+     de padding conviviendo. Con esa dispersion no hay jerarquia: entre 12px y 13px nadie percibe
+     "esto es mas importante", percibe desprolijidad. Y los 32 redondeos sueltos hacian que
+     cambiar --radius no cambiara la mitad de la interfaz -- justo lo que la variable evitaba.
+
+     REDONDEO. Pasa de 2px a 10px: es el cambio que mas acerca la app a Claude Desktop por unidad
+     de esfuerzo. OJO: este valor tambien esta en engine/nv_web_server.py (la pagina del celular).
+     Los dos tienen que moverse juntos o la app y el telefono dejan de verse igual. */
+  --radius: 10px;          /* tarjetas, burbujas, paneles */
+  --radius-chico: 6px;     /* chips, badges, campos chicos */
+  --radius-pildora: 999px; /* botones redondeados enteros */
+
+  /* TIPOGRAFIA: cinco pasos elegidos DONDE ESTA LA MASA de usos, para que ningun texto se mueva
+     mas de 2px. 12 valores distintos entraron en 5.
+     Lo que queda AFUERA a proposito: los 24px y 26px de.project-tile-new-plus,.cuadro-valor y
+     #profile-avatar-fallback. No son texto con jerarquia -- son un glifo "+" y la inicial de un
+     avatar. Meterlos en la escala le haria decir algo que no dice. */
+  --txt-xs: 11px;    /* metadatos, marcas de tiempo */
+  --txt-sm: 12px;    /* interfaz secundaria (el mas usado: 41 lugares) */
+  --txt-base: 13px;  /* el cuerpo de la conversacion */
+  --txt-lg: 15px;    /* titulos de seccion */
+  --txt-xl: 20px;    /* titulos de pantalla */
+
+  /* ESPACIADO: seis pasos. La regla al aplicarlos fue que un valor entra solo si esta a 2px o
+     menos del paso mas cercano. Mover 5px a 4px no se percibe; mover 22px a 16px si, y romperia
+     un layout que estaba ajustado por una razon que ya nadie recuerda. */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  /* MOVIMIENTO: una curva y dos duraciones. Es lo que hace que una interfaz se sienta "de una
+     pieza" sin que se pueda senalar por que. Rapida = respuesta al clic; lenta = aparecer. */
+  --anim-rapida: 120ms;
+  --anim-lenta: 200ms;
+  --anim-curva: cubic-bezier(0.2, 0, 0.2, 1);
   /* TIPOGRAFIA GOOGLE SANS FLEX EN TODA LA APP (pedido del usuario, 2026-08-10).
      Reemplaza a Courier New, que estuvo tres dias. El pedido ahora es explicito: "la nueva letra
      es Google Sans Flex para toda la app". Las tres variables apuntan a la misma familia a
@@ -88,7 +123,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   padding-left: 12px;
 }
 #barra-titulo-nombre {
-  font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.18em;
+  font-family: var(--font-sans); font-size: var(--txt-sm); letter-spacing: 0.18em;
   color: var(--texto-dim); text-transform: uppercase;
 }
 #barra-titulo-botones { display: flex; }
@@ -102,7 +137,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   -webkit-app-region: no-drag;
   /* --texto-dim sobre negro es demasiado tenue para un control: se veían "apagados". */
   color: #9aa0a6;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--anim-rapida) var(--anim-curva), color var(--anim-rapida) var(--anim-curva);
 }
 #barra-titulo-botones button:hover { background: rgba(255,255,255,0.08); color: var(--texto); }
 /* El rojo del cerrar es la convención de Windows: si no está, la gente no lo encuentra. */
@@ -121,7 +156,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius-pildora); border: 2px solid transparent; background-clip: padding-box; }
 *::-webkit-scrollbar-thumb:hover { background: var(--texto-dim); background-clip: padding-box; }
 *::-webkit-scrollbar-corner { background: transparent; }
 *::-webkit-scrollbar-button { background: transparent; }
@@ -129,7 +164,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* La sidebar es la "tapa" de la bitácora: superficie grande y contigua en el
    color principal, no un gris neutro -- así el verde sigue siendo legible
    incluso desenfocado. */
-#sidebar { width: 240px; background: var(--principal); border-right: 1px solid var(--border); padding: 12px; display: flex; flex-direction: column; }
+#sidebar { width: 240px; background: var(--principal); border-right: 1px solid var(--border); padding: var(--sp-3); display: flex; flex-direction: column; }
 /* EL ACENTO ES DETALLE (pedido del usuario, 2026-08-12). Este botón era un bloque naranja macizo y
    era lo más pesado de toda la pantalla: lo primero que veías al abrir Mentis no era la
    conversación, era un rectángulo naranja. Ahora el acento vive en el texto y el borde. Sigue
@@ -137,8 +172,8 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    sin gritar. */
 #btn-new-chat {
   background: transparent; color: var(--acento); border: 1px solid var(--acento);
-  border-radius: var(--radius); padding: 10px; cursor: pointer; font-weight: 600;
-  transition: background 0.15s ease;
+  border-radius: var(--radius); padding: var(--sp-2); cursor: pointer; font-weight: 600;
+  transition: background var(--anim-rapida) var(--anim-curva);
 }
 #btn-new-chat:hover { background: var(--acento-soft); }
 #btn-new-chat:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -170,7 +205,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    corre es el borde izquierdo, con el mismo cálculo que produce el centrado de arriba. */
 #linea-estado { padding-left: max(0px, calc((100% - var(--ancho-lectura)) / 2)); }
 
-#main-header { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 8px 12px; }
+#main-header { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3); }
 /* El logotipo del header es el UNICO lugar de la app que cambia de letra segun el modo, y por eso
    usa --font-marca en vez de --font-sans. El resto de la interfaz es Google Sans Flex siempre.
    El tamaño y el interletrado tambien los pisa cada modo (Silkscreen es pixelada y necesita mas
@@ -181,7 +216,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   font-weight: var(--marca-peso, 700);
   letter-spacing: var(--marca-espaciado, 0.18em);
   color: var(--acento); user-select: none; cursor: default;
-  transition: font-size 0.2s ease, letter-spacing 0.2s ease;
+  transition: font-size var(--anim-lenta) var(--anim-curva), letter-spacing var(--anim-lenta) var(--anim-curva);
 }
 
 /* ===== MOSTRAR/OCULTAR LA BARRA LATERAL (2026-08-10) =====
@@ -203,7 +238,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   width: 0; min-width: 0; padding-left: 0; padding-right: 0;
   border-right: 0; overflow: hidden;
 }
-#sidebar { transition: width 0.16s ease, padding 0.16s ease; }
+#sidebar { transition: width var(--anim-lenta) var(--anim-curva), padding var(--anim-lenta) var(--anim-curva); }
 
 /* ===== PREVISUALIZADOR A PANTALLA COMPLETA (2026-08-10) =====
    Cubre la zona de trabajo, no la ventana entera: la barra de título propia y la barra lateral
@@ -236,7 +271,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   border: 1px solid var(--border);
 }
 #status-panel.columna #preview-content {
-  flex: 1; overflow: auto; font-size: 13px; line-height: 1.6;
+  flex: 1; overflow: auto; font-size: var(--txt-base); line-height: 1.6;
 }
 
 /* PANTALLA COMPLETA DE VERDAD (2026-08-15, pedido del usuario: "el tamaño grande pasa a ser el común
@@ -254,7 +289,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   background: var(--secundario); border: 1px solid var(--border);
 }
 #status-panel.completa #preview-content {
-  flex: 1; overflow: auto; font-size: 14px; line-height: 1.65;
+  flex: 1; overflow: auto; font-size: var(--txt-lg); line-height: 1.65;
 }
 /* En pantalla completa el contenido NO se corre: el panel ya cubre el lugar del chat. */
 #main:has(#status-panel.completa) #zona-central,
@@ -262,7 +297,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #main:has(#status-panel.completa) #linea-estado { padding-right: 0; }
 #btn-status-full {
   display: flex; align-items: center; justify-content: center;
-  background: transparent; border: 0; padding: 4px; border-radius: var(--radius);
+  background: transparent; border: 0; padding: var(--sp-1); border-radius: var(--radius);
   color: var(--texto-dim); cursor: pointer;
 }
 #btn-status-full:hover { background: var(--secundario); color: var(--texto); }
@@ -291,7 +326,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 :root[data-modo="designe"] #header-wordmark.cursiva {
   font-family: "Playfair Display", Georgia, serif;
-  font-style: italic; font-weight: 800; font-size: 17px; letter-spacing: 0;
+  font-style: italic; font-weight: 800; font-size: var(--txt-lg); letter-spacing: 0;
   text-transform: none; margin-left: 3px;
 }
 :root[data-modo="cowork"] {
@@ -330,9 +365,9 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    de Mentis: no lo dijo él, pasó. Por eso va centrada, chica y sin burbuja -- si pareciera algo
    que dijo Mentis, quedaría en el historial como si fuera parte de la charla. */
 .modo-corte {
-  text-align: center; font-size: 11px; color: var(--texto-dim);
+  text-align: center; font-size: var(--txt-xs); color: var(--texto-dim);
   letter-spacing: 0.08em; text-transform: uppercase;
-  margin: 18px auto; padding: 0 12px; max-width: 80%;
+  margin: var(--sp-4) auto; padding: 0 var(--sp-3); max-width: 80%;
 }
 /* Easter egg sutil (pedido del usuario, mejora visual 2026-07-14): clic sostenido en el wordmark
    dispara una chispa breve. Clase toggleada por JS, ver renderer.js. */
@@ -349,24 +384,24 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Badge de proyecto (pedido del usuario, 2026-07-13): cuando la conversación activa pertenece a un
    proyecto, se ve claramente al lado del wordmark -- distingue un chat de proyecto de uno suelto. */
 #header-project-badge {
-  font-family: var(--font-sans); font-size: 11px; color: var(--acento);
+  font-family: var(--font-sans); font-size: var(--txt-xs); color: var(--acento);
   background: var(--acento-soft); border: 1px solid var(--acento); border-radius: var(--radius);
-  padding: 3px 6px 3px 8px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+  padding: var(--sp-1) var(--sp-1) var(--sp-1) var(--sp-2); font-weight: 600; display: flex; align-items: center; gap: var(--sp-1);
 }
 #header-project-badge.hidden { display: none; }
 #btn-exit-project {
-  background: none; border: none; color: var(--acento); cursor: pointer; padding: 2px;
-  display: flex; align-items: center; justify-content: center; border-radius: 2px;
+  background: none; border: none; color: var(--acento); cursor: pointer; padding: var(--sp-1);
+  display: flex; align-items: center; justify-content: center; border-radius: var(--radius-chico);
 }
 #btn-exit-project:hover, #btn-exit-project:focus-visible { background: var(--acento); color: var(--fondo); }
-#header-actions { display: flex; gap: 6px; margin-left: auto; }
+#header-actions { display: flex; gap: var(--sp-1); margin-left: auto; }
 
 /* Confirmación transitoria (pedido del usuario, 2026-07-13: "no sé si se creó" -- al crear un
    proyecto, ahora aparece esto abajo a la derecha con la ruta real en disco). */
 #toast {
   position: fixed; bottom: 20px; right: 20px; max-width: 360px; z-index: 200;
   background: var(--principal); border: 1px solid var(--acento); border-radius: var(--radius);
-  color: var(--texto); padding: 10px 14px; font-size: 13px; font-family: var(--font-sans);
+  color: var(--texto); padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); font-family: var(--font-sans);
   box-shadow: var(--shadow-tonal); animation: mentis-bubble-in 0.2s ease-out;
 }
 #toast.hidden { display: none; }
@@ -377,33 +412,33 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #connectors-popup {
   position: fixed; z-index: 210; min-width: 220px; max-width: 300px;
   background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow-tonal); padding: 6px; font-family: var(--font-sans);
+  box-shadow: var(--shadow-tonal); padding: var(--sp-1); font-family: var(--font-sans);
   animation: mentis-modal-in 0.12s ease-out;
 }
 #connectors-popup.hidden { display: none; }
 .connectors-popup-title {
-  font-size: 11px; color: var(--texto-dim); text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 6px 8px 4px;
+  font-size: var(--txt-xs); color: var(--texto-dim); text-transform: uppercase; letter-spacing: 0.04em;
+  padding: var(--sp-1) var(--sp-2) var(--sp-1);
 }
 .connectors-popup-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 7px 8px; border-radius: var(--radius); font-size: 13px; color: var(--texto);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2); border-radius: var(--radius); font-size: var(--txt-base); color: var(--texto);
 }
 .connectors-popup-row:hover { background: rgba(0, 0, 0, 0.15); }
-.connectors-popup-row-name { display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connectors-popup-row-name { display: flex; align-items: center; gap: var(--sp-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .connectors-popup-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--peligro); flex-shrink: 0; }
 .connectors-popup-dot.on { background: #7ee787; }
-.connectors-popup-empty { padding: 10px 8px; font-size: 12px; color: var(--texto-dim); }
+.connectors-popup-empty { padding: var(--sp-2) var(--sp-2); font-size: var(--txt-sm); color: var(--texto-dim); }
 
 /* Switch on/off (imagen 6): pill que se pone dorado/lleno cuando esta activo. */
 .connector-switch { position: relative; width: 34px; height: 19px; flex-shrink: 0; }
 .connector-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .connector-switch-track {
-  position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: background 0.15s;
+  position: absolute; inset: 0; background: var(--border); border-radius: var(--radius-pildora); transition: background var(--anim-rapida);
 }
 .connector-switch-track::after {
   content: ''; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
-  background: var(--texto-dim); transition: transform 0.15s;
+  background: var(--texto-dim); transition: transform var(--anim-rapida);
 }
 .connector-switch input:checked +.connector-switch-track { background: var(--acento); }
 .connector-switch input:checked +.connector-switch-track::after { transform: translateX(15px); background: var(--fondo); }
@@ -423,28 +458,28 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Protocolo de pérdida de contexto (pedido del usuario, 2026-07-13): aviso no intrusivo cuando la
    conversación activa ya pasó el umbral donde mentis-chat.sh deja de ver todo el historial. */
 #handoff-banner {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
   background: var(--acento-soft); border-bottom: 1px solid var(--acento);
-  padding: 8px 16px; font-family: var(--font-sans); font-size: 12px; color: var(--texto);
+  padding: var(--sp-2) var(--sp-4); font-family: var(--font-sans); font-size: var(--txt-sm); color: var(--texto);
 }
 #handoff-banner.hidden { display: none; }
-#handoff-banner-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#handoff-banner-actions { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; }
 #btn-handoff-accept {
   background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
+  padding: var(--sp-1) var(--sp-3); font-size: var(--txt-sm); font-weight: 600; cursor: pointer; font-family: var(--font-sans);
 }
 #btn-handoff-accept:hover { filter: brightness(1.1); }
 #btn-handoff-dismiss {
-  background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: 16px;
-  line-height: 1; padding: 0 4px;
+  background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: var(--txt-lg);
+  line-height: 1; padding: 0 var(--sp-1);
 }
 #btn-handoff-dismiss:hover, #btn-handoff-dismiss:focus-visible { color: var(--texto); }
 #btn-emergency-stop.hidden { display: none; }
 #btn-emergency-stop {
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: var(--sp-1);
   background: var(--peligro); color: var(--fondo); border: none;
-  border-radius: var(--radius); padding: 6px 12px; font-family: var(--font-sans);
-  font-size: 12px; font-weight: 700; cursor: pointer;
+  border-radius: var(--radius); padding: var(--sp-1) var(--sp-3); font-family: var(--font-sans);
+  font-size: var(--txt-sm); font-weight: 700; cursor: pointer;
 }
 #btn-emergency-stop:hover:not(:disabled) { filter: brightness(1.12); }
 #btn-emergency-stop:focus-visible { outline: 2px solid var(--texto); outline-offset: 2px; }
@@ -480,9 +515,9 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #main:has(#status-panel:not(.collapsed)) #composer,
 #main:has(#status-panel:not(.collapsed)) #linea-estado {
   padding-right: var(--ancho-panel-estado);
-  transition: padding-right 0.16s ease;
+  transition: padding-right var(--anim-lenta) var(--anim-curva);
 }
-#zona-central, #composer, #linea-estado { transition: padding-right 0.16s ease; }
+#zona-central, #composer, #linea-estado { transition: padding-right var(--anim-lenta) var(--anim-curva); }
 /* La excepción que anulaba el corrimiento cuando el panel estaba agrandado se RETIRÓ el
    2026-08-13. Existía porque el panel agrandado ocupaba el 78% del ancho y cubría todo, así que
    correr el contenido no servía de nada. Ahora que crece a lo alto y conserva su ancho, el
@@ -491,26 +526,26 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    "Previsualización", con su etiqueta fija y el botón de cerrar. */
 #status-tabs {
   display: flex; align-items: center; justify-content: space-between;
-  border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 8px 10px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0; padding: var(--sp-2) var(--sp-2);
 }
-#status-panel-label { color: var(--acento); font-size: 12px; font-family: var(--font-sans); font-weight: 600; }
+#status-panel-label { color: var(--acento); font-size: var(--txt-sm); font-family: var(--font-sans); font-weight: 600; }
 /* "paso 3 de 10". Discreto: acompaña, no compite con el contenido del panel. Se pone del color
    de peligro cuando quedan dos pasos o menos, que es cuando el turno puede cortarse sin terminar
    y conviene que el usuario lo vea antes de que pase, no después. */
-#status-progreso { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans);
+#status-progreso { font-size: var(--txt-xs); color: var(--texto-dim); font-family: var(--font-sans);
                    margin-left: auto; margin-right: 8px; letter-spacing: 0.02em; }
 #status-progreso.cerca-del-limite { color: var(--peligro); font-weight: 600; }
 #btn-close-status {
   flex: 0 0 auto; background: none; border: none; color: var(--texto-dim); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; padding: 0 10px;
+  display: flex; align-items: center; justify-content: center; padding: 0 var(--sp-2);
 }
 #btn-close-status:hover, #btn-close-status:focus-visible { color: var(--acento); }
-#status-panel #preview-content { padding: 10px; overflow-y: auto; }
-#preview-content { font-family: var(--font-mono); font-size: 12px; color: var(--texto-dim); }
+#status-panel #preview-content { padding: var(--sp-2); overflow-y: auto; }
+#preview-content { font-family: var(--font-mono); font-size: var(--txt-sm); color: var(--texto-dim); }
 #preview-content.preview-action { color: var(--acento); margin-bottom: 6px; }
 #preview-content pre {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 220px; overflow-y: auto;
+  padding: var(--sp-2); font-size: var(--txt-xs); white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 220px; overflow-y: auto;
 }
 /* Computer-use en vivo (pedido del usuario, 2026-07-16): captura real dentro del panel de
    Previsualización, misma cota de alto que los <pre> de arriba para no desbordar el panel. */
@@ -524,23 +559,23 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 
 /* Entrada suave (pedido del usuario, mejora visual 2026-07-14): reusa la misma animación que ya
    usaban la burbuja de bienvenida y el panel de stats, en vez de aparecer de golpe. */
-.bubble { max-width: 70%; padding: 10px 14px; border-radius: var(--radius); margin-bottom: 10px; white-space: pre-wrap; font-size: 14px; animation: mentis-bubble-in 0.2s ease-out; }
+.bubble { max-width: 70%; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); margin-bottom: 10px; white-space: pre-wrap; font-size: var(--txt-lg); animation: mentis-bubble-in 0.2s ease-out; }
 .bubble.usuario { background: var(--bubble-usuario); color: var(--texto); font-family: var(--font-sans); }
-.bubble.mentis { background: var(--secundario); border: 1px solid var(--border); color: var(--texto); font-family: var(--font-serif); font-size: 15px; line-height: 1.7; }
+.bubble.mentis { background: var(--secundario); border: 1px solid var(--border); color: var(--texto); font-family: var(--font-serif); font-size: var(--txt-lg); line-height: 1.7; }
 .bubble.mentis.error { border-color: var(--peligro); color: #ff8a80; font-family: var(--font-sans); }
 /* --- Modo administrador (2026-08-07) ----------------------------------------------------------
    Va arriba de todo en la barra lateral, discreto: es una herramienta que se usa cada tanto, no
    algo que tenga que competir con el chat. Sólo se muestra donde existe la clave privada. */
-#admin-switch-fila { padding: 8px 10px 4px; }
-.admin-switch { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+#admin-switch-fila { padding: var(--sp-2) var(--sp-2) var(--sp-1); }
+.admin-switch { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; user-select: none; }
 .admin-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-.admin-switch-pista { width: 30px; height: 17px; border-radius: 9px; background: var(--secundario);
+.admin-switch-pista { width: 30px; height: 17px; border-radius: var(--radius-pildora); background: var(--secundario);
                       border: 1px solid var(--border); position: relative; transition: background.15s; }
 .admin-switch-bolita { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px;
                        border-radius: 50%; background: var(--texto-dim); transition: transform.15s, background.15s; }
 .admin-switch input:checked +.admin-switch-pista { background: var(--acento-soft); border-color: var(--acento); }
 .admin-switch input:checked +.admin-switch-pista.admin-switch-bolita { transform: translateX(13px); background: var(--acento); }
-.admin-switch-texto { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans);
+.admin-switch-texto { font-size: var(--txt-xs); color: var(--texto-dim); font-family: var(--font-sans);
                       text-transform: uppercase; letter-spacing:.04em; }
 .admin-switch input:checked ~.admin-switch-texto { color: var(--acento); }
 
@@ -554,13 +589,13 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    no empuje el panel fuera de la pantalla. */
 #admin-panel { position: fixed; right: 12px; bottom: 12px; width: 380px;
                max-height: 72vh; overflow-y: auto; z-index: 6;
-               padding: 12px; border: 1px solid var(--acento);
-               border-radius: 8px; background: var(--secundario);
+               padding: var(--sp-3); border: 1px solid var(--acento);
+               border-radius: var(--radius); background: var(--secundario);
                box-shadow: var(--shadow-tonal); display: flex;
-               flex-direction: column; gap: 7px; }
-#admin-panel h4 { margin: 0; font-size: 12px; font-family: var(--font-sans); color: var(--texto); }
-#admin-estado { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans); line-height: 1.4; }
-#admin-panel button { font-size: 12px; padding: 6px 8px; border-radius: 6px;
+               flex-direction: column; gap: var(--sp-2); }
+#admin-panel h4 { margin: 0; font-size: var(--txt-sm); font-family: var(--font-sans); color: var(--texto); }
+#admin-estado { font-size: var(--txt-xs); color: var(--texto-dim); font-family: var(--font-sans); line-height: 1.4; }
+#admin-panel button { font-size: var(--txt-sm); padding: var(--sp-1) var(--sp-2); border-radius: var(--radius-chico);
                       border: 1px solid var(--border); background: var(--principal);
                       color: var(--texto); cursor: pointer; font-family: var(--font-sans); }
 #admin-panel button:hover:not(:disabled) { border-color: var(--acento); }
@@ -568,34 +603,34 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    se aprieta más fuerte en vez de leer por qué. */
 #admin-panel button:disabled { opacity:.45; cursor: not-allowed; }
 #btn-admin-publicar:not(:disabled) { background: var(--acento); color: #fff; border-color: var(--acento); font-weight: 600; }
-#admin-panel textarea { font-size: 12px; padding: 6px; border-radius: 6px; resize: vertical;
+#admin-panel textarea { font-size: var(--txt-sm); padding: var(--sp-1); border-radius: var(--radius-chico); resize: vertical;
                         background: var(--principal); color: var(--texto); border: 1px solid var(--border);
                         font-family: var(--font-sans); }
 /* Usa la variable como todo el resto: tenía la familia escrita a mano y se quedó afuera del
    cambio a Courier del 2026-08-07. Segundo caso igual en el mismo archivo. */
-#admin-salida { font-size: 10px; font-family: var(--font-mono); max-height: 190px;
-                overflow: auto; background: rgba(0,0,0,.32); padding: 7px; border-radius: 6px;
+#admin-salida { font-size: var(--txt-xs); font-family: var(--font-mono); max-height: 190px;
+                overflow: auto; background: rgba(0,0,0,.32); padding: var(--sp-2); border-radius: var(--radius-chico);
                 white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--texto-dim); }
-.admin-nota { font-size: 10px; color: var(--texto-dim); margin: 0; line-height: 1.35; font-family: var(--font-sans); }
+.admin-nota { font-size: var(--txt-xs); color: var(--texto-dim); margin: 0; line-height: 1.35; font-family: var(--font-sans); }
 .admin-secundario { opacity:.75; }
 
 /* --- Selector de paletas (2026-08-06) ---------------------------------------------------------
    Cada opción muestra las tres franjas que definen la paleta (fondo, acento, texto): se reconoce
    de un vistazo sin tener que aplicarla. La grilla se acomoda sola al ancho del panel. */
 #temas-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-                gap: 10px; margin-top: 10px; }
-.tema-opcion { background: none; border: 1px solid var(--border); border-radius: 8px;
-               padding: 6px; cursor: pointer; display: flex; flex-direction: column;
-               align-items: center; gap: 6px; transition: border-color.15s, transform.1s; }
+                gap: var(--sp-2); margin-top: 10px; }
+.tema-opcion { background: none; border: 1px solid var(--border); border-radius: var(--radius);
+               padding: var(--sp-1); cursor: pointer; display: flex; flex-direction: column;
+               align-items: center; gap: var(--sp-1); transition: border-color.15s, transform.1s; }
 .tema-opcion:hover { border-color: var(--texto-dim); }
 .tema-opcion:active { transform: scale(0.97); }
 .tema-opcion.elegido { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
-.tema-muestra { width: 100%; height: 34px; border-radius: 5px; border: 1px solid var(--border); }
-.tema-nombre { font-size: 11px; color: var(--texto-dim); font-family: var(--font-sans);
+.tema-muestra { width: 100%; height: 34px; border-radius: var(--radius-chico); border: 1px solid var(--border); }
+.tema-nombre { font-size: var(--txt-xs); color: var(--texto-dim); font-family: var(--font-sans);
                text-align: center; line-height: 1.2; }
 .tema-opcion.elegido.tema-nombre { color: var(--texto); }
-.settings-label { display: block; font-size: 12px; color: var(--texto-dim);
-                  font-family: var(--font-sans); margin: 4px 0; }
+.settings-label { display: block; font-size: var(--txt-sm); color: var(--texto-dim);
+                  font-family: var(--font-sans); margin: var(--sp-1) 0; }
 
 /* Formato dentro de las respuestas (negrita, cursiva, listas, codigo). Los margenes van chicos a
    proposito: la burbuja ya tiene su padding, y los valores por defecto del navegador para h3-h5,
@@ -603,22 +638,22 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .bubble.mentis strong { font-weight: 650; color: #fff; }
 .bubble.mentis em { font-style: italic; }
 .bubble.mentis h3,.bubble.mentis h4,.bubble.mentis h5 {
-  margin: 12px 0 6px; font-family: var(--font-sans); font-weight: 600; line-height: 1.3;
+  margin: var(--sp-3) 0 var(--sp-1); font-family: var(--font-sans); font-weight: 600; line-height: 1.3;
 }
 .bubble.mentis h3 { font-size: 1.12em; }
 .bubble.mentis h4 { font-size: 1.05em; }
 .bubble.mentis h5 { font-size: 1em; color: var(--texto-dim); }
-.bubble.mentis ul,.bubble.mentis ol { margin: 6px 0; padding-left: 22px; }
-.bubble.mentis li { margin: 3px 0; }
+.bubble.mentis ul,.bubble.mentis ol { margin: var(--sp-1) 0; padding-left: 22px; }
+.bubble.mentis li { margin: var(--sp-1) 0; }
 .bubble.mentis code {
   /* Usa la variable como todo el resto (2026-08-07): tenia la familia escrita a mano y se
      quedaba afuera del cambio de tipografia. El fondo gris ya distingue el codigo del texto. */
   font-family: var(--font-mono); font-size: 0.9em;
-  background: rgba(255,255,255,0.07); padding: 1px 5px; border-radius: 4px;
+  background: rgba(255,255,255,0.07); padding: 1px var(--sp-1); border-radius: var(--radius-chico);
 }
 .bubble.mentis pre.bloque-codigo {
-  background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 12px; margin: 8px 0; overflow-x: auto;   /* el codigo largo scrollea SOLO,
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-3); margin: var(--sp-2) 0; overflow-x: auto;   /* el codigo largo scrollea SOLO,
                                                             sin estirar la burbuja ni la ventana */
   white-space: pre; font-size: 0.88em; line-height: 1.5;
 }
@@ -645,50 +680,50 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    previsualización del composer (.attach-chip--image), pero en el historial de la conversación.
    flex+justify-content en vez de margin-left:auto porque este bloque aparece tanto envuelto en
 .message-row (flex-column) como suelto en #messages (burbuja optimista antes de recargar). */
-.message-attach-row { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.message-attach-row { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: 6px; }
 .message-attach-thumb {
-  width: 160px; height: 160px; object-fit: cover; border-radius: 4px; border: 1px solid var(--acento);
+  width: 160px; height: 160px; object-fit: cover; border-radius: var(--radius-chico); border: 1px solid var(--acento);
 }
 .message-attach-file-chip {
-  font-size: 12px; color: var(--texto-dim); background: var(--fondo); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 4px 8px;
+  font-size: var(--txt-sm); color: var(--texto-dim); background: var(--fondo); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--sp-1) var(--sp-2);
 }
 .message-toolbar {
-  display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity 0.1s ease-out;
-  font-family: var(--font-sans); font-size: 11px;
+  display: flex; align-items: center; gap: var(--sp-2); opacity: 0; transition: opacity var(--anim-rapida) var(--anim-curva);
+  font-family: var(--font-sans); font-size: var(--txt-xs);
 }
 .message-row:hover.message-toolbar,.message-row:focus-within.message-toolbar,.message-row.editing.message-toolbar { opacity: 1; }
 .message-edit-btn {
-  background: none; border: none; color: var(--texto-dim); cursor: pointer; padding: 2px 4px; font-size: 11px;
+  background: none; border: none; color: var(--texto-dim); cursor: pointer; padding: var(--sp-1) var(--sp-1); font-size: var(--txt-xs);
   font-family: var(--font-sans); text-decoration: underline;
 }
 .message-edit-btn:hover,.message-edit-btn:focus-visible { color: var(--acento); }
 .branch-nav-slot:empty { display: none; }
 .branch-nav-btn {
   background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--texto-dim);
-  cursor: pointer; padding: 1px 6px; font-size: 12px; line-height: 1.4;
+  cursor: pointer; padding: 1px var(--sp-1); font-size: var(--txt-sm); line-height: 1.4;
 }
 .branch-nav-btn:hover:not(:disabled),.branch-nav-btn:focus-visible:not(:disabled) { border-color: var(--acento); color: var(--acento); }
 .branch-nav-btn:disabled { opacity: 0.35; cursor: default; }
-.branch-nav-label { color: var(--texto-dim); font-size: 11px; }
+.branch-nav-label { color: var(--texto-dim); font-size: var(--txt-xs); }
 .message-row.editing { align-items: stretch; width: 100%; }
 .message-edit-textarea {
   width: 100%; min-height: 70px; background: var(--fondo); border: 1px solid var(--acento); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 14px; font-family: var(--font-sans); resize: vertical;
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-lg); font-family: var(--font-sans); resize: vertical;
 }
-.message-edit-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.message-edit-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: 6px; }
 .message-edit-actions button {
   background: var(--fondo); color: var(--texto); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 6px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-sans);
+  padding: var(--sp-1) var(--sp-3); font-size: var(--txt-sm); cursor: pointer; font-family: var(--font-sans);
 }
 .message-edit-actions button.primary { background: var(--acento); color: var(--fondo); border-color: var(--acento); font-weight: 600; }
 .message-edit-actions button:hover { filter: brightness(1.1); }
 
-.artifact-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 10px 0; }
+.artifact-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: -4px 0 var(--sp-2) 0; }
 .artifact-chip {
   background: var(--acento-soft); border: 1px solid var(--acento); color: var(--acento);
-  border-radius: var(--radius); padding: 5px 10px; font-family: var(--font-sans); font-size: 12px;
-  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  border-radius: var(--radius); padding: var(--sp-1) var(--sp-2); font-family: var(--font-sans); font-size: var(--txt-sm);
+  cursor: pointer; display: inline-flex; align-items: center; gap: var(--sp-1);
 }
 .artifact-chip:hover { background: var(--acento); color: var(--fondo); }
 .artifact-chip:focus-visible { outline: 2px solid var(--texto); outline-offset: 1px; }
@@ -696,38 +731,38 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 
 .question-card {
   max-width: 70%; background: var(--secundario); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 10px;
+  border-radius: var(--radius); padding: var(--sp-3); margin-bottom: 10px; display: flex; flex-direction: column; gap: var(--sp-2);
   font-family: var(--font-serif);
 }
-.question-title { font-size: 16px; color: var(--texto); font-weight: 700; }
-.question-options { display: flex; flex-direction: column; gap: 6px; }
+.question-title { font-size: var(--txt-lg); color: var(--texto); font-weight: 700; }
+.question-options { display: flex; flex-direction: column; gap: var(--sp-1); }
 .question-option {
-  display: flex; align-items: flex-start; gap: 8px; background: var(--fondo);
-  border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; cursor: pointer; font-size: 14px;
+  display: flex; align-items: flex-start; gap: var(--sp-2); background: var(--fondo);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: var(--sp-2) var(--sp-2); cursor: pointer; font-size: var(--txt-lg);
 }
 .question-option:has(input:checked) { border-color: var(--acento); }
 .question-option input { margin-top: 3px; accent-color: var(--acento); }
-.question-option-desc { color: var(--texto-dim); font-family: var(--font-sans); font-size: 13px; }
+.question-option-desc { color: var(--texto-dim); font-family: var(--font-sans); font-size: var(--txt-base); }
 .question-custom-input {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans);
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-base); font-family: var(--font-sans);
 }
 .question-custom-input:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
 .question-submit {
   align-self: flex-end; background: var(--acento); color: var(--fondo); border: none; font-weight: 600;
-  border-radius: var(--radius); padding: 7px 16px; font-size: 13px; cursor: pointer; font-family: var(--font-sans);
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-4); font-size: var(--txt-base); cursor: pointer; font-family: var(--font-sans);
 }
 .question-submit:hover { filter: brightness(1.1); }
 .question-submit:focus-visible,.question-option:has(input:focus-visible) { outline: 2px solid var(--acento); outline-offset: 1px; }
 .question-submit:disabled,.question-option:has(input:disabled),.question-custom-input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-#logs-content { font-family: var(--font-mono); max-height: 140px; overflow-y: auto; margin: 0; padding: 8px 14px; font-size: 12px; color: var(--texto-dim); }
+#logs-content { font-family: var(--font-mono); max-height: 140px; overflow-y: auto; margin: 0; padding: var(--sp-2) var(--sp-3); font-size: var(--txt-sm); color: var(--texto-dim); }
 /* Composer: la fila principal (textarea + cluster de acciones) queda ancla en la esquina
    inferior derecha -- el textarea achicado a la izquierda, todos los controles (flags MCP,
    adjuntar, enviar) agrandados y agrupados a la derecha, alineados abajo. */
 /* Cuadro de texto más alto (pedido del usuario, 2026-07-13, referencia visual): más aire arriba y
    abajo del composer, y el textarea arranca más alto en vez de rozar el borde inferior. */
-#composer { padding: 18px 18px 22px; border-top: 1px solid var(--border); position: relative; }
+#composer { padding: var(--sp-4) var(--sp-4) var(--sp-5); border-top: 1px solid var(--border); position: relative; }
 /* Catálogo "/" (pedido del usuario, 2026-07-12): flota justo arriba del composer, mismo look que
    los demás popups del tema (borde dorado en vez del gris de.modal-option para que se note
    que es un menu "vivo" que sigue lo que escribís, no una lista estatica). */
@@ -739,8 +774,8 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #slash-menu.hidden { display: none; }
 .slash-item {
-  display: flex; align-items: baseline; gap: 10px; padding: 8px 12px; cursor: pointer;
-  border-bottom: 1px solid var(--border); font-family: var(--font-sans); font-size: 13px;
+  display: flex; align-items: baseline; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); cursor: pointer;
+  border-bottom: 1px solid var(--border); font-family: var(--font-sans); font-size: var(--txt-base);
 }
 .slash-item:last-child { border-bottom: none; }
 .slash-item-prefix { color: var(--acento); font-family: var(--font-mono); font-weight: 700; flex: 0 0 auto; }
@@ -750,32 +785,32 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Narración de proceso en vivo (pedido del usuario, 2026-07-12): pasos que van apareciendo
    mientras Mentis trabaja el turno, arriba del spinner -- y su version colapsada, guardada
    junto a la respuesta ya persistida en el historial. */
-#live-steps { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+#live-steps { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: 6px; }
 /* Sin emoji (pedido del usuario, 2026-07-13): el estado se distingue por una barra de acento a la
    izquierda -- dorada en curso, roja si fue un rechazo/fallo -- no por pictograma. */
 .live-step {
-  display: flex; align-items: baseline; font-size: 13px; color: var(--texto-dim);
+  display: flex; align-items: baseline; font-size: var(--txt-base); color: var(--texto-dim);
   font-family: var(--font-sans); animation: mentis-bubble-in 0.2s ease-out;
   padding-left: 10px; border-left: 2px solid var(--acento-soft);
 }
 .live-step-error { border-left-color: var(--peligro); color: #f0a8a4; }
-.steps-summary { max-width: 70%; margin-bottom: 6px; font-family: var(--font-sans); font-size: 12px; }
-.steps-summary summary { cursor: pointer; color: var(--texto-dim); list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+.steps-summary { max-width: 70%; margin-bottom: 6px; font-family: var(--font-sans); font-size: var(--txt-sm); }
+.steps-summary summary { cursor: pointer; color: var(--texto-dim); list-style: none; display: inline-flex; align-items: center; gap: var(--sp-1); }
 .steps-summary summary::-webkit-details-marker { display: none; }
 .steps-summary summary::before { content: '▸'; }
 .steps-summary[open] summary::before { content: '▾'; }
 .steps-summary:hover summary { color: var(--acento); }
-.steps-summary-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; padding-left: 8px; border-left: 2px solid var(--border); }
+.steps-summary-list { margin-top: 6px; display: flex; flex-direction: column; gap: var(--sp-1); padding-left: 8px; border-left: 2px solid var(--border); }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 #attach-preview-row:not(:empty) { margin-bottom: 8px; }
-#composer-main { display: flex; align-items: flex-end; gap: 10px; }
+#composer-main { display: flex; align-items: flex-end; gap: var(--sp-2); }
 #message-input {
   flex: 1 1 auto; min-width: 0; width: auto; min-height: 64px; max-height: 160px;
   background: var(--secundario); color: var(--texto); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px; resize: vertical; font-family: inherit;
+  border-radius: var(--radius); padding: var(--sp-2); resize: vertical; font-family: inherit;
 }
 #message-input:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
 #message-input.hidden { display: none; }
@@ -795,16 +830,16 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    grande es el foco visual -- circular, dorado cuando graba, para que el estado se note sin
    tener que leer el texto de abajo. */
 #voice-panel {
-  flex: 1 1 auto; min-height: 40px; display: flex; align-items: center; gap: 12px;
+  flex: 1 1 auto; min-height: 40px; display: flex; align-items: center; gap: var(--sp-3);
   background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 16px;
+  padding: var(--sp-2) var(--sp-4);
 }
 #voice-panel.hidden { display: none; }
 #btn-mic {
   width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
   background: transparent; color: var(--texto-dim); border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: color var(--anim-rapida) var(--anim-curva), border-color var(--anim-rapida) var(--anim-curva);
 }
 #btn-mic svg { width: 18px; height: 18px; }
 #btn-mic:hover { color: var(--acento); border-color: var(--acento); }
@@ -815,7 +850,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   0%, 100% { box-shadow: 0 0 0 0 var(--peligro-soft); }
   50% { box-shadow: 0 0 0 10px transparent; }
 }
-#voice-status { color: var(--texto-dim); font-size: 13px; font-family: var(--font-sans); }
+#voice-status { color: var(--texto-dim); font-size: var(--txt-base); font-family: var(--font-sans); }
 /* Cluster de acciones en grilla fija (pedido del usuario, 2026-07-12): antes era una fila que
    envolvía de forma impredecible y le comía espacio horizontal al cuadro de texto. Con un ancho
    fijo el textarea de al lado (flex:1 1 auto) crece de forma confiable hacia la derecha en vez
@@ -838,14 +873,14 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   display: flex; flex-direction: column; gap: 1px;
   min-width: 232px; max-height: 60vh; overflow-y: auto;
   background: var(--principal); border: 1px solid var(--border);
-  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-tonal);
+  border-radius: var(--radius); padding: var(--sp-1); box-shadow: var(--shadow-tonal);
 }
 /* Cada capacidad pasa de cuadrado de 48px a fila de lista. Se pisan las reglas de.flag-toggle en
    vez de reescribir los diez controles: son los mismos nodos, con los mismos ids y listeners. */
 #action-cluster.flag-toggle {
-  width: auto; height: auto; justify-content: flex-start; gap: 10px;
-  padding: 8px 10px; border: 0; border-radius: 8px;
-  font-family: var(--font-sans); font-size: 13px; color: var(--texto);
+  width: auto; height: auto; justify-content: flex-start; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2); border: 0; border-radius: var(--radius);
+  font-family: var(--font-sans); font-size: var(--txt-base); color: var(--texto);
 }
 #action-cluster.flag-toggle:hover { background: var(--secundario); }
 #action-cluster.flag-toggle svg { width: 18px; height: 18px; flex: none; color: var(--texto-dim); }
@@ -910,34 +945,34 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    conversations/*.jsonl, colores de Mentis (acento dorado sobre fondo oscuro). */
 #usage-stats-panel {
   flex: 1 1 0; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 14px; padding: 0 24px; max-width: 420px;
+  justify-content: center; gap: var(--sp-3); padding: 0 var(--sp-5); max-width: 420px;
   animation: mentis-bubble-in 0.4s ease-out;
 }
 #usage-stats-panel.hidden { display: none; }
 .usage-stats-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); width: 100%;
 }
 .usage-stat-tile {
   background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 8px; text-align: center; font-family: var(--font-sans);
+  padding: var(--sp-2) var(--sp-2); text-align: center; font-family: var(--font-sans);
   /* Profundidad por capa de tono en vez de sombra negra: un filo claro tenue arriba,
      como si la ficha estuviera un poco elevada y agarrara luz. */
   box-shadow: inset 0 1px 0 rgba(220, 220, 220, 0.06);
 }
-.usage-stat-value { font-size: 20px; font-weight: 700; color: var(--acento); font-family: var(--font-serif); }
-.usage-stat-label { font-size: 10px; color: var(--texto-dim); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
-.usage-heatmap { display: grid; grid-template-columns: repeat(14, 1fr); gap: 3px; width: 100%; }
-.usage-heatmap-cell { aspect-ratio: 1; border-radius: 2px; background: var(--secundario); border: 1px solid var(--border); }
+.usage-stat-value { font-size: var(--txt-xl); font-weight: 700; color: var(--acento); font-family: var(--font-serif); }
+.usage-stat-label { font-size: var(--txt-xs); color: var(--texto-dim); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.03em; }
+.usage-heatmap { display: grid; grid-template-columns: repeat(14, 1fr); gap: var(--sp-1); width: 100%; }
+.usage-heatmap-cell { aspect-ratio: 1; border-radius: 2px; /* a proposito: una celda de 10px con radio 10 seria un circulo y el mapa dejaria de leerse como grilla */ background: var(--secundario); border: 1px solid var(--border); }
 .usage-heatmap-cell.level-1 { background: rgba(var(--acento-rgb), 0.28); border-color: transparent; }
 .usage-heatmap-cell.level-2 { background: rgba(var(--acento-rgb), 0.55); border-color: transparent; }
 .usage-heatmap-cell.level-3 { background: var(--acento); border-color: transparent; }
-.usage-stats-empty { font-size: 12px; color: var(--texto-dim); text-align: center; font-family: var(--font-sans); }
+.usage-stats-empty { font-size: var(--txt-sm); color: var(--texto-dim); text-align: center; font-family: var(--font-sans); }
 .usage-stats-costs {
   background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 10px; text-align: center; font-family: var(--font-sans); width: 100%;
+  padding: var(--sp-2) var(--sp-2); text-align: center; font-family: var(--font-sans); width: 100%;
 }
-.usage-stats-costs-total { font-size: 13px; font-weight: 700; color: var(--acento); }
-.usage-stats-costs-breakdown { font-size: 10px; color: var(--texto-dim); margin-top: 3px; }
+.usage-stats-costs-total { font-size: var(--txt-base); font-weight: 700; color: var(--acento); }
+.usage-stats-costs-breakdown { font-size: var(--txt-xs); color: var(--texto-dim); margin-top: 3px; }
 
 @media (max-width: 760px) {
   #usage-stats-panel { display: none; }
@@ -949,7 +984,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    discretos. Si maniana aparece un boton nuevo, tiene que sumarse a los DOS selectores de abajo. */
 #btn-new-folder, #btn-open-projects, #btn-open-directory, #btn-open-schedule, #btn-open-galeria {
   background: transparent; color: var(--texto-dim); border: 1px dashed var(--border);
-  border-radius: var(--radius); padding: 6px; cursor: pointer; margin-top: 8px; font-size: 12px;
+  border-radius: var(--radius); padding: var(--sp-1); cursor: pointer; margin-top: 8px; font-size: var(--txt-sm);
   font-family: var(--font-sans);
 }
 #btn-new-folder:hover, #btn-open-projects:hover, #btn-open-projects:focus-visible,
@@ -960,24 +995,24 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    de la lista de conversaciones en la sidebar, separado con un borde propio. */
 #btn-open-settings {
   background: transparent; color: var(--texto-dim); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 8px 10px; cursor: pointer; margin-top: 10px;
-  font-size: 12px; font-family: var(--font-sans); display: flex; align-items: center; gap: 8px;
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-2); cursor: pointer; margin-top: 10px;
+  font-size: var(--txt-sm); font-family: var(--font-sans); display: flex; align-items: center; gap: var(--sp-2);
   flex-shrink: 0;
 }
 #btn-open-settings:hover, #btn-open-settings:focus-visible { border-color: var(--acento); color: var(--acento); }
 .folder-group { margin-top: 10px; }
 .folder-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 4px 8px; color: var(--texto-dim); font-size: 12px; cursor: pointer;
+  padding: var(--sp-1) var(--sp-2); color: var(--texto-dim); font-size: var(--txt-sm); cursor: pointer;
 }
-.folder-header.folder-actions { display: none; gap: 4px; }
+.folder-header.folder-actions { display: none; gap: var(--sp-1); }
 .folder-header:hover.folder-actions { display: flex; }
 .folder-actions button {
-  background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: 11px;
+  background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: var(--txt-xs);
 }
 .conv-item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px; border-radius: var(--radius); cursor: pointer; color: var(--texto-dim); font-size: 13px;
+  padding: var(--sp-2); border-radius: var(--radius); cursor: pointer; color: var(--texto-dim); font-size: var(--txt-base);
   margin-bottom: 4px;
 }
 .conv-item:hover,.conv-item.active { background: rgba(0, 0, 0, 0.2); color: var(--texto); }
@@ -999,13 +1034,13 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Adjuntos múltiples (pedido del usuario, 2026-07-13): antes era una sola fila de texto con 1
    adjunto; ahora es una fila de chips, uno por archivo, cada uno con su propia miniatura/nombre
    y botón de quitar individual. */
-#attach-preview-row { display: flex; flex-wrap: wrap; gap: 6px; }
+#attach-preview-row { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 #attach-preview-row:empty { display: none; }
 .attach-chip {
-  font-size: 12px; color: var(--texto-dim); display: flex; align-items: center; gap: 6px;
-  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px;
+  font-size: var(--txt-sm); color: var(--texto-dim); display: flex; align-items: center; gap: var(--sp-1);
+  background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--sp-1) var(--sp-2);
 }
-.attach-thumb { width: 20px; height: 20px; object-fit: cover; border-radius: 1px; border: 1px solid var(--border); }
+.attach-thumb { width: 20px; height: 20px; object-fit: cover; border-radius: 2px; border: 1px solid var(--border); }
 .btn-remove-attachment {
   background: none; border: none; color: var(--texto-dim); cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0;
@@ -1015,12 +1050,12 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Miniatura de imagen adjunta grande (pedido del usuario, referencia visual estilo Gemini):
    thumbnail prominente en vez de chip-pill chico con nombre de archivo. Borde dorado fino y
    esquina apenas suavizada (pedido del usuario, mejora visual 2026-07-14: "como una foto pegada en
-   un cuaderno de campo" -- no un icono de app redondeado, coherente con --radius:2px del resto). */
+   un cuaderno de campo" -- no un icono de app redondeado, coherente con --radius del resto). */
 .attach-chip--image {
-  position: relative; background: none; border: none; padding: 0; border-radius: 4px;
+  position: relative; background: none; border: none; padding: 0; border-radius: var(--radius-chico);
 }
 .attach-chip--image.attach-thumb {
-  width: 112px; height: 112px; border-radius: 4px; border: 1px solid var(--acento);
+  width: 112px; height: 112px; border-radius: var(--radius-chico); border: 1px solid var(--acento);
 }
 .attach-chip--image.btn-remove-attachment {
   position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
@@ -1030,7 +1065,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .attach-chip--image.btn-remove-attachment:focus-visible { background: rgba(0, 0, 0, 0.8); color: #fff; }
 
 #thinking-indicator {
-  display: flex; align-items: center; gap: 10px; padding: 10px 4px; color: var(--acento);
+  display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-1); color: var(--acento);
   animation: mentis-bubble-in 0.25s ease-out;
 }
 /* Brasa/ascua en vez de spinner genérico (pedido del usuario, mejora visual 2026-07-14): un
@@ -1040,7 +1075,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   animation: mentis-ember 1.4s ease-in-out infinite;
 }
 #thinking-indicator #thinking-timer {
-  font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono); font-size: var(--txt-base); font-variant-numeric: tabular-nums;
   text-shadow: 0 0 8px rgba(var(--acento-rgb), 0.55);
 }
 @keyframes mentis-ember {
@@ -1058,37 +1093,37 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #modal-box {
   background: rgba(28, 28, 34, 0.9); border: 1px solid var(--border); border-radius: var(--radius);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-tonal);
-  padding: 18px; width: 320px; max-width: calc(100vw - 40px);
+  padding: var(--sp-4); width: 320px; max-width: calc(100vw - 40px);
   animation: mentis-modal-in 0.15s ease-out;
 }
 @keyframes mentis-modal-in {
   from { opacity: 0; transform: translateY(8px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
-#modal-title { margin: 0 0 12px; font-size: 14px; color: var(--texto); font-weight: 600; }
-#modal-body { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+#modal-title { margin: 0 0 var(--sp-3); font-size: var(--txt-lg); color: var(--texto); font-weight: 600; }
+#modal-body { display: flex; flex-direction: column; gap: var(--sp-1); max-height: 40vh; overflow-y: auto; }
 #modal-body input[type="text"] {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 13px; width: 100%;
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-base); width: 100%;
 }
 #modal-body input[type="text"]:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
 .modal-textarea {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 12px; width: 100%; resize: vertical;
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-sm); width: 100%; resize: vertical;
   font-family: var(--font-mono);
 }
 .modal-textarea:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
 .modal-option {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 13px; text-align: left; cursor: pointer;
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-base); text-align: left; cursor: pointer;
 }
 .modal-option:hover,.modal-option.active,.modal-option:focus-visible { border-color: var(--acento); color: var(--acento); }
-.capability-status { font-size: 12px; min-height: 16px; }
+.capability-status { font-size: var(--txt-sm); min-height: 16px; }
 .capability-status.success { color: var(--acento); }
 .capability-status.error { color: #ff7b72; }
-#modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+#modal-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); margin-top: 14px; }
 #modal-actions button {
-  border-radius: var(--radius); padding: 7px 14px; font-size: 13px; cursor: pointer; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); cursor: pointer; border: 1px solid var(--border);
   background: transparent; color: var(--texto-dim);
 }
 #modal-actions button.primary { background: var(--acento); color: var(--fondo); border-color: var(--acento); font-weight: 600; }
@@ -1113,54 +1148,54 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #directory-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: var(--sp-4) 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-#directory-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#directory-title { margin: 0; font-family: var(--font-serif); font-size: var(--txt-xl); color: var(--acento); font-weight: 700; }
 #btn-close-directory {
   background: none; border: none; color: var(--texto-dim); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; padding: 4px;
+  display: flex; align-items: center; justify-content: center; padding: var(--sp-1);
 }
 #btn-close-directory:hover, #btn-close-directory:focus-visible { color: var(--acento); }
 #directory-body { display: flex; flex: 1; min-height: 0; }
 #directory-nav {
-  width: 160px; flex-shrink: 0; background: var(--principal); padding: 12px;
-  display: flex; flex-direction: column; gap: 2px;
+  width: 160px; flex-shrink: 0; background: var(--principal); padding: var(--sp-3);
+  display: flex; flex-direction: column; gap: var(--sp-1);
 }
 .directory-tab {
   background: none; border: none; color: rgba(220, 220, 220, 0.75); cursor: pointer;
-  text-align: left; padding: 9px 10px; border-radius: var(--radius); font-size: 13px;
+  text-align: left; padding: var(--sp-2) var(--sp-2); border-radius: var(--radius); font-size: var(--txt-base);
   font-family: var(--font-sans); border-left: 2px solid transparent;
 }
 .directory-tab:hover { background: rgba(0, 0, 0, 0.15); color: var(--texto); }
 .directory-tab.active { color: var(--acento); border-left-color: var(--acento); background: rgba(0, 0, 0, 0.15); font-weight: 600; }
-#directory-content { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 16px 20px; overflow: hidden; }
-#directory-toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-shrink: 0; }
+#directory-content { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: var(--sp-4) 20px; overflow: hidden; }
+#directory-toolbar { display: flex; gap: var(--sp-2); margin-bottom: 14px; flex-shrink: 0; }
 #directory-search {
   flex: 1; background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans);
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-base); font-family: var(--font-sans);
 }
 #directory-search:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; border-color: var(--acento); }
 #btn-directory-add {
   background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); font-weight: 600; cursor: pointer; flex-shrink: 0;
 }
 #btn-directory-add:hover { filter: brightness(1.1); }
 #directory-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2);
   overflow-y: auto; align-content: start;
 }
 .directory-card {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  padding: var(--sp-3) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-1);
 }
 .directory-card:hover { border-color: var(--acento); }
 .directory-card-clickable { cursor: pointer; }
 .directory-card-clickable:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
-.directory-card-title { font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: var(--texto); display: flex; align-items: center; gap: 8px; }
-.directory-card-desc { font-family: var(--font-sans); font-size: 12px; color: var(--texto-dim); line-height: 1.4; }
+.directory-card-title { font-family: var(--font-sans); font-size: var(--txt-lg); font-weight: 600; color: var(--texto); display: flex; align-items: center; gap: var(--sp-2); }
+.directory-card-desc { font-family: var(--font-sans); font-size: var(--txt-sm); color: var(--texto-dim); line-height: 1.4; }
 .directory-status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--peligro); }
 .directory-status-dot.on { background: var(--acento); }
-#directory-empty { color: var(--texto-dim); font-size: 13px; font-family: var(--font-sans); padding: 20px 0; grid-column: 1 / -1; text-align: center; }
+#directory-empty { color: var(--texto-dim); font-size: var(--txt-base); font-family: var(--font-sans); padding: 20px 0; grid-column: 1 / -1; text-align: center; }
 
 /* Proyectos (pedido del usuario, 2026-07-13): "cuadrados que funcionan como botones" -- mosaico de
    tiles cuadrados de verdad (aspect-ratio: 1), mismo material que el Directorio. */
@@ -1179,22 +1214,22 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #projects-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: var(--sp-4) 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-#projects-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#projects-title { margin: 0; font-family: var(--font-serif); font-size: var(--txt-xl); color: var(--acento); font-weight: 700; }
 #btn-close-projects {
   background: none; border: none; color: var(--texto-dim); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; padding: 4px;
+  display: flex; align-items: center; justify-content: center; padding: var(--sp-1);
 }
 #btn-close-projects:hover, #btn-close-projects:focus-visible { color: var(--acento); }
 #projects-grid {
   flex: 1; overflow-y: auto; padding: 20px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; align-content: start;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--sp-3); align-content: start;
 }
 .project-tile {
   position: relative; aspect-ratio: 1; background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  padding: 12px; gap: 6px; cursor: pointer; color: var(--texto); font-family: var(--font-sans); font-size: 13px;
+  padding: var(--sp-3); gap: var(--sp-1); cursor: pointer; color: var(--texto); font-family: var(--font-sans); font-size: var(--txt-base);
 }
 .project-tile:hover,.project-tile:focus-visible { border-color: var(--acento); }
 
@@ -1214,33 +1249,33 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #schedule-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: var(--sp-4) 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-#schedule-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#schedule-title { margin: 0; font-family: var(--font-serif); font-size: var(--txt-xl); color: var(--acento); font-weight: 700; }
 #btn-close-schedule {
   background: none; border: none; color: var(--texto-dim); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; padding: 4px;
+  display: flex; align-items: center; justify-content: center; padding: var(--sp-1);
 }
 #btn-close-schedule:hover, #btn-close-schedule:focus-visible { color: var(--acento); }
-#schedule-toolbar { padding: 14px 20px 0; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+#schedule-toolbar { padding: var(--sp-3) 20px 0; flex-shrink: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
 #btn-new-scheduled-task {
   align-self: flex-start; background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); font-weight: 600; cursor: pointer;
 }
 #btn-new-scheduled-task:hover { filter: brightness(1.1); }
-#schedule-list { flex: 1; overflow-y: auto; padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+#schedule-list { flex: 1; overflow-y: auto; padding: var(--sp-3) 20px 20px; display: flex; flex-direction: column; gap: var(--sp-2); }
 .schedule-card-last { font-style: italic; }
-.schedule-card-actions { display: flex; gap: 8px; margin-top: 6px; }
+.schedule-card-actions { display: flex; gap: var(--sp-2); margin-top: 6px; }
 .schedule-card-actions button {
   background: var(--fondo); color: var(--texto); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: var(--font-sans);
+  padding: var(--sp-1) var(--sp-2); font-size: var(--txt-sm); cursor: pointer; font-family: var(--font-sans);
 }
 .schedule-card-actions button:hover { border-color: var(--acento); color: var(--acento); }
 #schedule-form-day-row.hidden, #schedule-form-time-row.hidden, #schedule-form-interval-row.hidden { display: none; }
-#schedule-form-error-msg { color: var(--peligro); font-size: 12px; font-family: var(--font-sans); margin-top: 4px; }
+#schedule-form-error-msg { color: var(--peligro); font-size: var(--txt-sm); font-family: var(--font-sans); margin-top: 4px; }
 #schedule-form-error-msg.hidden { display: none; }
 .project-tile-name { font-weight: 600; word-break: break-word; }
-.project-tile-date { color: var(--texto-dim); font-size: 11px; }
+.project-tile-date { color: var(--texto-dim); font-size: var(--txt-xs); }
 /* Botón de borrar (pedido del usuario, 2026-07-14): oculto hasta hover/foco para no ensuciar el
    mosaico -- mismo patrón que el botón "⋯" de cada conversación en el sidebar. */
 .project-tile-delete {
@@ -1260,7 +1295,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    proyecto -- mismo grid de tiles que la vista general, pero solo con SUS conversaciones. */
 .projects-back-btn {
   background: none; border: none; color: var(--texto-dim); cursor: pointer;
-  font-family: var(--font-sans); font-size: 13px; padding: 0; margin-right: 8px;
+  font-family: var(--font-sans); font-size: var(--txt-base); padding: 0; margin-right: 8px;
 }
 .projects-back-btn:hover,.projects-back-btn:focus-visible { color: var(--acento); }
 
@@ -1280,24 +1315,24 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #settings-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: var(--sp-4) 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
-#settings-title { margin: 0; font-family: var(--font-serif); font-size: 20px; color: var(--acento); font-weight: 700; }
+#settings-title { margin: 0; font-family: var(--font-serif); font-size: var(--txt-xl); color: var(--acento); font-weight: 700; }
 #btn-close-settings {
   background: none; border: none; color: var(--texto-dim); cursor: pointer;
-  display: flex; align-items: center; justify-content: center; padding: 4px;
+  display: flex; align-items: center; justify-content: center; padding: var(--sp-1);
 }
 #btn-close-settings:hover, #btn-close-settings:focus-visible { color: var(--acento); }
-#settings-body { padding: 18px 20px; overflow-y: auto; }
+#settings-body { padding: var(--sp-4) 20px; overflow-y: auto; }
 .settings-section { margin-bottom: 20px; }
 .settings-section:last-child { margin-bottom: 0; }
-.settings-section h3 { margin: 0 0 6px; font-family: var(--font-sans); font-size: 14px; color: var(--texto); font-weight: 600; }
-.settings-hint { margin: 0 0 12px; font-size: 12px; color: var(--texto-dim); line-height: 1.5; }
+.settings-section h3 { margin: 0 0 var(--sp-1); font-family: var(--font-sans); font-size: var(--txt-lg); color: var(--texto); font-weight: 600; }
+.settings-hint { margin: 0 0 var(--sp-3); font-size: var(--txt-sm); color: var(--texto-dim); line-height: 1.5; }
 .settings-hint a { color: var(--acento); }
 .settings-section input[type="text"],.settings-section input[type="password"],
 .settings-section select,.settings-section textarea {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--texto); padding: 8px 10px; font-size: 13px; font-family: var(--font-sans); width: 100%;
+  color: var(--texto); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-base); font-family: var(--font-sans); width: 100%;
 }
 .settings-section textarea { resize: vertical; font-family: inherit; margin-bottom: 8px; }
 .settings-section input:focus-visible,.settings-section select:focus-visible,.settings-section textarea:focus-visible {
@@ -1305,7 +1340,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 .settings-section > button {
   background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); font-weight: 600; cursor: pointer;
 }
 .settings-section > button:hover { filter: brightness(1.1); }
 /* Feedback de guardado inequívoco (pedido del usuario, 2026-07-13: no se notaba si Ideogram había
@@ -1317,15 +1352,15 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Estado de conexión reusable (Ideogram hoy, cualquier conector/clave futura después): punto +
    texto, siempre visible como fila propia, no una línea de texto que se confunde con el resto. */
 .key-status {
-  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px;
-  padding: 6px 10px; background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  font-size: 12px; color: var(--texto-dim); font-family: var(--font-sans);
+  display: inline-flex; align-items: center; gap: var(--sp-2); margin-bottom: 10px;
+  padding: var(--sp-1) var(--sp-2); background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: var(--txt-sm); color: var(--texto-dim); font-family: var(--font-sans);
 }
 .key-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--peligro); flex-shrink: 0; }
 .key-status-dot.on { background: #7ee787; box-shadow: 0 0 6px rgba(126, 231, 135, 0.6); }
 .key-status.on { color: var(--texto); border-color: rgba(126, 231, 135, 0.4); }
 
-#ideogram-form, #runway-form { display: flex; gap: 8px; }
+#ideogram-form, #runway-form { display: flex; gap: var(--sp-2); }
 #ideogram-form input, #runway-form input { flex: 1; }
 /* Botón "Guardar" de las API keys (Ideogram/Runway) -- el de Runway quedaba con el estilo
    default del navegador por faltarle esta regla compartida. Selector compartido para no
@@ -1333,23 +1368,23 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    propia key (bug real reportado por el usuario dos veces, 2026-07-15). */
 #btn-save-ideogram, #btn-save-runway {
   background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); font-weight: 600; cursor: pointer; flex-shrink: 0;
   font-family: var(--font-sans);
 }
 #btn-save-ideogram:hover, #btn-save-runway:hover { filter: brightness(1.1); }
 #btn-save-ideogram.save-flash-ok, #btn-save-runway.save-flash-ok { background: #2f8f4e; color: #eafff0; }
 
-#replicate-form { display: flex; gap: 8px; }
+#replicate-form { display: flex; gap: var(--sp-2); }
 #replicate-form input { flex: 1; }
 #btn-save-replicate {
   background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  padding: var(--sp-2) var(--sp-3); font-size: var(--txt-base); font-weight: 600; cursor: pointer; flex-shrink: 0;
 }
 #btn-save-replicate:hover { filter: brightness(1.1); }
 #btn-save-replicate.save-flash-ok { background: #2f8f4e; color: #eafff0; }
 
 /* Perfil (pedido del usuario, 2026-07-13): avatar circular + campos, mismo material que el resto. */
-#profile-form { display: flex; gap: 14px; margin-bottom: 10px; }
+#profile-form { display: flex; gap: var(--sp-3); margin-bottom: 10px; }
 #btn-pick-avatar {
   flex-shrink: 0; width: 64px; height: 64px; border-radius: 50%; padding: 0; cursor: pointer;
   background: var(--fondo); border: 1px dashed var(--border); color: var(--texto-dim);
@@ -1359,7 +1394,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #profile-avatar-img { width: 100%; height: 100%; object-fit: cover; }
 #profile-avatar-img.hidden { display: none; }
 #profile-avatar-fallback { font-size: 24px; font-family: var(--font-serif); }
-#profile-fields { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+#profile-fields { flex: 1; display: flex; flex-direction: column; gap: var(--sp-2); }
 #profile-role-custom.hidden { display: none; }
 #profile-instructions { margin-top: 4px; }
 #profile-save-status { margin-left: 10px; }
@@ -1367,25 +1402,25 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Modelos por rol: lista de acordeón (pedido del usuario, 2026-07-13 -- reemplaza el form siempre
    expuesto con selects/inputs a la vista todo el tiempo). Cada rol es una fila compacta;
    solo se ve el form de edición del rol que se clickeó. */
-#settings-models-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+#settings-models-list { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: 4px; }
 .cm-row {
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
-  font-size: 12px; font-family: var(--font-sans); color: var(--texto); overflow: hidden;
+  font-size: var(--txt-sm); font-family: var(--font-sans); color: var(--texto); overflow: hidden;
 }
 .cm-row-header {
-  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  background: none; border: none; color: inherit; cursor: pointer; padding: 9px 10px; text-align: left;
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  background: none; border: none; color: inherit; cursor: pointer; padding: var(--sp-2) var(--sp-2); text-align: left;
 }
 .cm-row-header:hover { background: rgba(0, 0, 0, 0.15); }
 .cm-row-name { font-weight: 600; }
-.cm-row-badge { color: var(--texto-dim); font-size: 11px; }
+.cm-row-badge { color: var(--texto-dim); font-size: var(--txt-xs); }
 .cm-row-badge.configured { color: var(--acento); }
 .cm-row.open.cm-row-header { border-bottom: 1px solid var(--border); }
-.cm-row-form { display: none; flex-direction: column; gap: 8px; padding: 10px; }
+.cm-row-form { display: none; flex-direction: column; gap: var(--sp-2); padding: var(--sp-2); }
 .cm-row.open.cm-row-form { display: flex; }
-.cm-row-form-actions { display: flex; gap: 8px; }
+.cm-row-form-actions { display: flex; gap: var(--sp-2); }
 .cm-row-form-actions button {
-  border-radius: var(--radius); padding: 7px 12px; font-size: 12px; cursor: pointer; border: 1px solid var(--border);
+  border-radius: var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--txt-sm); cursor: pointer; border: 1px solid var(--border);
   background: transparent; color: var(--texto-dim); font-family: var(--font-sans);
 }
 .cm-row-form-actions.cm-save { background: var(--acento); color: var(--fondo); border-color: var(--acento); font-weight: 600; }
@@ -1409,20 +1444,20 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   margin-top: 10px;
   max-height: 28%;
   overflow-y: auto;
-  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  display: flex; flex-direction: column; gap: var(--sp-2); align-items: center;
   pointer-events: none; text-align: center;
   flex: 0 0 auto;
 }
 #subtitulos-voz.hidden { display: none; }
 .subtitulo {
-  max-width: 100%; padding: 8px 16px; border-radius: 18px;
-  font-size: 17px; line-height: 1.45; opacity: 0;
-  transition: opacity 0.25s ease;
+  max-width: 100%; padding: var(--sp-2) var(--sp-4); border-radius: 18px; /* la burbuja lleva mas redondeo que el resto: es su forma, no un descuido */
+  font-size: var(--txt-lg); line-height: 1.45; opacity: 0;
+  transition: opacity var(--anim-lenta) var(--anim-curva);
   background: rgba(5, 5, 7, 0.72); backdrop-filter: blur(6px);
 }
 .subtitulo.visible { opacity: 1; }
 /* Lo que dijo el usuario va en gris y más chico: es el eco de lo que acaba de decir, no la respuesta. */
-#subtitulo-usuario { color: var(--texto-dim); font-size: 15px; font-style: italic; }
+#subtitulo-usuario { color: var(--texto-dim); font-size: var(--txt-lg); font-style: italic; }
 /* Lo que dice Mentis, en el naranja del cuerpo: es la voz que estás escuchando. */
 #subtitulo-mentis { color: var(--acento); font-weight: 500; }
 
@@ -1483,18 +1518,18 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #onboarding-overlay.hidden { display: none; }
 #onboarding-box { display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 440px; padding: 20px; text-align: center; }
-#onboarding-step-content h2 { font-family: var(--font-serif); color: var(--acento); font-size: 22px; margin: 0 0 10px; }
-#onboarding-step-content p { font-family: var(--font-sans); color: var(--texto); font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
-#onboarding-step-content ul { text-align: left; font-size: 13px; color: var(--texto-dim); line-height: 1.6; margin: 8px 0 0; padding-left: 20px; }
-#onboarding-dots { display: flex; gap: 6px; }
+#onboarding-step-content h2 { font-family: var(--font-serif); color: var(--acento); font-size: 22px; margin: 0 0 var(--sp-2); }
+#onboarding-step-content p { font-family: var(--font-sans); color: var(--texto); font-size: var(--txt-lg); line-height: 1.6; margin: 0 0 var(--sp-2); }
+#onboarding-step-content ul { text-align: left; font-size: var(--txt-base); color: var(--texto-dim); line-height: 1.6; margin: var(--sp-2) 0 0; padding-left: 20px; }
+#onboarding-dots { display: flex; gap: var(--sp-1); }
 .onboarding-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
 .onboarding-dot.active { background: var(--acento); }
-#onboarding-actions { display: flex; gap: 10px; align-items: center; }
-#btn-onboarding-skip { background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: 13px; font-family: var(--font-sans); }
+#onboarding-actions { display: flex; gap: var(--sp-2); align-items: center; }
+#btn-onboarding-skip { background: none; border: none; color: var(--texto-dim); cursor: pointer; font-size: var(--txt-base); font-family: var(--font-sans); }
 #btn-onboarding-skip:hover { color: var(--texto); }
 #btn-onboarding-next {
   background: var(--acento); color: var(--fondo); border: none; border-radius: var(--radius);
-  padding: 9px 20px; font-size: 13px; font-weight: 600; cursor: pointer;
+  padding: var(--sp-2) 20px; font-size: var(--txt-base); font-weight: 600; cursor: pointer;
 }
 #btn-onboarding-next:hover { filter: brightness(1.1); }
 
@@ -1517,8 +1552,8 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #zona-central { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #bienvenida {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 34px;
-  padding: 24px; min-height: 0;
+  align-items: center; justify-content: center; gap: var(--sp-6);
+  padding: var(--sp-5); min-height: 0;
 }
 #bienvenida-saludo {
   margin: 0; text-align: center;
@@ -1528,10 +1563,10 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   font-weight: 300; font-size: clamp(26px, 3.4vw, 42px);
   letter-spacing: -0.01em; color: var(--texto);
 }
-#bienvenida-cuadros { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+#bienvenida-cuadros { display: flex; gap: var(--sp-3); flex-wrap: wrap; justify-content: center; }
 .cuadro-ambiente {
   background: var(--principal); border: 1px solid var(--border);
-  border-radius: 12px; padding: 14px 22px; min-width: 132px; text-align: center;
+  border-radius: var(--radius); padding: var(--sp-3) var(--sp-5); min-width: 132px; text-align: center;
 }
 .cuadro-valor {
   font-size: 26px; font-weight: 500; color: var(--texto);
@@ -1539,22 +1574,22 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
      segundo, y un reloj que se sacude es peor que no tenerlo. */
   font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
 }
-.cuadro-etiqueta { font-size: 11px; color: var(--texto-dim); margin-top: 4px; letter-spacing: 0.04em; }
+.cuadro-etiqueta { font-size: var(--txt-xs); color: var(--texto-dim); margin-top: 4px; letter-spacing: 0.04em; }
 
 /* ===================== LÍNEA DE ESTADO (2026-08-11) =====================
    Qué está haciendo Mentis, hace cuánto, y el micrófono. Reemplaza al cuerpo digital.
    Los colores salen del TEMA, no de una rampa propia: así acompañan a claro y a oscuro sin una
    segunda tabla que mantener. */
 #linea-estado {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 16px 0;
-  font-family: var(--font-sans); font-size: 12px; color: var(--texto-dim);
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-4) 0;
+  font-family: var(--font-sans); font-size: var(--txt-sm); color: var(--texto-dim);
   user-select: none;
 }
 #estado-punto {
   width: 8px; height: 8px; border-radius: 50%; flex: none;
   background: var(--texto-dim);
-  transition: background 0.25s ease;
+  transition: background var(--anim-lenta) var(--anim-curva);
 }
 #estado-punto.pensando   { background: var(--acento); animation: mentis-latido 1.2s ease-in-out infinite; }
 #estado-punto.hablando   { background: var(--acento); }
@@ -1569,7 +1604,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Los tres puntitos que quedan en la conversación mientras Mentis piensa. Es lo único que el
    indicador aportaba en ese lugar: mostrar DÓNDE va a aparecer la respuesta. El "qué" y el
    "hace cuánto" los dice la línea de estado. */
-#thinking-indicator.puntos { display: inline-flex; gap: 5px; align-items: center; }
+#thinking-indicator.puntos { display: inline-flex; gap: var(--sp-1); align-items: center; }
 #thinking-indicator.puntos i {
   width: 6px; height: 6px; border-radius: 50%; background: var(--texto-dim);
   animation: mentis-latido 1.2s ease-in-out infinite;
@@ -1582,13 +1617,13 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    El selector se mudó acá desde el logotipo. Con seis modos, el lugar para elegir es donde estás
    por escribir. Se muestra el apellido ("Code", "Designe") y no "Mentis Code": el "Mentis" ya
    está en el logotipo y repetirlo cuatro veces en una fila de fichas es ruido. */
-#modo-fichas { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+#modo-fichas { display: flex; gap: var(--sp-1); flex-wrap: wrap; align-items: center; }
 .modo-ficha {
   background: transparent; border: 1px solid transparent;
-  border-radius: 999px; padding: 4px 12px;
-  font-family: var(--font-sans); font-size: 12px; font-weight: 500;
+  border-radius: var(--radius-pildora); padding: var(--sp-1) var(--sp-3);
+  font-family: var(--font-sans); font-size: var(--txt-sm); font-weight: 500;
   color: var(--texto-dim); cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background var(--anim-rapida) var(--anim-curva), color var(--anim-rapida) var(--anim-curva);
 }
 .modo-ficha:hover { background: var(--secundario); color: var(--texto); }
 .modo-ficha.elegido {
@@ -1601,7 +1636,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* ===================== EL "+" Y SU DESPLEGABLE (2026-08-12) ===================== */
 #btn-mas {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border-radius: 10px;
+  width: 40px; height: 40px; border-radius: var(--radius);
   color: var(--texto-dim); border: 1px solid var(--border);
   background: transparent; cursor: pointer; padding: 0; flex: none;
 }
@@ -1609,9 +1644,9 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 #btn-mas[aria-expanded="true"] { color: var(--acento); border-color: var(--acento); }
 #action-cluster {
   position: absolute; bottom: 62px; left: 12px; z-index: 35;
-  display: grid; grid-template-columns: repeat(5, auto); gap: 6px;
+  display: grid; grid-template-columns: repeat(5, auto); gap: var(--sp-1);
   background: var(--principal); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px; box-shadow: var(--shadow-tonal);
+  border-radius: var(--radius); padding: var(--sp-2); box-shadow: var(--shadow-tonal);
 }
 
 /* Ancla del desplegable del "+": sin esto, su `right: 0` se mide contra #main.
@@ -1626,16 +1661,16 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   position: absolute; bottom: 38px; right: 0; z-index: 36;
   display: flex; flex-direction: column; gap: 1px; min-width: 260px;
   background: var(--principal); border: 1px solid var(--border);
-  border-radius: 12px; padding: 6px; box-shadow: var(--shadow-tonal);
+  border-radius: var(--radius); padding: var(--sp-1); box-shadow: var(--shadow-tonal);
 }
 .modo-lista-item {
   display: block; width: 100%; text-align: left;
-  background: transparent; border: 0; border-radius: 8px;
-  padding: 8px 10px; cursor: pointer; font-family: var(--font-sans);
+  background: transparent; border: 0; border-radius: var(--radius);
+  padding: var(--sp-2) var(--sp-2); cursor: pointer; font-family: var(--font-sans);
 }
 .modo-lista-item:hover { background: var(--secundario); }
-.modo-lista-titulo { display: block; font-size: 13px; font-weight: 600; color: var(--texto); }
-.modo-lista-desc { display: block; font-size: 11px; color: var(--texto-dim); margin-top: 2px; line-height: 1.4; }
+.modo-lista-titulo { display: block; font-size: var(--txt-base); font-weight: 600; color: var(--texto); }
+.modo-lista-desc { display: block; font-size: var(--txt-xs); color: var(--texto-dim); margin-top: 2px; line-height: 1.4; }
 
 /* ===== VISOR DE LO QUE MENTIS CREA (2026-08-12) =====
    Cubre la zona de trabajo entera porque mirar un render o una infografía es la tarea de ese
@@ -1649,17 +1684,17 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 }
 #visor.hidden { display: none; }
 #visor-barra {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border); flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border); flex: none;
 }
 #visor-nombre {
-  font-family: var(--font-sans); font-size: 13px; color: var(--texto);
+  font-family: var(--font-sans); font-size: var(--txt-base); color: var(--texto);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-#visor-acciones { display: flex; align-items: center; gap: 8px; flex: none; }
+#visor-acciones { display: flex; align-items: center; gap: var(--sp-2); flex: none; }
 #visor-acciones button {
   background: transparent; border: 1px solid var(--border); color: var(--texto-dim);
-  border-radius: var(--radius); padding: 5px 12px; font-size: 12px;
+  border-radius: var(--radius); padding: var(--sp-1) var(--sp-3); font-size: var(--txt-sm);
   font-family: var(--font-sans); cursor: pointer;
 }
 #visor-acciones button:hover { background: var(--secundario); color: var(--texto); }
@@ -1668,7 +1703,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    arriba a la izquierda de un área de 1000px. */
 #visor-cuerpo {
   flex: 1; min-height: 0; overflow: auto;
-  display: flex; align-items: center; justify-content: center; padding: 16px;
+  display: flex; align-items: center; justify-content: center; padding: var(--sp-4);
 }
 .visor-imagen { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius); }
 /* El video comparte el encuadre de la imagen: entra entero, sin recortar y sin desbordar el visor.
@@ -1683,41 +1718,41 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 /* Aviso de "esta pagina necesita archivos de al lado" (2026-08-15). Va ARRIBA del marco y no
    encima: tapar la pagina para avisar que la pagina se ve incompleta seria absurdo. El marco
    sigue ocupando todo lo que sobra. */
-.visor-con-aviso { display: flex; flex-direction: column; gap: 8px; width: 100%; height: 100%; }
+.visor-con-aviso { display: flex; flex-direction: column; gap: var(--sp-2); width: 100%; height: 100%; }
 .visor-con-aviso.visor-marco { flex: 1; min-height: 0; }
 .visor-aviso {
-  flex: 0 0 auto; padding: 8px 12px; border-radius: var(--radius);
+  flex: 0 0 auto; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius);
   background: var(--secundario); border: 1px solid var(--border);
-  color: var(--texto-dim); font-size: 12px; line-height: 1.5;
+  color: var(--texto-dim); font-size: var(--txt-sm); line-height: 1.5;
 }
 .visor-texto {
-  width: 100%; height: 100%; margin: 0; padding: 16px; overflow: auto;
-  font-family: var(--font-mono); font-size: 13px; color: var(--texto);
+  width: 100%; height: 100%; margin: 0; padding: var(--sp-4); overflow: auto;
+  font-family: var(--font-mono); font-size: var(--txt-base); color: var(--texto);
   background: var(--secundario); border-radius: var(--radius); white-space: pre-wrap;
 }
 .visor-mensaje { text-align: center; font-family: var(--font-sans); color: var(--texto-dim); }
-.visor-mensaje p { color: var(--texto); font-size: 15px; margin: 0 0 6px; }
-.visor-mensaje span { font-size: 13px; }
+.visor-mensaje p { color: var(--texto); font-size: var(--txt-lg); margin: 0 0 var(--sp-1); }
+.visor-mensaje span { font-size: var(--txt-base); }
 /* Galería: grilla que se acomoda sola. auto-fill y no auto-fit para que con dos archivos las
    tarjetas mantengan su tamaño en vez de estirarse a media pantalla cada una. */
 .visor-galeria {
   align-self: flex-start; width: 100%;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-3);
 }
 .visor-tarjeta {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
   background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px; cursor: pointer; font-family: var(--font-sans);
+  padding: var(--sp-2); cursor: pointer; font-family: var(--font-sans);
 }
 .visor-tarjeta:hover { border-color: var(--acento); }
-.visor-tarjeta img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; background: var(--fondo); }
+.visor-tarjeta img { width: 100%; height: 110px; object-fit: cover; border-radius: var(--radius-chico); background: var(--fondo); }
 .visor-tarjeta-ext {
   display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 110px; border-radius: 6px; background: var(--fondo);
-  color: var(--acento); font-size: 15px; letter-spacing: 0.08em;
+  width: 100%; height: 110px; border-radius: var(--radius-chico); background: var(--fondo);
+  color: var(--acento); font-size: var(--txt-lg); letter-spacing: 0.08em;
 }
 .visor-tarjeta-nombre {
-  font-size: 11px; color: var(--texto-dim); width: 100%;
+  font-size: var(--txt-xs); color: var(--texto-dim); width: 100%;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
 }
 /* La ficha del dato en las estructuras químicas (Science). Va sobre el modelo y no debajo: si
@@ -1725,14 +1760,14 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
 .visor-3d { position: relative; }
 .visor-ficha {
   position: absolute; left: 12px; bottom: 12px; max-width: 60%;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: var(--sp-1);
   background: color-mix(in srgb, var(--fondo) 82%, transparent);
   border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 12px; font-family: var(--font-sans); pointer-events: none;
+  padding: var(--sp-2) var(--sp-3); font-family: var(--font-sans); pointer-events: none;
 }
-.visor-ficha strong { color: var(--texto); font-size: 13px; font-weight: 600; }
-.visor-ficha span { color: var(--acento); font-size: 12px; }
-.visor-ficha em { color: var(--texto-dim); font-size: 11px; font-style: normal; line-height: 1.4; }
+.visor-ficha strong { color: var(--texto); font-size: var(--txt-base); font-weight: 600; }
+.visor-ficha span { color: var(--acento); font-size: var(--txt-sm); }
+.visor-ficha em { color: var(--texto-dim); font-size: var(--txt-xs); font-style: normal; line-height: 1.4; }
 
 /* ===== LA FILA DE CONTROLES DEBAJO DEL CUADRO DE TEXTO (2026-08-13) =====
    el usuario: "quiero mover todo lo que señalo a abajo del cuadro de texto donde escribo". El modo y
@@ -1741,10 +1776,10 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    Comparte el ancho de la columna de lectura, así los controles arrancan y terminan sobre el
    mismo eje que el cuadro y que los mensajes. */
 #composer-acciones {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  max-width: var(--ancho-lectura); margin: 8px auto 0;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  max-width: var(--ancho-lectura); margin: var(--sp-2) auto 0;
 }
-#composer-acciones-izq, #composer-acciones-der { display: flex; align-items: center; gap: 8px; }
+#composer-acciones-izq, #composer-acciones-der { display: flex; align-items: center; gap: var(--sp-2); }
 /* El "+" baja de 40 a 34 px para igualar al micrófono: en una fila propia, dos botones del mismo
    peso visual se leen como un par; con tamaños distintos, uno parece más importante que el otro. */
 #composer-acciones #btn-mas { width: 34px; height: 34px; }
@@ -1762,59 +1797,59 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    terracota del acento sobre el gris de siempre, en vez de la paleta de morados y verdes del
    original. Dos columnas porque el panel mide 384px: con tres, cada tarjeta queda más angosta que
    su propio título. */
-#panel-estudio { padding: 10px; overflow-y: auto; }
+#panel-estudio { padding: var(--sp-2); overflow-y: auto; }
 #panel-estudio.hidden { display: none; }
 /* La grilla pasa a ser una PILA DE SECCIONES (2026-08-15): Study tiene una sola sección sin
    nombre -- se ve igual que antes -- y Designe tiene dos con encabezado. Las tarjetas siguen
    yendo de a dos por fila; lo que cambió es que ahora hay filas agrupadas. */
-#panel-estudio-grilla { display: flex; flex-direction: column; gap: 10px; }
+#panel-estudio-grilla { display: flex; flex-direction: column; gap: var(--sp-2); }
 #panel-estudio-grilla.hidden { display: none; }
-.estudio-fila { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.estudio-fila { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
 .estudio-seccion {
-  margin: 2px 0 0; font-size: 11px; font-weight: 600; letter-spacing:.04em;
+  margin: var(--sp-1) 0 0; font-size: var(--txt-xs); font-weight: 600; letter-spacing:.04em;
   text-transform: uppercase; color: var(--texto-dim);
 }
 .estudio-tarjeta {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
-  background: var(--secundario); border: 1px solid var(--border); border-radius: 10px;
-  padding: 12px 10px; cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2);
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--sp-3) var(--sp-2); cursor: pointer; text-align: left;
   font-family: var(--font-sans); color: var(--texto);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color var(--anim-rapida) var(--anim-curva), background var(--anim-rapida) var(--anim-curva);
 }
 .estudio-tarjeta:hover { border-color: var(--acento); background: var(--principal); }
 .estudio-tarjeta:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
-.estudio-icono { color: var(--acento); font-size: 15px; line-height: 1; }
-.estudio-titulo { font-size: 12px; line-height: 1.3; }
+.estudio-icono { color: var(--acento); font-size: var(--txt-lg); line-height: 1; }
+.estudio-titulo { font-size: var(--txt-sm); line-height: 1.3; }
 /* Las preguntas reemplazan a la grilla en el mismo lugar: es un paso adelante en el mismo panel,
    no una ventana nueva encima. */
 #panel-estudio-preguntas.hidden { display: none; }
 .estudio-volver {
   background: transparent; border: 0; color: var(--texto-dim); cursor: pointer;
-  font-family: var(--font-sans); font-size: 12px; padding: 4px 0 10px;
+  font-family: var(--font-sans); font-size: var(--txt-sm); padding: var(--sp-1) 0 var(--sp-2);
   display: block;
 }
 .estudio-volver:hover { color: var(--acento); }
-.estudio-preg-titulo { margin: 0 0 12px; color: var(--acento); font-size: 14px; font-weight: 600; font-family: var(--font-sans); }
+.estudio-preg-titulo { margin: 0 0 var(--sp-3); color: var(--acento); font-size: var(--txt-lg); font-weight: 600; font-family: var(--font-sans); }
 .estudio-preg { margin-bottom: 14px; }
-.estudio-preg-texto { display: block; font-size: 12px; color: var(--texto-dim); margin-bottom: 6px; font-family: var(--font-sans); }
-.estudio-ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.estudio-preg-texto { display: block; font-size: var(--txt-sm); color: var(--texto-dim); margin-bottom: 6px; font-family: var(--font-sans); }
+.estudio-ops { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 .estudio-op {
-  background: var(--secundario); border: 1px solid var(--border); border-radius: 999px;
-  color: var(--texto); padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: var(--font-sans);
+  background: var(--secundario); border: 1px solid var(--border); border-radius: var(--radius-pildora);
+  color: var(--texto); padding: var(--sp-1) var(--sp-3); font-size: var(--txt-sm); cursor: pointer; font-family: var(--font-sans);
 }
 .estudio-op:hover { border-color: var(--acento); }
 /* La elegida se pinta con el acento: en una lista de píldoras grises, la seleccionada tiene que
    distinguirse de un vistazo o hay que releer todas para saber qué se eligió. */
 .estudio-op.elegida { background: var(--acento); border-color: var(--acento); color: var(--fondo); }
 .estudio-tema {
-  width: 100%; margin: 4px 0 12px; padding: 8px 10px; font-size: 12px;
+  width: 100%; margin: var(--sp-1) 0 var(--sp-3); padding: var(--sp-2) var(--sp-2); font-size: var(--txt-sm);
   background: var(--fondo); border: 1px solid var(--border); border-radius: var(--radius);
   color: var(--texto); font-family: var(--font-sans);
 }
 .estudio-tema:focus { outline: none; border-color: var(--acento); }
 .estudio-listo {
   width: 100%; background: var(--acento); border: 0; border-radius: var(--radius);
-  color: var(--fondo); padding: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+  color: var(--fondo); padding: var(--sp-2); font-size: var(--txt-base); font-weight: 600; cursor: pointer;
   font-family: var(--font-sans);
 }
 .estudio-listo:hover { filter: brightness(1.08); }
@@ -1835,27 +1870,27 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
    Con prefers-reduced-motion no hay transiciones: el estado cambia seco, que es lo que esa
    preferencia pide. */
 #tablero-tareas {
-  margin: 8px 10px 0; padding: 10px 12px;
-  background: var(--principal); border: 1px solid var(--border); border-radius: 10px;
-  opacity: 1; transform: none; transition: opacity.15s ease, transform.15s ease;
+  margin: var(--sp-2) var(--sp-2) 0; padding: var(--sp-2) var(--sp-3);
+  background: var(--principal); border: 1px solid var(--border); border-radius: var(--radius);
+  opacity: 1; transform: none; transition: opacity.15s var(--anim-curva), transform.15s var(--anim-curva);
 }
 #tablero-tareas.hidden { display: none; }
 #tablero-tareas.tablero-entrando { opacity: 0; transform: translateY(-8px); }
 .tablero-titulo {
-  margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing:.04em;
+  margin: 0 0 var(--sp-2); font-size: var(--txt-xs); font-weight: 600; letter-spacing:.04em;
   text-transform: uppercase; color: var(--texto-dim);
 }
-.tablero-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tablero-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
 .tablero-item {
-  display: flex; align-items: flex-start; gap: 8px;
+  display: flex; align-items: flex-start; gap: var(--sp-2);
   font-size: 12.5px; line-height: 1.4; color: var(--texto);
 }
 .tablero-tilde {
   flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--border); border-radius: 4px;
-  font-size: 10px; color: transparent; background: transparent;
-  transition: color.12s ease, background.12s ease, border-color.12s ease, transform.12s ease;
+  border: 1px solid var(--border); border-radius: var(--radius-chico);
+  font-size: var(--txt-xs); color: transparent; background: transparent;
+  transition: color.12s var(--anim-curva), background.12s var(--anim-curva), border-color.12s var(--anim-curva), transform.12s var(--anim-curva);
 }
 /* El texto lleva su propia línea de tachado como pseudo-elemento: con text-decoration no se puede
    animar el trazo, y aparecería entero de un cuadro al otro. */
@@ -1864,7 +1899,7 @@ body { margin: 0; background: var(--fondo); color: var(--texto); font-family: va
   content: ''; position: absolute; left: 0; right: 0; top: 50%;
   height: 1px; background: currentColor;
   transform: scaleX(0); transform-origin: left center;
-  transition: transform.18s ease-out;
+  transition: transform var(--anim-lenta) var(--anim-curva);
 }
 .tablero-item.hecha.tablero-texto { color: var(--texto-dim); }
 .tablero-item.hecha.tablero-texto::after { transform: scaleX(1); }
